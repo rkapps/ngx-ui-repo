@@ -1,0 +1,23 @@
+<button
+  [type]="type()"
+  [disabled]="disabled() || loading()"
+  [class]="buttonClasses()"
+  [attr.role]="semanticRole() === 'radio' ? 'radio' : null"
+  [attr.aria-checked]="semanticRole() === 'radio' ? !!ariaChecked() : null"
+  [attr.aria-label]="ariaLabel().trim() ? ariaLabel() : null"
+  [attr.aria-expanded]="ariaExpanded() === undefined ? null : ariaExpanded()"
+  [attr.aria-controls]="ariaControls().trim() ? ariaControls() : null"
+  [attr.title]="title().trim() ? title() : null"
+  [attr.aria-busy]="loading() ? true : null"
+  (click)="onClick($event)"
+>
+  @if (loading()) {
+    <lucide-icon name="loader-circle" [size]="iconSize()" class="animate-spin" aria-hidden="true" />
+  } @else if (icon()) {
+    <lucide-icon [name]="icon()" [size]="iconSize()" aria-hidden="true" />
+  }
+  @if (label()) {
+    <span>{{ label() }}</span>
+  }
+  <ng-content />
+</button>

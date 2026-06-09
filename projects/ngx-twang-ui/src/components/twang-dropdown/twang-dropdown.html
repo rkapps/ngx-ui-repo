@@ -1,0 +1,78 @@
+<div class="twang-dropdown-root relative w-full">
+  @if (label()) {
+    <label
+      [attr.for]="fieldId() ?? null"
+      class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-text-muted"
+    >{{ label() }}</label>
+  }
+  <button
+    #triggerBtn
+    type="button"
+    [class]="triggerClasses()"
+    [attr.id]="fieldId() ?? null"
+    [disabled]="disabled()"
+    [attr.aria-expanded]="open()"
+    aria-haspopup="listbox"
+    (click)="toggleOpen(); $event.stopPropagation()"
+  >
+    <span class="min-w-0 flex-1 truncate" [class.text-text-muted]="multiselect() ? selectedValues().length === 0 : !value()">{{ currentLabel() }}</span>
+    @if (!(multiselect() && selectedValues().length > 0)) {
+      <span class="twang-dropdown-chevron shrink-0" aria-hidden="true">
+        <lucide-icon name="chevron-down" [size]="chevronSize()" class="text-text-muted transition-transform duration-200" [class.rotate-180]="open()" />
+      </span>
+    }
+  </button>
+  @if (multiselect() && selectedValues().length > 0) {
+    <button
+      type="button"
+      class="absolute right-0 top-0 flex h-full items-center pr-2 text-text-muted hover:text-text"
+      aria-label="Clear selection"
+      (click)="clearSelection($event)"
+    >
+      <lucide-icon name="x" [size]="14" />
+    </button>
+  }
+
+  @if (open()) {
+    <div
+      class="twang-dropdown-panel fixed z-[999] max-h-64 overflow-auto rounded-lg border border-border bg-white py-1 shadow-lg ring-1 ring-black/5"
+      [style.top]="panelStyle()?.top"
+      [style.left]="panelStyle()?.left"
+      [style.width]="panelStyle()?.width"
+      role="listbox"
+      (mousedown)="$event.stopPropagation()"
+    >
+      @for (opt of options(); track opt.value) {
+        @if (multiselect()) {
+          <label
+            class="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-sm text-text hover:bg-primary-50/80 hover:text-primary-800"
+            [class.bg-primary-50]="isOptionSelected(opt)"
+            (mousedown)="$event.preventDefault()"
+            (click)="toggleOption(opt, $event)"
+          >
+            <input
+              type="checkbox"
+              class="h-3.5 w-3.5 shrink-0 rounded border-border accent-primary-600"
+              [checked]="isOptionSelected(opt)"
+              (click)="$event.stopPropagation()"
+            />
+            <span class="min-w-0 flex-1 truncate">{{ opt.label }}</span>
+          </label>
+        } @else {
+          <button
+            type="button"
+            role="option"
+            class="flex w-full items-center px-3 py-1 text-left text-sm text-text hover:bg-primary-50/80 hover:text-primary-800"
+            [class.bg-primary-50]="opt.value === value()"
+            [attr.aria-selected]="opt.value === value()"
+            (click)="select(opt, $event)"
+          >
+            {{ opt.label }}
+          </button>
+        }
+      } @empty {
+        <div class="px-3 py-2 text-sm text-text-muted">No options</div>
+      }
+    </div>
+  }
+</div>

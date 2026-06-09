@@ -1,0 +1,28 @@
+<div [class]="layout() === 'horizontal'
+  ? 'flex items-center gap-4'
+  : 'flex flex-col gap-1.5'">
+
+  @if (label()) {
+    <label
+      [attr.for]="inputId"
+      [class]="layout() === 'horizontal'
+        ? 'w-32 shrink-0 text-sm font-medium text-text'
+        : 'text-sm font-medium text-text'"
+    >
+      {{ label() }}@if (required()) {<span class="ml-0.5 text-danger-600">*</span>}
+    </label>
+  }
+
+  <input
+    [id]="inputId"
+    [type]="type()"
+    [placeholder]="placeholder()"
+    [disabled]="disabled()"
+    [value]="value()"
+    (input)="onInput($event)"
+    (blur)="onBlur()"
+    class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-muted focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+    [class.font-mono]="mono()"
+  />
+
+</div>

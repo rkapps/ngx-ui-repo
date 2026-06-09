@@ -1,0 +1,20 @@
+<nav
+  class="twang-nav-tabs-inner"
+  [class]="navClasses()"
+  [attr.id]="navId().trim() ? navId() : null"
+  [attr.aria-label]="ariaLabel().trim() ? ariaLabel() : null"
+>
+  @for (item of items(); track trackKey(item, $index)) {
+    <a
+      [routerLink]="item.link"
+      [routerLinkActive]="routerLinkActiveClass()"
+      [routerLinkActiveOptions]="{ exact: item.exact ?? false }"
+      [class]="linkInactiveClasses()"
+    >
+      @if (item.icon) {
+        <lucide-icon [name]="item.icon" [size]="iconSize()" aria-hidden="true" />
+      }
+      <span class="leading-tight">{{ item.label }}</span>
+    </a>
+  }
+</nav>

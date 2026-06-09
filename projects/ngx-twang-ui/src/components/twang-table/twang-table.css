@@ -1,0 +1,372 @@
+.twang-table tbody tr:last-child td {
+  border-bottom: 1px solid var(--app-chrome-border, #e5e7eb);
+}
+
+:host {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  /* `auto` basis lets the panel grow to full table height so scroll escapes — no sticky thead. */
+  flex: 1 1 0%;
+  flex-direction: column;
+}
+
+/*
+ * Outer panel: flex column only (no overflow). Footer is `<tfoot>` in the same table as thead/tbody
+ * so one column grid (no misaligned second table). Horizontal scroll wraps the wide table.
+ */
+.twang-table-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  flex: 1 1 0%;
+  /* clip (not hidden) — avoids creating a vertical scroll container; hidden+overscroll-behavior:contain would eat wheel events. */
+  overflow-y: clip;
+}
+
+.twang-table-panel--footer .twang-table-hscroll {
+  /* clip — no vertical scroll container; vscroll handles vertical scroll. */
+  overflow-y: clip;
+}
+
+/* Footer mode: vertical scroll on `.twang-table-vscroll`; panel must not add a second vertical bar. */
+.twang-table-panel--footer {
+  overflow-y: clip;
+}
+
+/*
+ * Fill horizontal space: table is `width: 100%` so fixed-width columns stay fixed and
+ * `fillRemaining` columns absorb the rest (same behavior across sibling cards, e.g. market tiles).
+ */
+.twang-table-panel--fill-container .twang-table-inner {
+  width: 100%;
+  min-width: 0;
+}
+
+.twang-table-panel--fill-container .twang-table-inner .twang-table-vscroll .twang-table:not(.twang-table--footer-layout) {
+  width: 100%;
+  max-width: 100%;
+}
+
+.twang-table-panel--fill-container .twang-table:not(.twang-table--footer-layout) {
+  width: 100%;
+}
+
+.twang-table-panel--fill-container col.twang-col-fill-remaining,
+.twang-table-panel--fill-container th.twang-col-fill-remaining,
+.twang-table-panel--fill-container td.twang-col-fill-remaining {
+  width: auto;
+}
+
+/*
+ * `min-width: 0` lets flex/grid descendants shrink; only apply when the column does not define
+ * `minWidth` (e.g. expenses description uses `minWidth: '437px'` — that must not be zeroed here).
+ */
+.twang-table-panel--fill-container col.twang-col-fill-remaining.twang-col-fill-remaining-squeeze,
+.twang-table-panel--fill-container th.twang-col-fill-remaining.twang-col-fill-remaining-squeeze,
+.twang-table-panel--fill-container td.twang-col-fill-remaining.twang-col-fill-remaining-squeeze {
+  min-width: 0;
+}
+
+.twang-table-hscroll {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: clip;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-gutter: auto;
+}
+
+/* As wide as the main table (or full panel when table is narrower). */
+.twang-table-inner {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-height: 0;
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
+}
+
+.twang-table-inner .twang-table-vscroll .twang-table:not(.twang-table--footer-layout) {
+  width: max-content;
+  max-width: none;
+}
+
+/* Non-footer: wrapper is layout-transparent so the table stays a direct flex child of vscroll. */
+.twang-table-body-wrap {
+  display: contents;
+}
+
+/*
+ * Footer + capped height: stretch to fill the scrollport when rows are short (totals on bottom).
+ * `min-height: 100%` lives here — not on `<table>` — so `position: sticky` on thead/tfoot still
+ * resolves correctly when the table is taller than the viewport and vscroll scrolls.
+ */
+.twang-table-panel--footer .twang-table-footer-fill {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  flex-shrink: 0;
+  min-height: 100%;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/*
+ * Footer layout needs the same horizontal sizing contract as `income-matrix`:
+ * avoid `max-content` here, otherwise `table width: 100%` + percent columns
+ * can create a pathological intrinsic width loop (~10^4 px).
+ */
+.twang-table-panel--footer .twang-table-inner {
+  width: 100%;
+  min-width: 0;
+}
+
+.twang-table-vscroll {
+  flex: 1 1 0%;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: visible;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+/*
+ * When a footer exists and the panel height is capped:
+ * - Vertical scroll is on this wrapper only — it matches the horizontal viewport width, so the
+ *   scrollbar track stays visible (not on the far right of a min-w-[…] table).
+ * - `.twang-table-footer-fill` (inside this) uses `min-height: 100%` when short; the table flex-grows
+ *   inside it so `tbody` absorbs space and `tfoot` sits at the bottom. Sticky uses natural table height.
+ * - Long lists scroll here; sticky thead/tfoot pin inside this scrollport.
+ *
+ * `colspan` on `<tfoot>` does not size like a normal table here (`thead`/`tbody`/`tfoot` are
+ * `display: block`); use one `<td>` per column with the same widths as the header/body.
+ */
+.twang-table-panel--footer .twang-table-vscroll {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  /* Horizontal overflow is handled by `.twang-table-hscroll`; do not clip the wide table here. */
+  overflow-x: visible;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  /* `auto`: do not reserve a track when there is no vertical overflow (stable looks like dead padding). */
+  scrollbar-gutter: auto;
+}
+
+/*
+ * Match `portfolio-income-matrix.css`: flex column table uses `width: 100%` + `min-w-[…]` from
+ * `tableMinWidthClass` — not `min-width: max-content`, which with `display:flex` on `<table>` and
+ * `width: 100%` on thead/tbody/tfoot can resolve to pathological intrinsic widths (~10⁴ px).
+ */
+.twang-table-panel--footer .twang-table.twang-table--footer-layout {
+  display: flex;
+  flex-direction: column;
+  /* Fill `.twang-table-footer-fill` when content is short; grow with rows when tall.
+   * Do NOT use `min-height: 0` here — it lets the flex item shrink below row content and breaks
+   * `position: sticky` on thead/tfoot when many rows scroll in `.twang-table-vscroll`. */
+  flex: 1 1 0%;
+  flex-shrink: 0;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+.twang-table-panel--footer .twang-table thead,
+.twang-table-panel--footer .twang-table tbody,
+.twang-table-panel--footer .twang-table tfoot {
+  display: block;
+  width: 100%;
+  /*
+   * `overflow-x: clip` on these blocks breaks sticky positioning relative to `.twang-table-vscroll`
+   * in Chromium. Horizontal overflow is handled by `.twang-table-hscroll`, not here.
+   */
+  overflow-x: visible;
+}
+
+.twang-table-panel--footer .twang-table thead,
+.twang-table-panel--footer .twang-table tfoot {
+  flex-shrink: 0;
+  overflow-y: visible;
+}
+
+.twang-table-panel--footer .twang-table tbody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: visible;
+  overflow-x: visible;
+}
+
+.twang-table-panel--footer .twang-table thead tr,
+.twang-table-panel--footer .twang-table tbody tr,
+.twang-table-panel--footer .twang-table tfoot tr {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.twang-table {
+  /* Do not grow to fill the scroll panel — avoids huge row heights when there are few rows. */
+  flex: 0 0 auto;
+  height: auto;
+  table-layout: fixed;
+  /* `border-collapse: collapse` breaks `position: sticky` on `th`/`td` in several browsers. */
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.twang-table:not(.twang-table--footer-layout) {
+  /* Prevent browser from stretching columns proportionally. */
+  width: max-content;
+  /* Avoid stretching to container width (can cause per-view rounding drift). */
+  min-width: max-content;
+}
+
+.twang-table tbody,
+.twang-table tfoot {
+  color: var(--app-text);
+}
+
+/* Sticky header block: some browsers only honor vertical stickiness on `thead`, not each `th`. */
+.twang-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 11;
+}
+
+/* Sticky header row — must sit above tbody’s sticky-first column when rows scroll under it. */
+.twang-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: color-mix(in oklch, var(--app-gray-50, #f9fafb) 95%, white);
+}
+
+.twang-table-sort-btn {
+  display: inline-flex;
+  /* Prevent default button box metrics from affecting width calculations. */
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  box-sizing: border-box;
+  align-items: center;
+  /* As a flex item inside the header wrapper, stretch to container width. */
+  flex: 1 1 0%;
+  min-width: 0;
+  gap: 0.2rem;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  transition: color 120ms ease;
+}
+
+.twang-table-sort-btn:hover {
+  color: var(--app-primary-600);
+}
+
+.twang-table-sort-btn:focus-visible {
+  outline: 2px solid color-mix(in oklch, var(--app-primary-500) 50%, transparent);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+/* First data column: stick to left; z-index below thead so rows slide under the header. */
+.twang-table-sticky-first {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: white;
+  /* Separator when horizontally scrolling wide tables */
+  box-shadow: 1px 0 0 var(--app-chrome-border, #e5e7eb);
+}
+
+.twang-table thead .twang-table-sticky-first {
+  /* Explicit sticky positioning for the frozen header cell. */
+  position: sticky;
+  top: 0 !important;
+  left: 0 !important;
+  z-index: 20;
+  background: color-mix(in oklch, var(--app-gray-50, #f9fafb) 95%, white);
+  box-shadow: 1px 0 0 var(--app-chrome-border, #e5e7eb);
+}
+
+/* Totals row: stick to bottom of vertical scrollport; frozen first column on horizontal scroll. */
+.twang-table tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 14;
+  background: color-mix(in oklch, var(--app-gray-50, #f9fafb) 50%, white);
+}
+
+.twang-table tfoot .twang-table-sticky-first {
+  position: sticky;
+  left: 0;
+  bottom: 0;
+  z-index: 15;
+  background: color-mix(in oklch, var(--app-gray-50, #f9fafb) 50%, white);
+  box-shadow: 1px 0 0 var(--app-chrome-border, #e5e7eb);
+}
+
+/*
+ * Footer + capped height: vertical scroll is on `.twang-table-vscroll` (viewport width).
+ * Pin thead/tfoot inside that scrollport while horizontally scrolling wide tables.
+ */
+.twang-table-panel--footer .twang-table thead {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 11 !important;
+}
+
+.twang-table-panel--footer .twang-table thead th:not(.twang-table-sticky-first) {
+  position: sticky !important;
+  top: 0 !important;
+}
+
+.twang-table-panel--footer .twang-table thead .twang-table-sticky-first {
+  position: sticky !important;
+  top: 0 !important;
+  left: 0 !important;
+  z-index: 20;
+  background: color-mix(in oklch, var(--app-gray-50, #f9fafb) 95%, white);
+  box-shadow: 1px 0 0 var(--app-chrome-border, #e5e7eb);
+}
+
+.twang-table-panel--footer .twang-table tfoot td:not(.twang-table-sticky-first) {
+  position: sticky !important;
+  bottom: 0 !important;
+}
+
+.twang-table-panel--footer .twang-table tfoot {
+  position: sticky !important;
+  bottom: 0 !important;
+  z-index: 14;
+  background: color-mix(in oklch, var(--app-gray-50, #f9fafb) 50%, white);
+  overflow-x: visible;
+  flex-shrink: 0;
+}
+
+.twang-table-panel--footer .twang-table tfoot .twang-table-sticky-first {
+  position: sticky !important;
+  left: 0 !important;
+  bottom: 0 !important;
+  z-index: 15;
+  background: color-mix(in oklch, var(--app-gray-50, #f9fafb) 50%, white);
+  box-shadow: 1px 0 0 var(--app-chrome-border, #e5e7eb);
+}

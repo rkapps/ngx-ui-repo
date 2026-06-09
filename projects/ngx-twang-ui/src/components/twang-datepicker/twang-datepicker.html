@@ -1,0 +1,158 @@
+<div class="twang-dp-root relative inline-flex flex-col gap-1.5">
+  @if (label()) {
+    <span class="block text-xs font-semibold uppercase tracking-wide text-text-muted">{{ label() }}</span>
+  }
+  <div class="inline-flex items-center gap-1">
+
+  <!-- Trigger -->
+  <button
+    type="button"
+    class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-[7px] text-sm text-text transition hover:bg-surface-muted focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+    [attr.aria-expanded]="open()"
+    aria-haspopup="dialog"
+    (click)="toggleOpen($event)"
+  >
+    <lucide-icon name="calendar" [size]="15" class="shrink-0 text-text-muted" aria-hidden="true" />
+    <span class="min-w-0 whitespace-nowrap" [class.text-text-muted]="!displayValue()">
+      {{ displayValue() || placeholder() }}
+    </span>
+    <lucide-icon name="chevron-down" [size]="14" class="shrink-0 text-text-muted transition-transform duration-200" [class.rotate-180]="open()" aria-hidden="true" />
+  </button>
+
+  <!-- Clear -->
+  @if (value()) {
+    <button
+      type="button"
+      class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-text-muted transition hover:bg-surface-muted hover:text-text focus:outline-none"
+      aria-label="Clear date"
+      (click)="clear($event)"
+    >
+      <lucide-icon name="x" [size]="13" aria-hidden="true" />
+    </button>
+  }
+
+  <!-- Popover -->
+  @if (open()) {
+    <div
+      class="fixed z-[200] w-72 select-none rounded-xl border border-border bg-white p-3 shadow-xl ring-1 ring-black/5"
+      [ngStyle]="popoverStyle()"
+      role="dialog"
+      aria-label="Date picker"
+      (mousedown)="$event.stopPropagation()"
+    >
+
+      <!-- ── Day view ── -->
+      @if (mode() === 'day') {
+
+        <!-- Nav header -->
+        <div class="mb-2 flex items-center gap-0.5">
+          <button type="button"
+            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition hover:bg-surface-muted hover:text-text focus:outline-none"
+            aria-label="Previous month" (click)="prevMonth()">
+            <lucide-icon name="chevron-left" [size]="16" aria-hidden="true" />
+          </button>
+          <button type="button"
+            class="flex-1 rounded-md py-1 text-center text-sm font-semibold text-text transition hover:bg-surface-muted focus:outline-none"
+            (click)="showMonthView()">
+            {{ headerLabel() }}
+          </button>
+          <button type="button"
+            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition hover:bg-surface-muted hover:text-text focus:outline-none"
+            aria-label="Next month" (click)="nextMonth()">
+            <lucide-icon name="chevron-right" [size]="16" aria-hidden="true" />
+          </button>
+        </div>
+
+        <!-- Day-of-week labels -->
+        <div class="mb-1 grid grid-cols-7 text-center">
+          @for (d of dayLabels; track d) {
+            <div class="py-1 text-[10px] font-semibold uppercase tracking-wide text-text-muted">{{ d }}</div>
+          }
+        </div>
+
+        <!-- Day grid -->
+        <div class="grid grid-cols-7 gap-y-0.5">
+          @for (cell of dayGrid(); track $index) {
+            @if (cell) {
+              <button
+                type="button"
+                class="mx-auto flex h-8 w-8 items-center justify-center rounded-full text-xs transition-colors"
+                [ngClass]="dayClasses(cell)"
+                (click)="selectDay(cell)"
+              >{{ cell }}</button>
+            } @else {
+              <span></span>
+            }
+          }
+        </div>
+      }
+
+      <!-- ── Month view ── -->
+      @if (mode() === 'month') {
+
+        <div class="mb-3 flex items-center gap-0.5">
+          <button type="button"
+            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition hover:bg-surface-muted hover:text-text focus:outline-none"
+            aria-label="Previous year" (click)="prevYear()">
+            <lucide-icon name="chevron-left" [size]="16" aria-hidden="true" />
+          </button>
+          <button type="button"
+            class="flex-1 rounded-md py-1 text-center text-sm font-semibold text-text transition hover:bg-surface-muted focus:outline-none"
+            (click)="showYearView()">
+            {{ viewYear() }}
+          </button>
+          <button type="button"
+            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition hover:bg-surface-muted hover:text-text focus:outline-none"
+            aria-label="Next year" (click)="nextYear()">
+            <lucide-icon name="chevron-right" [size]="16" aria-hidden="true" />
+          </button>
+        </div>
+
+        <div class="grid grid-cols-3 gap-1">
+          @for (m of monthAbbr; track $index) {
+            <button
+              type="button"
+              class="rounded-lg py-2.5 text-xs font-medium transition-colors focus:outline-none"
+              [ngClass]="monthClasses($index)"
+              (click)="selectMonth($index)"
+            >{{ m }}</button>
+          }
+        </div>
+      }
+
+      <!-- ── Year view ── -->
+      @if (mode() === 'year') {
+
+        <div class="mb-3 flex items-center gap-0.5">
+          <button type="button"
+            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition hover:bg-surface-muted hover:text-text focus:outline-none"
+            aria-label="Previous years" (click)="prevYearPage()">
+            <lucide-icon name="chevron-left" [size]="16" aria-hidden="true" />
+          </button>
+          <span class="flex-1 text-center text-sm font-semibold text-text">
+            {{ yearRange()[0] }} – {{ yearRange()[15] }}
+          </span>
+          <button type="button"
+            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition hover:bg-surface-muted hover:text-text focus:outline-none"
+            aria-label="Next years" (click)="nextYearPage()">
+            <lucide-icon name="chevron-right" [size]="16" aria-hidden="true" />
+          </button>
+        </div>
+
+        <div class="grid grid-cols-4 gap-1">
+          @for (y of yearRange(); track y) {
+            <button
+              type="button"
+              class="rounded-lg py-2.5 text-xs font-medium transition-colors focus:outline-none"
+              [ngClass]="yearClasses(y)"
+              (click)="selectYear(y)"
+            >{{ y }}</button>
+          }
+        </div>
+      }
+
+    </div>
+  }
+
+  </div>
+</div>

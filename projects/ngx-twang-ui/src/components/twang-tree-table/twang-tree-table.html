@@ -1,0 +1,235 @@
+<div
+  class="twang-table-panel"
+  [class.twang-table-panel--footer]="!!footer?.length && !!scrollPanelMaxHeight"
+  [class.twang-table-panel--fill-container]="fillContainerWidth"
+  [style.max-height]="scrollPanelMaxHeight ? scrollPanelMaxHeight : null"
+  [style.min-height]="effectiveScrollPanelMinHeight()"
+>
+  <div class="twang-table-hscroll">
+    <div class="twang-table-inner">
+      <div class="twang-table-vscroll">
+        <div
+          class="twang-table-body-wrap"
+          [class.twang-table-footer-fill]="!!footer?.length && !!scrollPanelMaxHeight"
+        >
+          <table
+            class="twang-table {{ tableMinWidthClass }} border-separate border-spacing-0 text-left"
+            [class.twang-table--footer-layout]="!!footer?.length && !!scrollPanelMaxHeight"
+          >
+            <colgroup>
+              @for (col of columns; track col.id) {
+                <col
+                  [class]="col.widthClass ?? ''"
+                  [class.twang-col-fill-remaining]="!!col.fillRemaining"
+                  [class.twang-col-fill-remaining-squeeze]="!!col.fillRemaining && !col.minWidth"
+                  [style.width]="col.fillRemaining ? null : (col.width ?? null)"
+                  [style.minWidth]="col.minWidth ?? null"
+                  [style.maxWidth]="col.fillRemaining ? null : (col.maxWidth ?? null)"
+                />
+              }
+            </colgroup>
+
+            <thead class="border-b border-border bg-gray-50/95 backdrop-blur-sm">
+              <tr>
+                @for (col of columns; track col.id) {
+                  <th
+                    class="portfolio-table-th {{ col.widthClass ?? '' }} {{ col.headerClass ?? '' }} {{ col.sticky ? 'twang-table-sticky-first' : '' }}"
+                    [class.portfolio-table-th--right]="col.align === 'right'"
+                    [class.twang-col-fill-remaining]="!!col.fillRemaining"
+                    [style.width]="col.fillRemaining ? null : (col.width ?? null)"
+                    [style.minWidth]="col.minWidth ?? null"
+                    [style.maxWidth]="col.fillRemaining ? null : (col.maxWidth ?? null)"
+                  >
+                    {{ col.header }}
+                  </th>
+                }
+              </tr>
+            </thead>
+
+            <tbody class="divide-y divide-border">
+              @for (flat of visibleRows(); track flat.node.id; let last = $last) {
+                <tr
+                  class="transition-colors"
+                  [class.twang-tree-last-row]="last"
+                  [ngClass]="flat.isLeaf
+                    ? 'hover:bg-gray-50/60'
+                    : summaryDepthClass(flat.node.depth)"
+                >
+                  @for (col of columns; track col.id) {
+
+                    @if (col.isLabelColumn) {
+                      <!-- ── Label column ─────────────────────────────────── -->
+                      <td
+                        class="portfolio-table-cell twang-tree-label-cell {{ col.widthClass ?? '' }} {{ col.sticky ? 'twang-table-sticky-first' : '' }}"
+                        [class.twang-col-fill-remaining]="!!col.fillRemaining"
+                        [style.width]="col.fillRemaining ? null : (col.width ?? null)"
+                        [style.minWidth]="col.minWidth ?? null"
+                        [style.maxWidth]="col.fillRemaining ? null : (col.maxWidth ?? null)"
+                      >
+                        @if (!flat.isLeaf) {
+                          <!-- Summary row: expand / collapse -->
+                          <button
+                            type="button"
+                            class="twang-tree-expand-btn"
+                            (click)="toggle(flat.node.id)"
+                          >
+                            <span
+                              class="twang-tree-indent shrink-0"
+                              [style.width.px]="flat.node.depth * 16"
+                            ></span>
+                            <lucide-icon
+                              name="chevron-right"
+                              [size]="16"
+                              class="twang-tree-chevron shrink-0 text-text-muted"
+                              [class.twang-tree-chevron--open]="isExpanded(flat.node.id)"
+                            />
+                            <span class="min-w-0 truncate">{{ flat.node.label }}</span>
+                          </button>
+                        } @else {
+                          <!-- Leaf row: symbol + name (or plain value) -->
+                          @if (isActionCell(col, flat.rowData)) {
+                            <button
+                              type="button"
+                              class="portfolio-table-symbol-btn twang-tree-leaf-label-btn"
+                              [ngClass]="getActionClass(col, flat.rowData)"
+                              (click)="col.onCellClick?.(flat.rowData, $event)"
+                            >
+                              <span
+                                class="twang-tree-indent shrink-0"
+                                [style.width.px]="flat.node.depth * 16 + 20"
+                              ></span>
+                              @if (splitCellValue(col, flat.rowData); as split) {
+                                <div
+                                  class="flex min-w-0 gap-2"
+                                  [class.flex-col]="split.layout === 'stack'"
+                                  [class.items-start]="split.layout === 'stack'"
+                                  [class.gap-0]="split.layout === 'stack'"
+                                  [class.items-center]="split.layout !== 'stack'"
+                                >
+                                  <div
+                                    class="min-w-0 shrink-0 text-left"
+                                    [class.truncate]="split.layout === 'stack'"
+                                    [class]="split.primaryClass ?? ''"
+                                  >{{ split.primary }}</div>
+                                  <div
+                                    class="min-w-0 shrink-0"
+                                    [class.truncate]="split.layout === 'stack'"
+                                    [class]="split.secondaryClass ?? ''"
+                                  >{{ split.secondary }}</div>
+                                  @if (split.tertiaryClass) {
+                                    <div class="shrink-0" [class]="split.tertiaryClass">{{ split.tertiary ?? '' }}</div>
+                                  }
+                                </div>
+                              } @else {
+                                {{ displayValue(col, flat.rowData) }}
+                              }
+                            </button>
+                          } @else {
+                            <span class="twang-tree-leaf-plain flex items-center">
+                              <span
+                                class="twang-tree-indent shrink-0"
+                                [style.width.px]="flat.node.depth * 16 + 20"
+                              ></span>
+                              {{ displayValue(col, flat.rowData) }}
+                            </span>
+                          }
+                        }
+                      </td>
+
+                    } @else {
+                      <!-- ── Regular column ───────────────────────────────── -->
+                      <td
+                        class="portfolio-table-cell {{ col.widthClass ?? '' }} {{ getCellClass(col, flat.rowData) }} {{ col.sticky ? 'twang-table-sticky-first' : '' }}"
+                        [class.portfolio-table-cell--numeric]="col.align === 'right'"
+                        [class.twang-col-fill-remaining]="!!col.fillRemaining"
+                        [style.width]="col.fillRemaining ? null : (col.width ?? null)"
+                        [style.minWidth]="col.minWidth ?? null"
+                        [style.maxWidth]="col.fillRemaining ? null : (col.maxWidth ?? null)"
+                      >
+                        @if (isActionCell(col, flat.rowData)) {
+                          <button
+                            type="button"
+                            class="portfolio-table-symbol-btn"
+                            [class.text-right]="col.align === 'right'"
+                            [class.ml-auto]="col.align === 'right'"
+                            [class.w-full]="col.align === 'right'"
+                            [class.text-left]="col.align !== 'right'"
+                            [ngClass]="getActionClass(col, flat.rowData)"
+                            (click)="col.onCellClick?.(flat.rowData, $event)"
+                          >
+                            @if (splitCellValue(col, flat.rowData); as split) {
+                              <div
+                                class="flex w-full min-w-0 gap-2"
+                                [class.flex-col]="split.layout === 'stack'"
+                                [class.items-start]="split.layout === 'stack'"
+                                [class.gap-0]="split.layout === 'stack'"
+                                [class.items-center]="split.layout !== 'stack'"
+                                [class.justify-end]="col.align === 'right' && split.layout !== 'stack'"
+                              >
+                                <div
+                                  class="min-w-0 shrink-0 text-left"
+                                  [class.truncate]="split.layout === 'stack'"
+                                  [class]="split.primaryClass ?? ''"
+                                >{{ split.primary }}</div>
+                                <div
+                                  class="min-w-0 shrink-0"
+                                  [class.truncate]="split.layout === 'stack'"
+                                  [class]="split.secondaryClass ?? ''"
+                                >{{ split.secondary }}</div>
+                                @if (split.tertiaryClass) {
+                                  <div class="shrink-0" [class]="split.tertiaryClass">{{ split.tertiary ?? '' }}</div>
+                                }
+                              </div>
+                            } @else if (col.cellTruncate) {
+                              <span class="block min-w-0 truncate">{{ displayValue(col, flat.rowData) }}</span>
+                            } @else {
+                              {{ displayValue(col, flat.rowData) }}
+                            }
+                          </button>
+                        } @else if (col.cellTruncate) {
+                          <span class="block min-w-0 truncate">{{ displayValue(col, flat.rowData) }}</span>
+                        } @else {
+                          {{ displayValue(col, flat.rowData) }}
+                        }
+                      </td>
+                    }
+
+                  }
+                </tr>
+              } @empty {
+                <tr>
+                  <td
+                    [attr.colspan]="columns.length"
+                    class="px-4 py-10 text-center text-sm text-text-muted sm:px-6"
+                  >
+                    {{ emptyMessage }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+
+            @if (footer?.length) {
+              <tfoot class="twang-table-tfoot border-t border-border bg-gray-50/50">
+                <tr>
+                  @for (cell of footer ?? []; track $index) {
+                    <td
+                      class="portfolio-table-footer-cell {{ cell.widthClass ?? '' }} {{ cell.className ?? '' }} {{ cell.sticky ? 'twang-table-sticky-first' : '' }}"
+                      [class.portfolio-table-footer-cell--numeric]="cell.align === 'right'"
+                      [attr.colspan]="cell.colspan ?? 1"
+                      [style.width]="cell.width ?? null"
+                      [style.minWidth]="cell.minWidth ?? null"
+                      [style.maxWidth]="cell.maxWidth ?? null"
+                    >
+                      {{ cell.text }}
+                    </td>
+                  }
+                </tr>
+              </tfoot>
+            }
+
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

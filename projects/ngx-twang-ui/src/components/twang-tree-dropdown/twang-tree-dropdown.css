@@ -1,0 +1,7 @@
+.twang-tree-dropdown-root {
+  width: 100%;
+}
+
+.twang-tree-dropdown-panel {
+  overscroll-behavior: contain;
+}

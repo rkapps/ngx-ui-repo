@@ -1,0 +1,208 @@
+<div
+  class="twang-table-panel"
+  [class.twang-table-panel--footer]="!!footer?.length && !!scrollPanelMaxHeight"
+  [class.twang-table-panel--fill-container]="fillContainerWidth"
+  [style.max-height]="isPaginated() ? null : (scrollPanelMaxHeight || null)"
+  [style.min-height]="effectiveScrollPanelMinHeight()"
+>
+  <div class="twang-table-hscroll" [style.touch-action]="isPaginated() ? 'pan-x pan-y' : null">
+    <div class="twang-table-inner">
+      <div class="twang-table-vscroll" [style.overflow-y]="isPaginated() ? 'clip' : null">
+        <div
+          class="twang-table-body-wrap"
+          [class.twang-table-footer-fill]="!!footer?.length && !!scrollPanelMaxHeight"
+        >
+        <table
+          class="twang-table {{ tableMinWidthClass }} border-separate border-spacing-0 text-left"
+          [class.twang-table--footer-layout]="!!footer?.length && !!scrollPanelMaxHeight"
+        >
+          <colgroup>
+            @for (col of columns; track col.id) {
+              <col
+                [class]="col.widthClass ?? ''"
+                [class.twang-col-fill-remaining]="!!col.fillRemaining"
+                [class.twang-col-fill-remaining-squeeze]="!!col.fillRemaining && !col.minWidth"
+                [style.width]="col.fillRemaining ? null : (col.width ?? null)"
+                [style.minWidth]="col.minWidth ?? null"
+                [style.maxWidth]="col.fillRemaining ? null : (col.maxWidth ?? null)"
+              />
+            }
+          </colgroup>
+          <thead class="border-b border-border bg-gray-50/95 backdrop-blur-sm">
+            <tr>
+              @for (col of columns; track col.id) {
+                <th
+                  class="portfolio-table-th {{ col.widthClass ?? '' }} {{ col.headerClass ?? '' }} {{ col.sticky ? 'twang-table-sticky-first' : '' }}"
+                  [class.portfolio-table-th--right]="col.align === 'right'"
+                  [class.twang-col-fill-remaining]="!!col.fillRemaining"
+                  [style.width]="col.fillRemaining ? null : (col.width ?? null)"
+                  [style.minWidth]="col.minWidth ?? null"
+                  [style.maxWidth]="col.fillRemaining ? null : (col.maxWidth ?? null)"
+                >
+                  @if (col.sortable) {
+                    <div
+                      class="flex w-full min-w-0"
+                      [class.justify-end]="col.align === 'right'"
+                      [class.justify-start]="col.align !== 'right'"
+                    >
+                      <button
+                        type="button"
+                        class="twang-table-sort-btn w-full min-w-0"
+                        [class.justify-end]="col.align === 'right'"
+                        [class.justify-start]="col.align !== 'right'"
+                        (click)="toggleSort(col)"
+                      >
+                        @if (sortIndicator(col)) {
+                          <lucide-icon
+                            [name]="sortIndicator(col)"
+                            [size]="14"
+                            class="shrink-0"
+                            [class.order-first]="col.align === 'right'"
+                            aria-hidden="true"
+                          />
+                        }
+                        <span class="min-w-0 truncate">{{ col.header }}</span>
+                      </button>
+                    </div>
+                  } @else {
+                    {{ col.header }}
+                  }
+                </th>
+              }
+            </tr>
+          </thead>
+
+          <tbody class="divide-y divide-border">
+            @for (row of displayedRows(); track bodyRowTrackId(row)) {
+              <tr [class]="getTrClass(row)" (click)="handleRowClick(row, $event)">
+                @for (col of columns; track col.id) {
+                  <td
+                    class="portfolio-table-cell {{ col.widthClass ?? '' }} {{ getCellClass(col, row) }} {{ col.sticky ? 'twang-table-sticky-first' : '' }}"
+                    [class.portfolio-table-cell--numeric]="col.align === 'right'"
+                    [class.twang-col-fill-remaining]="!!col.fillRemaining"
+                    [class.twang-col-fill-remaining-squeeze]="!!col.fillRemaining && !col.minWidth"
+                    [style.width]="col.fillRemaining ? null : (col.width ?? null)"
+                    [style.minWidth]="col.minWidth ?? null"
+                    [style.maxWidth]="col.fillRemaining ? null : (col.maxWidth ?? null)"
+                  >
+                    @if (isActionCell(col, row)) {
+                      <button
+                        type="button"
+                        class="portfolio-table-symbol-btn"
+                        [class.text-right]="col.align === 'right'"
+                        [class.ml-auto]="col.align === 'right'"
+                        [class.w-full]="col.align === 'right'"
+                        [class.text-left]="col.align !== 'right'"
+                        [ngClass]="getActionClass(col, row)"
+                        (click)="col.onCellClick?.(row, $event)"
+                      >
+                        @if (splitCellValue(col, row); as split) {
+                          <div
+                            class="flex w-full min-w-0 gap-2"
+                            [class.flex-col]="split.layout === 'stack'"
+                            [class.items-start]="split.layout === 'stack'"
+                            [class.gap-0]="split.layout === 'stack'"
+                            [class.items-center]="split.layout !== 'stack'"
+                            [class.justify-end]="col.align === 'right' && split.layout !== 'stack'"
+                          >
+                            <div
+                              class="min-w-0 shrink-0 text-left"
+                              [class.truncate]="split.layout === 'stack'"
+                              [class]="split.primaryClass ?? ''"
+                            >{{ split.primary }}</div>
+                            <div class="min-w-0 shrink-0" [class.truncate]="split.layout === 'stack'" [class]="split.secondaryClass ?? ''">{{ split.secondary }}</div>
+                            @if (split.tertiaryClass) {
+                              <div class="shrink-0" [class]="split.tertiaryClass">{{ split.tertiary ?? '' }}</div>
+                            }
+                          </div>
+                        } @else if (col.cellTruncate) {
+                          <span class="block min-w-0 truncate">{{ displayValue(col, row) }}</span>
+                        } @else {
+                          {{ displayValue(col, row) }}
+                        }
+                      </button>
+                    } @else {
+                      @if (splitCellValue(col, row); as split) {
+                        <div
+                          class="flex w-full min-w-0 gap-2"
+                          [class.flex-col]="split.layout === 'stack'"
+                          [class.items-start]="split.layout === 'stack'"
+                          [class.gap-0]="split.layout === 'stack'"
+                          [class.items-center]="split.layout !== 'stack'"
+                          [class.justify-end]="col.align === 'right' && split.layout !== 'stack'"
+                        >
+                          <div
+                            class="min-w-0 shrink-0 text-left"
+                            [class.truncate]="split.layout === 'stack'"
+                            [class]="split.primaryClass ?? ''"
+                          >{{ split.primary }}</div>
+                          <div class="min-w-0 shrink-0" [class.truncate]="split.layout === 'stack'" [class]="split.secondaryClass ?? ''">{{ split.secondary }}</div>
+                          @if (split.tertiaryClass) {
+                            <div class="shrink-0" [class]="split.tertiaryClass">{{ split.tertiary ?? '' }}</div>
+                          }
+                        </div>
+                      } @else if (col.cellTruncate) {
+                        <span class="block min-w-0 truncate">{{ displayValue(col, row) }}</span>
+                      } @else {
+                        {{ displayValue(col, row) }}
+                      }
+                    }
+                  </td>
+                }
+              </tr>
+            } @empty {
+              <tr>
+                <td
+                  [attr.colspan]="columns.length"
+                  class="px-4 py-10 text-center text-sm text-text-muted sm:px-6"
+                >
+                  {{ emptyMessage }}
+                </td>
+              </tr>
+            }
+          </tbody>
+
+          @if (footer?.length) {
+            <tfoot class="twang-table-tfoot border-t border-border bg-gray-50/50">
+              <tr>
+                @for (cell of footer ?? []; track $index) {
+                  <td
+                    class="portfolio-table-footer-cell {{ cell.widthClass ?? '' }} {{ cell.className ?? '' }} {{ cell.sticky ? 'twang-table-sticky-first' : '' }}"
+                    [class.portfolio-table-footer-cell--numeric]="cell.align === 'right'"
+                    [attr.colspan]="cell.colspan ?? 1"
+                    [style.width]="cell.width ?? null"
+                    [style.minWidth]="cell.minWidth ?? null"
+                    [style.maxWidth]="cell.maxWidth ?? null"
+                  >
+                    {{ cell.text }}
+                  </td>
+                }
+              </tr>
+            </tfoot>
+          }
+        </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+@if (isPaginated()) {
+  <div class="shrink-0 flex items-center justify-end gap-2 border-t border-border px-4 py-2">
+    <span class="text-xs text-text-muted">{{ page() + 1 }} / {{ totalPages() }}</span>
+    <button
+      type="button"
+      class="rounded p-1 text-text-muted transition hover:text-text disabled:opacity-30"
+      [disabled]="page() === 0"
+      (click)="prevPage()"
+      aria-label="Previous page"
+    ><lucide-icon name="chevron-left" [size]="16" /></button>
+    <button
+      type="button"
+      class="rounded p-1 text-text-muted transition hover:text-text disabled:opacity-30"
+      [disabled]="page() === totalPages() - 1"
+      (click)="nextPage()"
+      aria-label="Next page"
+    ><lucide-icon name="chevron-right" [size]="16" /></button>
+  </div>
+}

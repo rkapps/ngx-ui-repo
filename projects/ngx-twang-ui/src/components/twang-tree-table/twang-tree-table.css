@@ -1,0 +1,358 @@
+/*
+ * TwangTreeTable styles.
+ * Structural panel/scroll CSS is duplicated from twang-table.css because Angular's Emulated
+ * view encapsulation scopes those styles to their own component. Tree-specific rules follow.
+ */
+
+:host {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  flex: 1 1 0%;
+  flex-direction: column;
+}
+
+/* ─── Panel / scroll infrastructure (mirrors twang-table.css) ──────────────── */
+
+.twang-table-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  flex: 1 1 0%;
+  overflow-y: hidden;
+}
+
+.twang-table-panel--footer .twang-table-hscroll {
+  overflow-y: hidden;
+}
+
+.twang-table-panel--footer {
+  overflow-y: hidden;
+}
+
+.twang-table-panel--fill-container .twang-table-inner {
+  width: 100%;
+  min-width: 0;
+}
+
+.twang-table-panel--fill-container .twang-table-inner .twang-table-vscroll .twang-table:not(.twang-table--footer-layout) {
+  width: 100%;
+  max-width: 100%;
+}
+
+.twang-table-panel--fill-container .twang-table:not(.twang-table--footer-layout) {
+  width: 100%;
+}
+
+.twang-table-panel--fill-container col.twang-col-fill-remaining,
+.twang-table-panel--fill-container th.twang-col-fill-remaining,
+.twang-table-panel--fill-container td.twang-col-fill-remaining {
+  width: auto;
+}
+
+.twang-table-panel--fill-container col.twang-col-fill-remaining.twang-col-fill-remaining-squeeze,
+.twang-table-panel--fill-container th.twang-col-fill-remaining.twang-col-fill-remaining-squeeze,
+.twang-table-panel--fill-container td.twang-col-fill-remaining.twang-col-fill-remaining-squeeze {
+  min-width: 0;
+}
+
+.twang-table-hscroll {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-gutter: auto;
+}
+
+.twang-table-inner {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-height: 0;
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
+}
+
+.twang-table-inner .twang-table-vscroll .twang-table:not(.twang-table--footer-layout) {
+  width: max-content;
+  max-width: none;
+}
+
+.twang-table-body-wrap {
+  display: contents;
+}
+
+.twang-table-panel--footer .twang-table-footer-fill {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  flex-shrink: 0;
+  min-height: 100%;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.twang-table-panel--footer .twang-table-inner {
+  width: 100%;
+  min-width: 0;
+}
+
+.twang-table-vscroll {
+  flex: 1 1 0%;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: visible;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.twang-table-panel--footer .twang-table-vscroll {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: visible;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-gutter: auto;
+}
+
+.twang-table-panel--footer .twang-table.twang-table--footer-layout {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  flex-shrink: 0;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+.twang-table-panel--footer .twang-table thead,
+.twang-table-panel--footer .twang-table tbody,
+.twang-table-panel--footer .twang-table tfoot {
+  display: block;
+  width: 100%;
+  overflow-x: visible;
+}
+
+.twang-table-panel--footer .twang-table thead,
+.twang-table-panel--footer .twang-table tfoot {
+  flex-shrink: 0;
+  overflow-y: visible;
+}
+
+.twang-table-panel--footer .twang-table tbody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: visible;
+  overflow-x: visible;
+}
+
+.twang-table-panel--footer .twang-table thead tr,
+.twang-table-panel--footer .twang-table tbody tr,
+.twang-table-panel--footer .twang-table tfoot tr {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.twang-table {
+  flex: 0 0 auto;
+  height: auto;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.twang-table:not(.twang-table--footer-layout) {
+  width: max-content;
+  min-width: max-content;
+}
+
+.twang-table tbody,
+.twang-table tfoot {
+  color: var(--app-text);
+}
+
+.twang-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 11;
+}
+
+.twang-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: color-mix(in oklch, var(--app-gray-50, #f9fafb) 95%, white);
+}
+
+.twang-table-sticky-first {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: white;
+  box-shadow: 1px 0 0 var(--app-chrome-border, #e5e7eb);
+}
+
+.twang-table thead .twang-table-sticky-first {
+  position: sticky;
+  top: 0 !important;
+  left: 0 !important;
+  z-index: 20;
+  background: color-mix(in oklch, var(--app-gray-50, #f9fafb) 95%, white);
+  box-shadow: 1px 0 0 var(--app-chrome-border, #e5e7eb);
+}
+
+.twang-table tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 14;
+  background: color-mix(in oklch, var(--app-gray-50, #f9fafb) 50%, white);
+}
+
+.twang-table tfoot .twang-table-sticky-first {
+  position: sticky;
+  left: 0;
+  bottom: 0;
+  z-index: 15;
+  background: color-mix(in oklch, var(--app-gray-50, #f9fafb) 50%, white);
+  box-shadow: 1px 0 0 var(--app-chrome-border, #e5e7eb);
+}
+
+.twang-table-panel--footer .twang-table thead {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 11 !important;
+}
+
+.twang-table-panel--footer .twang-table thead th:not(.twang-table-sticky-first) {
+  position: sticky !important;
+  top: 0 !important;
+}
+
+.twang-table-panel--footer .twang-table thead .twang-table-sticky-first {
+  position: sticky !important;
+  top: 0 !important;
+  left: 0 !important;
+  z-index: 20;
+  background: color-mix(in oklch, var(--app-gray-50, #f9fafb) 95%, white);
+  box-shadow: 1px 0 0 var(--app-chrome-border, #e5e7eb);
+}
+
+.twang-table-panel--footer .twang-table tfoot td:not(.twang-table-sticky-first) {
+  position: sticky !important;
+  bottom: 0 !important;
+}
+
+.twang-table-panel--footer .twang-table tfoot {
+  position: sticky !important;
+  bottom: 0 !important;
+  z-index: 14;
+  background: color-mix(in oklch, var(--app-gray-50, #f9fafb) 50%, white);
+  overflow-x: visible;
+  flex-shrink: 0;
+}
+
+.twang-table-panel--footer .twang-table tfoot .twang-table-sticky-first {
+  position: sticky !important;
+  left: 0 !important;
+  bottom: 0 !important;
+  z-index: 15;
+  background: color-mix(in oklch, var(--app-gray-50, #f9fafb) 50%, white);
+  box-shadow: 1px 0 0 var(--app-chrome-border, #e5e7eb);
+}
+
+/* ─── Tree-specific: row styling ───────────────────────────────────────────── */
+
+/* All rows: consistent font-weight for financial figures */
+.twang-table tbody td {
+  font-weight: 500;
+}
+
+/* Last row bottom border */
+.twang-tree-last-row td {
+  border-bottom: 1px solid var(--app-chrome-border, #e5e7eb);
+}
+
+/* ─── Expand / collapse button ─────────────────────────────────────────────── */
+
+.twang-tree-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  gap: 0.25rem;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  box-sizing: border-box;
+  font: inherit;
+  font-weight: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.twang-tree-expand-btn:hover {
+  color: var(--app-primary-600);
+}
+
+.twang-tree-expand-btn:focus-visible {
+  outline: 2px solid color-mix(in oklch, var(--app-primary-500) 40%, transparent);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+.twang-tree-chevron {
+  transition: transform 150ms ease;
+  transform: rotate(0deg);
+}
+
+.twang-tree-chevron--open {
+  transform: rotate(90deg);
+}
+
+/* ─── Leaf label cell ───────────────────────────────────────────────────────── */
+
+.twang-tree-leaf-label-btn {
+  display: inline-flex !important;
+  align-items: center;
+  white-space: normal;
+  font-weight: inherit;
+}
+
+.twang-tree-leaf-plain {
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Indent spacer: inline-block so it contributes to flex layout width */
+.twang-tree-indent {
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* Label cell: overflow hidden so deep indents + long labels don't blow out the column */
+.twang-tree-label-cell {
+  overflow: hidden;
+}
+
