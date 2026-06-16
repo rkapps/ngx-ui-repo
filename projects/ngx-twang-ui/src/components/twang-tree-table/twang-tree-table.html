@@ -83,7 +83,7 @@
                               class="twang-tree-chevron shrink-0 text-text-muted"
                               [class.twang-tree-chevron--open]="isExpanded(flat.node.id)"
                             />
-                            <span class="min-w-0 truncate">{{ flat.node.label }}</span>
+                            <span class="min-w-0 break-words">{{ flat.node.label }}</span>
                           </button>
                         } @else {
                           <!-- Leaf row: symbol + name (or plain value) -->

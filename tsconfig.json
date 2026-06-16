@@ -13,7 +13,11 @@
     "experimentalDecorators": true,
     "importHelpers": true,
     "target": "ES2022",
-    "module": "preserve"
+    "module": "preserve",
+    "paths": {
+      "ngx-twang-ui": ["./projects/ngx-twang-ui/src/index.ts"],
+      "ngx-common": ["./projects/ngx-common/src/index.ts"]
+    }
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,
@@ -24,10 +28,16 @@
   "files": [],
   "references": [
     {
+      "path": "./projects/ngx-common/tsconfig.lib.json"
+    },
+    {
       "path": "./projects/ngx-twang-ui/tsconfig.lib.json"
     },
     {
       "path": "./projects/ngx-twang-ui/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/angular-starter/tsconfig.app.json"
     }
   ]
 }

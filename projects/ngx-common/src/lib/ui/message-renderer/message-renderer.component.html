@@ -1,0 +1,29 @@
+@if (parsed; as structured) {
+    <div class="flex flex-col gap-6">
+        @for (section of structured.sections; track $index) {
+            @if (section.type === 'context') {
+                <div><app-context-section [section]="$any(section)"></app-context-section></div>
+            }
+            @if (section.type === 'metric_cards') {
+                <div><app-metric-cards-section [section]="$any(section)"></app-metric-cards-section></div>
+            }
+            @if (section.type === 'bar_chart') {
+                <div><app-bar-chart-section [section]="$any(section)"></app-bar-chart-section></div>
+            }
+            @if (section.type === 'table') {
+                <div><app-table-section [section]="$any(section)"></app-table-section></div>
+            }
+            @if (section.type === 'insight_cards') {
+                <div><app-insight-cards-section [section]="$any(section)"></app-insight-cards-section></div>
+            }
+            @if (section.type === 'economic_signals') {
+                <div><app-economic-signals-section [section]="$any(section)"></app-economic-signals-section></div>
+            }
+            @if (section.type === 'consumer_buzz') {
+                <div><app-consumer-buzz-section [section]="$any(section)"></app-consumer-buzz-section></div>
+            }
+        }
+    </div>
+} @else if (!looksLikeJson) {
+    <div class="prose prose-sm max-w-none" [innerHTML]="content() | markdown"></div>
+}

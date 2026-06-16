@@ -6,6 +6,75 @@
   },
   "newProjectRoot": "projects",
   "projects": {
+    "angular-starter": {
+      "projectType": "application",
+      "root": "projects/angular-starter",
+      "sourceRoot": "projects/angular-starter/src",
+      "prefix": "app",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "outputPath": "dist/angular-starter",
+            "index": "projects/angular-starter/src/index.html",
+            "browser": "projects/angular-starter/src/main.ts",
+            "tsConfig": "projects/angular-starter/tsconfig.app.json",
+            "styles": ["projects/angular-starter/src/styles.css"],
+            "scripts": []
+          },
+          "configurations": {
+            "production": {
+              "tsConfig": "projects/angular-starter/tsconfig.app.prod.json",
+              "optimization": true,
+              "outputHashing": "all",
+              "fileReplacements": [
+                {
+                  "replace": "projects/angular-starter/src/environments/environment.ts",
+                  "with": "projects/angular-starter/src/environments/environment.prod.ts"
+                }
+              ]
+            },
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "configurations": {
+            "production": { "buildTarget": "angular-starter:build:production" },
+            "development": { "buildTarget": "angular-starter:build:development" }
+          },
+          "defaultConfiguration": "development"
+        }
+      }
+    },
+    "ngx-common": {
+      "projectType": "library",
+      "root": "projects/ngx-common",
+      "sourceRoot": "projects/ngx-common/src",
+      "prefix": "lib",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:ng-packagr",
+          "options": {
+            "project": "projects/ngx-common/ng-package.json"
+          },
+          "configurations": {
+            "production": {
+              "tsConfig": "projects/ngx-common/tsconfig.lib.prod.json"
+            },
+            "development": {
+              "tsConfig": "projects/ngx-common/tsconfig.lib.json"
+            }
+          },
+          "defaultConfiguration": "production"
+        }
+      }
+    },
     "ngx-twang-ui": {
       "projectType": "library",
       "root": "projects/ngx-twang-ui",

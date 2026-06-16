@@ -1,13 +1,13 @@
-<div class="twang-dp-root relative inline-flex flex-col gap-1.5">
+<div class="twang-dp-root relative inline-flex flex-col gap-1.5" [class.dp-full]="fullWidth()">
   @if (label()) {
     <span class="block text-xs font-semibold uppercase tracking-wide text-text-muted">{{ label() }}</span>
   }
-  <div class="inline-flex items-center gap-1">
+  <div class="twang-dp-row inline-flex items-center gap-1">
 
   <!-- Trigger -->
   <button
     type="button"
-    class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-[7px] text-sm text-text transition hover:bg-surface-muted focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+    class="twang-dp-trigger inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-[7px] text-sm text-text transition hover:bg-surface-muted focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
     [attr.aria-expanded]="open()"
     aria-haspopup="dialog"
     (click)="toggleOpen($event)"

@@ -24,6 +24,7 @@ const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
   imports: [CommonModule, LucideAngularModule],
   templateUrl: './twang-datepicker.html',
   styleUrl: './twang-datepicker.css',
+  host: { '[class.dp-full]': 'fullWidth()' },
 })
 export class TwangDatepickerComponent {
   private readonly host = inject(ElementRef<HTMLElement>);
@@ -31,6 +32,7 @@ export class TwangDatepickerComponent {
   readonly label = input<string>('');
   readonly value = input<string>('');
   readonly placeholder = input('Select date');
+  readonly fullWidth = input<boolean>(false);
   readonly valueChange = output<string>();
 
   protected readonly open = signal(false);

@@ -1,0 +1,17 @@
+{
+  "name": "ngx-common",
+  "version": "0.0.1",
+  "peerDependencies": {
+    "@angular/common": ">=21.0.0",
+    "@angular/core": ">=21.0.0",
+    "@angular/fire": ">=21.0.0",
+    "@angular/router": ">=21.0.0",
+    "firebase": ">=11.0.0",
+    "lucide-angular": ">=0.500.0",
+    "ngx-twang-ui": ">=0.0.1"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  },
+  "sideEffects": false
+}

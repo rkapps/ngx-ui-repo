@@ -78,12 +78,12 @@ export class TwangNavTabsComponent {
     if (v === 'segment') {
       const sz =
         s === 'xs'
-          ? 'rounded-md px-2 py-0.5 text-[11px] font-semibold sm:px-2.5'
+          ? 'rounded-md px-2 py-0.5 text-[11px] font-medium sm:px-2.5'
           : s === 'sm'
-            ? 'rounded-md px-2.5 py-1 text-xs font-semibold sm:px-3'
+            ? 'rounded-md px-2.5 py-1 text-xs font-medium sm:px-3'
             : s === 'lg'
-              ? 'rounded-md px-4 py-2 text-base font-semibold sm:px-5'
-              : 'rounded-md px-3 py-1.5 text-sm font-semibold sm:px-4';
+              ? 'rounded-md px-4 py-2 text-base font-medium sm:px-5'
+              : 'rounded-md px-3 py-1.5 text-sm font-medium sm:px-4';
       return `inline-flex items-center gap-0.5 ${sz} text-text-muted transition-all hover:text-text ${focus}`;
     }
     const sz =
@@ -103,7 +103,7 @@ export class TwangNavTabsComponent {
       return 'bg-primary-50 text-primary-900 ring-1 ring-primary-200';
     }
     if (v === 'segment') {
-      return 'bg-gray-100 font-bold text-text shadow-sm ring-1 ring-border';
+      return '!font-bold !text-accent-600';
     }
     return 'border-primary-600 !font-bold !text-primary-600';
   });

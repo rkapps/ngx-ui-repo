@@ -351,8 +351,10 @@
   flex-shrink: 0;
 }
 
-/* Label cell: overflow hidden so deep indents + long labels don't blow out the column */
+/* Label cell: allows wrapping by default; overflow hidden would prevent it */
 .twang-tree-label-cell {
-  overflow: hidden;
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
