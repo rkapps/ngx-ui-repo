@@ -32,7 +32,7 @@ import { AuthService, LOGIN_CONFIG, UserMenuComponent } from 'ngx-common';
         <twang-nav-tabs
           [items]="navItems"
           variant="segment"
-          size="sm"
+          size="md"
           align="center"
           ariaLabel="Main navigation"
           class="max-w-xs"
