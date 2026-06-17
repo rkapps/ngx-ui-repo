@@ -32,6 +32,8 @@ import {
   SquarePen,
   Sun,
   User,
+  TrendingDown,
+  TrendingUp,
   X,
 } from 'lucide-angular';
 import { LucideAngularModule } from 'lucide-angular';
@@ -67,6 +69,8 @@ const icons = {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  TrendingDown,
+  TrendingUp,
 };
 
 export const appConfig: ApplicationConfig = {
