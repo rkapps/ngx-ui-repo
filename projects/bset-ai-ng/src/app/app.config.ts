@@ -32,6 +32,7 @@ import {
   SquarePen,
   Sun,
   User,
+  Trash2,
   TrendingDown,
   TrendingUp,
   X,
@@ -69,6 +70,7 @@ const icons = {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  Trash2,
   TrendingDown,
   TrendingUp,
 };

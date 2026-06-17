@@ -1,7 +1,8 @@
 import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { LucideAngularModule } from 'lucide-angular';
+import { TwangButtonComponent } from 'ngx-twang-ui';
 import { ChatComponent } from '../chat/chat.component';
 import type { ChatMessage } from '../chat/chat-message';
 import { UsageTableComponent } from '../usage-table/usage-table.component';
@@ -10,7 +11,7 @@ import { ConversationService, type Conversation, type Turn } from '../../service
 @Component({
   selector: 'app-conversation-detail',
   standalone: true,
-  imports: [LucideAngularModule, ChatComponent, UsageTableComponent],
+  imports: [LucideAngularModule, TwangButtonComponent, ChatComponent, UsageTableComponent],
   host: { class: 'flex flex-1 flex-col min-h-0' },
   template: `
     @if (conversation(); as conv) {
@@ -32,6 +33,13 @@ import { ConversationService, type Conversation, type Turn } from '../../service
             >
               <lucide-icon [name]="showUsage() ? 'message-square' : 'chart-bar'" [size]="15" />
             </button>
+            <button
+              class="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-danger-50 hover:text-danger-600"
+              title="Delete conversation"
+              (click)="showDeleteConfirm.set(true)"
+            >
+              <lucide-icon name="trash-2" [size]="15" />
+            </button>
           </div>
         </div>
 
@@ -49,6 +57,26 @@ import { ConversationService, type Conversation, type Turn } from '../../service
           />
         }
       </div>
+
+      <!-- Delete confirmation modal -->
+      @if (showDeleteConfirm()) {
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" (click)="showDeleteConfirm.set(false)">
+          <div class="w-96 rounded-lg bg-white p-6 shadow-xl" (click)="$event.stopPropagation()">
+            <h3 class="text-base font-semibold text-gray-900">Delete conversation?</h3>
+            <p class="mt-1 text-sm text-gray-500">
+              "{{ conv.title }}" will be permanently deleted. This cannot be undone.
+            </p>
+            <div class="mt-5 flex justify-end gap-3">
+              <twang-button variant="outline" [disabled]="deleting()" (click)="showDeleteConfirm.set(false)">
+                Cancel
+              </twang-button>
+              <twang-button variant="destructive" [loading]="deleting()" (click)="confirmDelete(conv.id)">
+                Delete
+              </twang-button>
+            </div>
+          </div>
+        </div>
+      }
     } @else {
       <div class="flex h-full items-center justify-center">
         <lucide-icon name="loader-circle" [size]="24" class="animate-spin text-text-muted" />
@@ -58,11 +86,14 @@ import { ConversationService, type Conversation, type Turn } from '../../service
 })
 export class ConversationDetailComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly conversationService = inject(ConversationService);
   private paramSub?: Subscription;
 
   protected readonly conversation = signal<Conversation | undefined>(undefined);
   protected readonly showUsage = signal(false);
+  protected readonly showDeleteConfirm = signal(false);
+  protected readonly deleting = signal(false);
   protected readonly turns = signal<Turn[]>([]);
   protected readonly loadingTurns = signal(true);
   protected readonly streamingStatus = signal('');
@@ -100,6 +131,14 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.paramSub?.unsubscribe();
+  }
+
+  protected confirmDelete(id: string): void {
+    this.deleting.set(true);
+    this.conversationService.deleteConversation(id).subscribe({
+      next: () => this.router.navigate(['/agents']),
+      error: () => this.deleting.set(false),
+    });
   }
 
   protected onSend(text: string): void {

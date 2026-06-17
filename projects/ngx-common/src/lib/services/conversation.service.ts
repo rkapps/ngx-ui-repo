@@ -87,6 +87,12 @@ export class ConversationService {
     );
   }
 
+  deleteConversation(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/conversations/${id}`).pipe(
+      tap(() => this._conversations.update(list => list.filter(c => c.id !== id)))
+    );
+  }
+
   sendMessage(conversationId: string, userPrompt: string): Observable<CompletionChunkResponse> {
     return new Observable(subscriber => {
       const doFetch = async (token: string) => {
