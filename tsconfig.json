@@ -38,6 +38,9 @@
     },
     {
       "path": "./projects/angular-starter/tsconfig.app.json"
+    },
+    {
+      "path": "./projects/bset-ai-ng/tsconfig.app.json"
     }
   ]
 }

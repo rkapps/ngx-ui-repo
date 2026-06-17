@@ -1,0 +1,64 @@
+<app-page-layout class="flex h-full flex-col" expandedWidth="w-96" storageKey="layout.chat" panelTitle="Conversations">
+  <!-- Panel header action: new conversation -->
+  <button
+    panel-action
+    class="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-muted hover:text-text"
+    title="New conversation"
+    (click)="newConversation()"
+  >
+    <lucide-icon name="square-pen" [size]="15" />
+  </button>
+
+  <!-- Sidebar: conversation list -->
+  <div sidebar class="flex flex-col gap-1 p-3">
+    @if (loadingConvs()) {
+      <div class="flex items-center justify-center py-8">
+        <lucide-icon name="loader-circle" [size]="20" class="animate-spin text-text-muted" />
+      </div>
+    } @else if (error()) {
+      <p class="px-2 py-4 text-xs text-danger-600">{{ error() }}</p>
+    } @else {
+      @for (conv of filteredConversations(); track conv.id) {
+        <button
+          class="flex w-full items-start gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+          [class.bg-primary-50]="activeId() === conv.id"
+          [class.ring-1]="activeId() === conv.id"
+          [class.ring-primary-200]="activeId() === conv.id"
+          (click)="select(conv)"
+        >
+          <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-700">
+            {{ initials(conv.title) }}
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-1.5">
+              <lucide-icon name="bot" [size]="14" class="shrink-0 text-primary-600" />
+              <p class="truncate text-sm font-medium text-text">{{ conv.title }}</p>
+            </div>
+            <p class="mt-0.5 text-xs capitalize text-text-muted">{{ conv.strategy }}</p>
+            <div class="mt-1">
+              <span class="rounded bg-surface-muted px-1.5 py-0.5 text-[10px] font-medium text-text-muted">
+                {{ conv.llm }} / {{ conv.model }}
+              </span>
+            </div>
+          </div>
+        </button>
+      }
+    }
+  </div>
+
+  <!-- Right panel: router outlet -->
+  <div content class="flex flex-1 flex-col min-h-0">
+    <router-outlet />
+    @if (!hasChild()) {
+      <div class="flex min-h-full flex-col items-center justify-center gap-4 p-8">
+        <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-50 text-primary-600 ring-1 ring-primary-200">
+          <lucide-icon name="bot" [size]="28" />
+        </div>
+        <div class="text-center">
+          <h2 class="mb-1 text-xl font-bold text-text">Select a conversation</h2>
+          <p class="text-sm text-text-muted">Choose one from the list or start a new one.</p>
+        </div>
+      </div>
+    }
+  </div>
+</app-page-layout>
