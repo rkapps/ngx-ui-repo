@@ -16,7 +16,7 @@ import { MetricCard, MetricCardsSection } from '../message-renderer.types';
                 </div>
             }
             <div class="px-6 py-5">
-                <div class="grid gap-2" style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));">
+                <div class="grid gap-2" style="grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));">
                     @for (card of section().data; track $index) {
                         <div class="rounded-lg border border-gray-200 bg-gray-100 px-3 py-3">
                             <p class="text-xs font-medium text-gray-500 mb-1">{{ card.label }}</p>

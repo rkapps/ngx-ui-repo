@@ -28,7 +28,7 @@ import { BarChartSection } from '../message-renderer.types';
                     <div class="overflow-x-auto -mx-6 px-6">
                         <div class="flex" [class]="groupGapClass()" style="min-width: max-content;">
                             @for (item of section().data; track $index) {
-                                <div class="flex flex-col items-center gap-2" [class]="groupItemClass()">
+                                <div class="flex flex-col items-center gap-2" [style.width]="itemWidth(item.name)">
                                     <div class="flex items-end gap-1 w-full justify-center border-b border-gray-200"
                                          style="height: 220px;">
                                         @for (val of (item.values ?? []); track $index; let i = $index) {
@@ -109,7 +109,11 @@ export class BarChartSectionComponent {
 
     groupGapClass = computed(() => this.numGroups() <= 1 ? 'gap-3' : 'gap-12');
 
-    groupItemClass = computed(() => this.numGroups() <= 1 ? 'w-6' : 'w-20');
+    itemWidth(name: string): string {
+        const minPx = this.numGroups() <= 1 ? 24 : 48;
+        const px = Math.max(minPx, Math.min(120, name.length * 8));
+        return `${px}px`;
+    }
 
     groupBgColor(index: number): string {
         return this.groupBgColors[index % this.groupBgColors.length];
