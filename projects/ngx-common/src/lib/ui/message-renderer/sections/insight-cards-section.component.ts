@@ -7,8 +7,8 @@ import { InsightCardsSection } from '../message-renderer.types';
     template: `
         <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
             @if (section().title) {
-                <div class="px-6 pt-3">
-                    <div class="pb-4 border-b-2 border-primary-500">
+                <div class="px-6 pt-2">
+                    <div class="pb-2 border-b-2 border-primary-500">
                         <h3 class="text-lg font-bold text-gray-800">{{ section().title }}</h3>
                     </div>
                 </div>
@@ -17,23 +17,29 @@ import { InsightCardsSection } from '../message-renderer.types';
             <table class="w-full text-sm">
                 <thead>
                     <tr class="border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        <th class="px-6 py-3 w-8">#</th>
-                        <th class="px-4 py-3">Insight</th>
-                        <th class="px-4 py-3">Evidence</th>
-                        <th class="px-4 py-3 w-40">Source</th>
+                        <th class="px-3 py-1.5 w-10 text-center">#</th>
+                        <th class="px-3 py-1.5">Insight</th>
+                        <th class="px-3 py-1.5">Evidence</th>
+                        <th class="px-3 py-1.5 w-40">Source</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @for (card of section().data; track card.number) {
+                    @for (card of section().data; track $index) {
                         <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
-                            <td class="px-6 py-3 align-top">
-                                <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-xs font-semibold text-primary-700">
+                            <td class="px-3 py-1.5 w-10 text-center align-top">
+                                <span class="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold"
+                                      [class.bg-emerald-100]="card.signal === 'up'"
+                                      [class.text-emerald-700]="card.signal === 'up'"
+                                      [class.bg-red-100]="card.signal === 'down'"
+                                      [class.text-red-700]="card.signal === 'down'"
+                                      [class.bg-gray-100]="!card.signal || card.signal === 'neutral'"
+                                      [class.text-gray-600]="!card.signal || card.signal === 'neutral'">
                                     {{ card.number }}
                                 </span>
                             </td>
-                            <td class="px-4 py-3 font-medium text-gray-900 align-top">{{ card.title }}</td>
-                            <td class="px-4 py-3 text-gray-500 leading-relaxed align-top">{{ card.evidence }}</td>
-                            <td class="px-4 py-3 align-top">
+                            <td class="px-3 py-1.5 font-medium text-gray-900 align-top">{{ card.title }}</td>
+                            <td class="px-3 py-1.5 text-gray-500 leading-relaxed align-top">{{ card.evidence }}</td>
+                            <td class="px-3 py-1.5 align-top">
                                 @if (card.source) {
                                     <span class="text-xs font-medium text-primary-500">{{ card.source }}</span>
                                 }

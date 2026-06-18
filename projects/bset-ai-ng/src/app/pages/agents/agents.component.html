@@ -2,20 +2,20 @@
   <!-- Panel header actions -->
   <button
     panel-action
+    class="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-muted hover:text-text"
+    title="New conversation"
+    (click)="newConversation()"
+  >
+    <lucide-icon name="square-pen" [size]="15" />
+  </button>
+  <button
+    panel-action
     class="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-muted hover:text-text disabled:opacity-40"
     title="Refresh"
     [disabled]="refreshing()"
     (click)="refresh()"
   >
     <lucide-icon name="refresh-cw" [size]="15" [class.animate-spin]="refreshing()" />
-  </button>
-  <button
-    panel-action
-    class="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-muted hover:text-text"
-    title="New conversation"
-    (click)="newConversation()"
-  >
-    <lucide-icon name="square-pen" [size]="15" />
   </button>
 
   <!-- Sidebar: conversation list -->
@@ -46,10 +46,9 @@
               <lucide-icon name="bot" [size]="14" class="shrink-0 text-primary-600" />
               <p class="truncate text-sm font-medium text-text">{{ conv.title }}</p>
             </div>
-            <p class="mt-0.5 text-xs capitalize text-text-muted">{{ conv.strategy }}</p>
             <div class="mt-1">
-              <span class="rounded bg-surface-muted px-1.5 py-0.5 text-[10px] font-medium text-text-muted">
-                {{ conv.llm }} / {{ conv.model }}
+              <span class="text-xs font-medium text-text-muted">
+                {{ conv.llm }} / {{ conv.model }} ({{ conv.strategy | titlecase }})
               </span>
             </div>
           </div>

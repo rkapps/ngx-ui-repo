@@ -1,4 +1,4 @@
-import { Component, ElementRef, input, OnDestroy, output, signal, ViewChild, afterRenderEffect } from '@angular/core';
+import { Component, effect, ElementRef, input, OnDestroy, output, signal, ViewChild, afterRenderEffect } from '@angular/core';
 import { LucideAngularModule } from 'lucide-angular';
 import { ChatMessage } from './chat-message';
 import { MarkdownPipe } from './markdown.pipe';
@@ -61,6 +61,14 @@ import { MessageRendererComponent } from '../message-renderer/message-renderer.c
         }
       </div>
 
+      <!-- Stream error -->
+      @if (errorMessage()) {
+        <div class="mx-16 mb-2 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <span class="shrink-0 font-bold">!</span>
+          <span>{{ errorMessage() }}</span>
+        </div>
+      }
+
       <!-- Prompt bar -->
       <div class="shrink-0 border-t border-border bg-white px-4 pt-4 pb-8">
         <div class="mx-auto flex w-3/4 items-end gap-2 rounded-2xl border border-border bg-white px-3 py-2 shadow-sm focus-within:border-primary-400 focus-within:ring-2 focus-within:ring-primary-400/20 transition-shadow">
@@ -109,6 +117,8 @@ export class ChatComponent implements OnDestroy {
   readonly messages = input<ChatMessage[]>([]);
   readonly loading = input(false);
   readonly status = input('');
+  readonly errorMessage = input<string | null>(null);
+  readonly clearTrigger = input<number>(0);
   readonly send = output<string>();
 
   protected readonly prompt = signal('');
@@ -119,6 +129,13 @@ export class ChatComponent implements OnDestroy {
   private prevMsgCount = 0;
 
   constructor() {
+    effect(() => {
+      if (this.clearTrigger() > 0) {
+        this.prompt.set('');
+        if (this.promptEl) this.promptEl.nativeElement.style.height = 'auto';
+      }
+    });
+
     afterRenderEffect(() => {
       const msgs = this.messages();
       if (msgs.length === 0) { this.prevMsgCount = 0; return; }
@@ -168,10 +185,6 @@ export class ChatComponent implements OnDestroy {
     const text = this.prompt().trim();
     if (!text) return;
     this.send.emit(text);
-    this.prompt.set('');
-    if (this.promptEl) {
-      this.promptEl.nativeElement.style.height = 'auto';
-    }
   }
 
   protected toggleMic(): void {

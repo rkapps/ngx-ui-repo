@@ -1,6 +1,6 @@
 import { Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Location } from '@angular/common';
+import { Location, TitleCasePipe } from '@angular/common';
 import { ActivatedRoute, Router, RouterOutlet } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd } from '@angular/router';
@@ -13,7 +13,7 @@ const SELECTED_KEY = 'agents.selectedId';
 @Component({
   selector: 'app-agents',
   standalone: true,
-  imports: [LucideAngularModule, PageLayoutComponent, RouterOutlet],
+  imports: [LucideAngularModule, PageLayoutComponent, RouterOutlet, TitleCasePipe],
   templateUrl: './agents.component.html',
   host: { class: 'flex flex-1 flex-col min-h-0 overflow-hidden' },
 })
@@ -85,9 +85,14 @@ export class AgentsPageComponent implements OnInit {
         if (isRefresh) {
           this.selectFirst();
         } else {
-          const savedId = sessionStorage.getItem(SELECTED_KEY);
-          if (savedId && data.find(c => c.id === savedId)) {
-            this.router.navigate([savedId], { relativeTo: this.route, replaceUrl: true });
+          const currentId = this.route.firstChild?.snapshot.params?.['id'];
+          if (currentId) {
+            sessionStorage.setItem(SELECTED_KEY, currentId);
+          } else {
+            const savedId = sessionStorage.getItem(SELECTED_KEY);
+            if (savedId && data.find(c => c.id === savedId)) {
+              this.router.navigate([savedId], { relativeTo: this.route, replaceUrl: true });
+            }
           }
         }
       },

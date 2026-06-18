@@ -53,6 +53,8 @@ import { ConversationService, type Conversation, type Turn } from '../../service
             [messages]="chatMessages()"
             [loading]="loadingTurns()"
             [status]="streamingStatus()"
+            [errorMessage]="streamError()"
+            [clearTrigger]="clearPromptTrigger()"
             (send)="onSend($event)"
           />
         }
@@ -77,9 +79,14 @@ import { ConversationService, type Conversation, type Turn } from '../../service
           </div>
         </div>
       }
-    } @else {
+    } @else if (loadingConversation()) {
       <div class="flex h-full items-center justify-center">
         <lucide-icon name="loader-circle" [size]="24" class="animate-spin text-text-muted" />
+      </div>
+    } @else {
+      <div class="flex h-full flex-col items-center justify-center gap-3 text-center">
+        <lucide-icon name="message-square-x" [size]="36" class="text-text-muted opacity-40" />
+        <p class="text-sm text-text-muted">Conversation not found.</p>
       </div>
     }
   `,
@@ -91,12 +98,15 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
   private paramSub?: Subscription;
 
   protected readonly conversation = signal<Conversation | undefined>(undefined);
+  protected readonly loadingConversation = signal(true);
   protected readonly showUsage = signal(false);
   protected readonly showDeleteConfirm = signal(false);
   protected readonly deleting = signal(false);
   protected readonly turns = signal<Turn[]>([]);
   protected readonly loadingTurns = signal(true);
   protected readonly streamingStatus = signal('');
+  protected readonly streamError = signal<string | null>(null);
+  protected readonly clearPromptTrigger = signal(0);
   private readonly streamingTurn = signal<ChatMessage | null>(null);
 
   protected readonly chatMessages = computed<ChatMessage[]>(() => {
@@ -113,19 +123,40 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.paramSub = this.route.params.subscribe(params => {
       const id = params['id'] as string;
-      this.conversation.set(this.conversationService.getById(id));
       this.showUsage.set(false);
       this.turns.set([]);
       this.streamingTurn.set(null);
       this.loadingTurns.set(true);
 
-      this.conversationService.getTurns(id).subscribe({
-        next: (data) => {
-          this.turns.set([...data].sort((a, b) => a.sequence - b.sequence));
-          this.loadingTurns.set(false);
-        },
-        error: () => this.loadingTurns.set(false),
-      });
+      const cached = this.conversationService.getById(id);
+      if (cached) {
+        this.conversation.set(cached);
+        this.loadingConversation.set(false);
+        this.fetchTurns(id);
+      } else {
+        this.loadingConversation.set(true);
+        this.conversationService.getConversations().subscribe({
+          next: () => {
+            this.conversation.set(this.conversationService.getById(id));
+            this.loadingConversation.set(false);
+            this.fetchTurns(id);
+          },
+          error: () => {
+            this.loadingConversation.set(false);
+            this.loadingTurns.set(false);
+          },
+        });
+      }
+    });
+  }
+
+  private fetchTurns(id: string): void {
+    this.conversationService.getTurns(id).subscribe({
+      next: (data) => {
+        this.turns.set([...data].sort((a, b) => a.sequence - b.sequence));
+        this.loadingTurns.set(false);
+      },
+      error: () => this.loadingTurns.set(false),
     });
   }
 
@@ -150,6 +181,7 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
     let statusAccumulated = '';
     let lastStatus = '';
 
+    this.streamError.set(null);
     this.streamingStatus.set('Assistant is responding');
     this.streamingTurn.set({ id: tempId, userContent: text, assistantContent: '', streaming: true });
 
@@ -176,8 +208,14 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
         };
         this.turns.update(t => [...t, newTurn]);
         this.streamingTurn.set(null);
+        this.clearPromptTrigger.update(v => v + 1);
       },
-      error: () => { this.streamingStatus.set(''); this.streamingTurn.set(null); },
+      error: (err) => {
+        this.streamingStatus.set('');
+        this.streamingTurn.set(null);
+        const msg = err?.error?.message ?? err?.message ?? 'Something went wrong. Please try again.';
+        this.streamError.set(msg);
+      },
     });
   }
 }

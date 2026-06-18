@@ -7,15 +7,15 @@ import { EconomicSignalsSection } from '../message-renderer.types';
     template: `
         <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
             @if (section().title) {
-                <div class="px-6 pt-3">
-                <div class="pb-4 border-b-2 border-primary-500">
+                <div class="px-6 pt-2">
+                <div class="pb-2 border-b-2 border-primary-500">
                     <h3 class="text-lg font-bold text-gray-800">{{ section().title }}</h3>
                 </div>
             </div>
             }
             <div class="px-6 py-5">
                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    @for (item of section().data; track item.label) {
+                    @for (item of section().data; track $index) {
                         <div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-3">
                             <div class="flex items-start justify-between gap-1 mb-1">
                                 <p class="text-xs text-gray-400 leading-snug">{{ item.label }}</p>
