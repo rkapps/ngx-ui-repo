@@ -48,8 +48,8 @@ export class TableSectionComponent {
             value: (row: TableRow) => row[`c${i}`]?.value ?? '',
             cellClass: (row: TableRow) => {
                 const sig = row[`c${i}`]?.signal;
-                if (sig === 'up') return 'signal-up';
-                if (sig === 'down') return 'signal-down';
+                if (sig === 'up') return 'text-emerald-600 font-medium';
+                if (sig === 'down') return 'text-red-600 font-medium';
                 return '';
             },
         }));

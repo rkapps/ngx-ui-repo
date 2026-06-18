@@ -3,8 +3,8 @@ export type Signal = 'up' | 'down' | 'neutral';
 export interface ContextSection       { type: 'context';       title?: string; content: string; }
 export interface MetricCard           { label: string; value: string; benchmark: string; status: Signal; }
 export interface MetricCardsSection   { type: 'metric_cards';  title?: string; data: MetricCard[]; }
-export interface BarChartItem         { name: string; value: number; signal?: Signal; }
-export interface BarChartSection      { type: 'bar_chart';     title?: string; data: BarChartItem[]; }
+export interface BarChartItem         { name: string; value?: number; values?: number[]; signal?: Signal; }
+export interface BarChartSection      { type: 'bar_chart';     title?: string; groups?: string[]; data: BarChartItem[]; }
 export interface TableCell            { value: string; signal?: Signal; }
 export interface TableSection         { type: 'table';         title?: string; headers: string[]; rows: TableCell[][]; }
 export interface InsightCard          { number: number; title: string; evidence: string; source?: string; }
