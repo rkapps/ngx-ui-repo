@@ -125,9 +125,12 @@ export class ChatComponent implements OnDestroy {
       const streaming = msgs.some(m => m.streaming);
       const isInitialLoad = this.prevMsgCount === 0;
       this.prevMsgCount = msgs.length;
-      const el = this.scrollArea?.nativeElement;
-      if (!el) return;
-      el.scrollTo({ top: el.scrollHeight, behavior: (streaming || isInitialLoad) ? 'instant' : 'smooth' });
+      const behavior = (streaming || isInitialLoad) ? 'instant' : 'smooth';
+      requestAnimationFrame(() => {
+        const el = this.scrollArea?.nativeElement;
+        if (!el) return;
+        el.scrollTo({ top: el.scrollHeight, behavior });
+      });
     });
   }
 

@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, signal } from '@angular/core';
 import { Auth } from '@angular/fire/auth';
-import { Observable, tap } from 'rxjs';
+import { Observable, Subject, tap } from 'rxjs';
 import { API_BASE_URL } from './api-url.token';
 
 export type ConversationStrategy = 'stateful' | 'stateless';
@@ -67,6 +67,9 @@ export class ConversationService {
   private readonly _conversations = signal<Conversation[]>([]);
   readonly conversations = this._conversations.asReadonly();
 
+  private readonly _deleted$ = new Subject<void>();
+  readonly deleted$ = this._deleted$.asObservable();
+
   getConversations(): Observable<Conversation[]> {
     return this.http.get<Conversation[]>(`${this.base}/conversations`).pipe(
       tap(data => this._conversations.set(data))
@@ -89,7 +92,10 @@ export class ConversationService {
 
   deleteConversation(id: string): Observable<void> {
     return this.http.delete<void>(`${this.base}/conversations/${id}`).pipe(
-      tap(() => this._conversations.update(list => list.filter(c => c.id !== id)))
+      tap(() => {
+        this._conversations.update(list => list.filter(c => c.id !== id));
+        this._deleted$.next();
+      })
     );
   }
 

@@ -1,5 +1,14 @@
 <app-page-layout class="flex h-full flex-col" expandedWidth="w-96" storageKey="layout.chat" panelTitle="Conversations">
-  <!-- Panel header action: new conversation -->
+  <!-- Panel header actions -->
+  <button
+    panel-action
+    class="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-muted hover:text-text disabled:opacity-40"
+    title="Refresh"
+    [disabled]="refreshing()"
+    (click)="refresh()"
+  >
+    <lucide-icon name="refresh-cw" [size]="15" [class.animate-spin]="refreshing()" />
+  </button>
   <button
     panel-action
     class="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-muted hover:text-text"
@@ -16,7 +25,10 @@
         <lucide-icon name="loader-circle" [size]="20" class="animate-spin text-text-muted" />
       </div>
     } @else if (error()) {
-      <p class="px-2 py-4 text-xs text-danger-600">{{ error() }}</p>
+      <div class="px-2 py-4">
+        <p class="text-xs text-danger-600">{{ error() }}</p>
+        <button class="mt-2 text-xs text-primary-600 underline hover:text-primary-700" (click)="refresh()">Try again</button>
+      </div>
     } @else {
       @for (conv of filteredConversations(); track conv.id) {
         <button
