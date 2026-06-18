@@ -89,6 +89,6 @@ export const appConfig: ApplicationConfig = {
     provideAuth(() => getAuth()),
     importProvidersFrom(LucideAngularModule.pick(icons)),
     { provide: API_BASE_URL, useValue: environment.apiUrl },
-    { provide: LOGIN_CONFIG, useValue: { appName: 'Basset AI', enableEmail: true, enableGoogle: false, redirectTo: '/agents' } },
+    { provide: LOGIN_CONFIG, useValue: { appName: 'Rustic AI', enableEmail: true, enableGoogle: true, redirectTo: '/agents' } },
   ],
 };

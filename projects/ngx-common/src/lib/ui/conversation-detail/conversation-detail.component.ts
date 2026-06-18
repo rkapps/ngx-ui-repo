@@ -1,4 +1,4 @@
-import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, input, OnDestroy, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { LucideAngularModule } from 'lucide-angular';
@@ -6,12 +6,13 @@ import { TwangButtonComponent } from 'ngx-twang-ui';
 import { ChatComponent } from '../chat/chat.component';
 import type { ChatMessage } from '../chat/chat-message';
 import { UsageTableComponent } from '../usage-table/usage-table.component';
-import { ConversationService, type Conversation, type Turn } from '../../services/conversation.service';
+import { ConversationFormComponent } from '../conversation-form/conversation-form.component';
+import { ConversationService, type Conversation, type ConversationStrategy, type HistoryMode, type Turn } from '../../services/conversation.service';
 
 @Component({
   selector: 'app-conversation-detail',
   standalone: true,
-  imports: [LucideAngularModule, TwangButtonComponent, ChatComponent, UsageTableComponent],
+  imports: [LucideAngularModule, TwangButtonComponent, ChatComponent, UsageTableComponent, ConversationFormComponent],
   host: { class: 'flex flex-1 flex-col min-h-0' },
   template: `
     @if (conversation(); as conv) {
@@ -23,6 +24,18 @@ import { ConversationService, type Conversation, type Turn } from '../../service
             <p class="text-xs text-text-muted">{{ conv.model }}</p>
           </div>
           <div class="flex shrink-0 items-center gap-2">
+            @if (showEditButton()) {
+              <button
+                class="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-surface-muted"
+                [class.text-primary-600]="showEdit()"
+                [class.bg-primary-50]="showEdit()"
+                [class.text-text-muted]="!showEdit()"
+                title="Edit conversation"
+                (click)="toggleEdit(conv)"
+              >
+                <lucide-icon name="square-pen" [size]="15" />
+              </button>
+            }
             <button
               class="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-surface-muted"
               [class.text-primary-600]="showUsage()"
@@ -46,6 +59,45 @@ import { ConversationService, type Conversation, type Turn } from '../../service
         @if (showUsage()) {
           <div class="flex flex-1 min-h-0 p-4">
             <app-usage-table [conversationId]="conv.id" />
+          </div>
+        } @else if (showEdit()) {
+          <!-- Edit panel -->
+          <div class="flex flex-1 flex-col overflow-y-auto px-16 py-8 gap-6">
+            <!-- Model info card (mirrors agent card in create) -->
+            <div class="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-100 px-5 py-4">
+              <lucide-icon name="bot" [size]="20" class="mt-0.5 shrink-0 text-primary-600" />
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-gray-800">{{ conv.title }}</p>
+                <p class="mt-0.5 text-sm leading-relaxed text-gray-500">{{ conv.llm }} / {{ conv.model }}</p>
+              </div>
+            </div>
+            <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
+              <div class="px-5 py-3 border-b border-gray-100 bg-gray-50">
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-500">Conversation</h3>
+              </div>
+              <div class="px-5 py-4 flex flex-col gap-4">
+                <app-conversation-form
+                  [showLlm]="false"
+                  [currentModel]="conv.model"
+                  [(title)]="editTitle"
+                  [(stream)]="editStream"
+                  [(strategy)]="editStrategy"
+                  [(historyMode)]="editHistoryMode"
+                  [(maxTurns)]="editMaxTurns"
+                  [(systemPrompt)]="editSystemPrompt"
+                />
+              </div>
+            </div>
+
+            <div class="flex flex-col gap-3">
+              @if (saveError()) {
+                <p class="text-sm text-danger-600">{{ saveError() }}</p>
+              }
+              <div class="flex justify-end gap-3">
+                <twang-button variant="outline" [disabled]="saving()" (click)="showEdit.set(false)">Cancel</twang-button>
+                <twang-button variant="primary" label="Save Changes" [loading]="saving()" (buttonClick)="saveEdit(conv.id)" />
+              </div>
+            </div>
           </div>
         } @else {
           <ngx-chat
@@ -92,6 +144,8 @@ import { ConversationService, type Conversation, type Turn } from '../../service
   `,
 })
 export class ConversationDetailComponent implements OnInit, OnDestroy {
+  readonly showEditButton = input(false);
+
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly conversationService = inject(ConversationService);
@@ -100,8 +154,17 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
   protected readonly conversation = signal<Conversation | undefined>(undefined);
   protected readonly loadingConversation = signal(true);
   protected readonly showUsage = signal(false);
+  protected readonly showEdit = signal(false);
   protected readonly showDeleteConfirm = signal(false);
   protected readonly deleting = signal(false);
+  protected readonly saving = signal(false);
+  protected readonly saveError = signal('');
+  protected readonly editTitle = signal('');
+  protected readonly editSystemPrompt = signal('');
+  protected readonly editStream = signal(false);
+  protected readonly editStrategy = signal<ConversationStrategy>('stateful');
+  protected readonly editHistoryMode = signal<HistoryMode>('full');
+  protected readonly editMaxTurns = signal<number | null>(null);
   protected readonly turns = signal<Turn[]>([]);
   protected readonly loadingTurns = signal(true);
   protected readonly streamingStatus = signal('');
@@ -162,6 +225,37 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.paramSub?.unsubscribe();
+  }
+
+  protected toggleEdit(conv: Conversation): void {
+    if (this.showEdit()) {
+      this.showEdit.set(false);
+      return;
+    }
+    this.editTitle.set(conv.title);
+    this.editSystemPrompt.set(conv.system_prompt ?? '');
+    this.editStream.set(conv.stream ?? false);
+    this.editStrategy.set((conv.strategy as ConversationStrategy) ?? 'stateful');
+    this.editHistoryMode.set('full');
+    this.editMaxTurns.set(null);
+    this.saveError.set('');
+    this.showEdit.set(true);
+  }
+
+  protected saveEdit(id: string): void {
+    this.saving.set(true);
+    this.saveError.set('');
+    this.conversationService.updateConversation(id, {
+      title: this.editTitle().trim() || undefined,
+      system_prompt: this.editSystemPrompt().trim() || undefined,
+      stream: this.editStream(),
+      strategy: this.editStrategy(),
+      history_mode: this.editHistoryMode(),
+      ...(this.editMaxTurns() != null ? { max_turns: this.editMaxTurns()! } : {}),
+    }).subscribe({
+      next: () => { this.saving.set(false); this.showEdit.set(false); },
+      error: () => { this.saving.set(false); this.saveError.set('Failed to save changes. Please try again.'); },
+    });
   }
 
   protected confirmDelete(id: string): void {

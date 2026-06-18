@@ -5,7 +5,7 @@ import { Observable, Subject, tap } from 'rxjs';
 import { API_BASE_URL } from './api-url.token';
 
 export type ConversationStrategy = 'stateful' | 'stateless';
-export type HistoryMode = 'full' | 'last_n' | 'none';
+export type HistoryMode = 'full' | 'trimmed' | 'last_n' | 'none';
 
 export interface ConversationRequest {
   conversation_type: 'chat' | 'agent';
@@ -16,6 +16,15 @@ export interface ConversationRequest {
   llm: string;
   model: string;
   stream: boolean;
+  strategy?: ConversationStrategy;
+  history_mode?: HistoryMode;
+  max_turns?: number;
+}
+
+export interface ConversationUpdateRequest {
+  title?: string;
+  system_prompt?: string;
+  stream?: boolean;
   strategy?: ConversationStrategy;
   history_mode?: HistoryMode;
   max_turns?: number;
@@ -32,6 +41,8 @@ export interface Conversation {
   model: string;
   total_tokens_cost: number;
   strategy: string;
+  stream?: boolean;
+  system_prompt?: string;
   uid: string;
 }
 
@@ -87,6 +98,12 @@ export class ConversationService {
   createConversation(payload: ConversationRequest): Observable<Conversation> {
     return this.http.post<Conversation>(`${this.base}/conversations`, payload).pipe(
       tap(conv => this._conversations.update(list => [conv, ...list]))
+    );
+  }
+
+  updateConversation(id: string, payload: ConversationUpdateRequest): Observable<Conversation> {
+    return this.http.patch<Conversation>(`${this.base}/conversations/${id}`, payload).pipe(
+      tap(updated => this._conversations.update(list => list.map(c => c.id === id ? updated : c)))
     );
   }
 

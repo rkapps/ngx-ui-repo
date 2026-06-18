@@ -32,6 +32,7 @@ export type { ChatMessage } from './lib/ui/chat/chat-message';
 export { MessageRendererComponent } from './lib/ui/message-renderer/message-renderer.component';
 export type { StructuredResponse, Section } from './lib/ui/message-renderer/message-renderer.types';
 export { UsageComponent } from './lib/ui/usage/usage.component';
+export { ConversationFormComponent } from './lib/ui/conversation-form/conversation-form.component';
 export { ConversationDetailComponent } from './lib/ui/conversation-detail/conversation-detail.component';
 export { NewConversationComponent } from './lib/ui/new-conversation/new-conversation.component';
 export { LoginComponent } from './lib/ui/login/login.component';
