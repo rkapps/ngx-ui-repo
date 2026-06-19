@@ -26,26 +26,89 @@ import { BarChartSection } from '../message-renderer.types';
                         </div>
                     }
                     <div class="overflow-x-auto -mx-6 px-6">
-                        <div class="flex" [class]="groupGapClass()" style="min-width: max-content;">
-                            @for (item of section().data; track $index) {
-                                <div class="flex flex-col items-center gap-2" [style.width]="itemWidth(item.name)">
-                                    <div class="flex items-end gap-1 w-full justify-center border-b border-gray-200"
-                                         style="height: 220px;">
-                                        @for (val of (item.values ?? []); track $index; let i = $index) {
-                                            <div class="flex flex-col items-center justify-end gap-0.5 h-full">
-                                                <span class="text-[10px] leading-none text-gray-600 font-semibold">
-                                                    {{ formatValue(val, section().unit) }}
-                                                </span>
-                                                <div class="w-6 rounded-t transition-all duration-700"
-                                                     [class]="groupBgColor(i)"
-                                                     [style.height]="verticalBarHeight(val)">
-                                                </div>
-                                            </div>
-                                        }
-                                    </div>
-                                    <span class="text-[10px] text-gray-500 text-center leading-tight font-medium">{{ item.name }}</span>
+                        <div class="flex items-start gap-2" style="min-width: max-content;">
+
+                            <!-- Y-axis -->
+                            <div class="relative shrink-0" style="width: 36px">
+                                <div class="relative" [style.height.px]="CHART_HEIGHT_PX">
+                                    @for (tick of yAxisTicks(); track tick.value) {
+                                        <div class="absolute right-0 flex items-center gap-1"
+                                             [style.bottom]="tick.bottomPct + '%'"
+                                             style="transform: translateY(50%)">
+                                            <span class="text-[9px] leading-none text-gray-400 whitespace-nowrap text-right">
+                                                {{ formatValue(tick.value, section().unit) }}
+                                            </span>
+                                            <div class="w-1.5 border-b border-gray-300"></div>
+                                        </div>
+                                    }
                                 </div>
-                            }
+                                <!-- spacer to align with item name labels below bars -->
+                                <div style="height: 20px"></div>
+                            </div>
+
+                            <!-- Bars with gridlines -->
+                            <div class="relative flex" [class]="groupGapClass()">
+                                <!-- Gridline overlay spanning all items -->
+                                <div class="absolute left-0 right-0 top-0 pointer-events-none z-0"
+                                     [style.height.px]="CHART_HEIGHT_PX">
+                                    @for (tick of yAxisTicks(); track tick.value) {
+                                        <div class="absolute left-0 right-0 border-t"
+                                             [class]="tick.value === 0 ? 'border-gray-300' : 'border-gray-100'"
+                                             [style.bottom]="tick.bottomPct + '%'">
+                                        </div>
+                                    }
+                                </div>
+
+                                @for (item of section().data; track $index) {
+                                    <div class="relative flex flex-col items-center gap-2 z-10"
+                                         [style.width]="itemWidth(item.name)">
+                                        <div class="flex flex-col w-full" [style.height.px]="CHART_HEIGHT_PX">
+                                            <!-- Positive area: bars grow up toward zero line -->
+                                            <div class="flex items-end gap-1 w-full justify-center"
+                                                 [style.height.px]="positiveAreaPx()">
+                                                @for (val of (item.values ?? []); track $index; let i = $index) {
+                                                    <div class="flex flex-col items-center justify-end gap-0.5 h-full">
+                                                        @if (val > 0) {
+                                                            <span class="text-[10px] leading-none text-gray-600 font-semibold">
+                                                                {{ formatValue(val, section().unit) }}
+                                                            </span>
+                                                            <div class="w-6 rounded-t transition-all duration-700"
+                                                                 [class]="groupBgColor(i)"
+                                                                 [style.height.px]="posBarPx(val)">
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+                                            <!-- Zero axis line -->
+                                            <div class="w-full border-b"
+                                                 [class]="hasGroupNegatives() ? 'border-gray-400' : 'border-gray-200'">
+                                            </div>
+                                            <!-- Negative area: bars grow down from zero line -->
+                                            @if (hasGroupNegatives()) {
+                                                <div class="flex items-start gap-1 w-full justify-center"
+                                                     [style.height.px]="negativeAreaPx()">
+                                                    @for (val of (item.values ?? []); track $index; let i = $index) {
+                                                        <div class="flex flex-col items-center justify-start gap-0.5 h-full">
+                                                            @if (val < 0) {
+                                                                <div class="w-6 rounded-b transition-all duration-700"
+                                                                     [class]="groupBgColor(i)"
+                                                                     [style.height.px]="negBarPx(val)">
+                                                                </div>
+                                                                <span class="text-[10px] leading-none text-gray-600 font-semibold">
+                                                                    {{ formatValue(val, section().unit) }}
+                                                                </span>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                        <span class="text-[10px] text-gray-500 text-center leading-tight font-medium">{{ item.name }}</span>
+                                    </div>
+                                }
+                            </div>
+
                         </div>
                     </div>
                 } @else {
@@ -56,14 +119,26 @@ import { BarChartSection } from '../message-renderer.types';
                                     <span>{{ item.name }}</span>
                                     <span class="font-medium">{{ formatValue(item.value ?? 0, section().unit) }}</span>
                                 </div>
-                                <div class="h-2 w-full rounded-full bg-gray-100">
-                                    <div class="h-2 rounded-full transition-all duration-500"
+                                <div class="relative h-2 w-full rounded-full bg-gray-100">
+                                    @if (hasSingleNegatives()) {
+                                        <div class="absolute inset-y-0 w-px bg-gray-400 z-10"
+                                             [style.left]="zeroPctSingle() + '%'"></div>
+                                    }
+                                    <div class="absolute inset-y-0 h-2 rounded-full transition-all duration-500"
                                         [class.bar-signal-up]="item.signal === 'up'"
                                         [class.bar-signal-down]="item.signal === 'down'"
                                         [class.bar-signal-neutral]="!item.signal || item.signal === 'neutral'"
-                                        [style.width]="singleBarWidth(item.value!)">
+                                        [style.left]="singleBarLeft(item.value ?? 0) + '%'"
+                                        [style.width]="singleBarWidthPct(item.value ?? 0) + '%'">
                                     </div>
                                 </div>
+                                @if (hasSingleNegatives()) {
+                                    <div class="relative h-3 mt-0.5">
+                                        <span class="absolute text-[9px] text-gray-400"
+                                              [style.left]="zeroPctSingle() + '%'"
+                                              style="transform: translateX(-50%)">0</span>
+                                    </div>
+                                }
                             </div>
                         }
                     </div>
@@ -80,25 +155,72 @@ export class BarChartSectionComponent {
         this.section().data?.some(d => d.values?.length)
     );
 
-    private maxGroupValue = computed(() => {
-        const allValues = this.section().data.flatMap(d => d.values ?? []);
-        return Math.max(...allValues, 0);
-    });
+    private maxGroupValue = computed(() =>
+        Math.max(...this.section().data.flatMap(d => d.values ?? []), 0)
+    );
+    private minGroupValue = computed(() =>
+        Math.min(...this.section().data.flatMap(d => d.values ?? []), 0)
+    );
+    private groupRange = computed(() => this.maxGroupValue() - this.minGroupValue());
 
     private maxSingleValue = computed(() =>
         Math.max(...this.section().data.map(d => d.value ?? 0), 0)
     );
+    private minSingleValue = computed(() =>
+        Math.min(...this.section().data.map(d => d.value ?? 0), 0)
+    );
+    private singleRange = computed(() => this.maxSingleValue() - this.minSingleValue());
 
-    private groupTotals = computed(() => {
-        const numGroups = this.section().groups?.length ?? 0;
-        const totals = new Array<number>(numGroups).fill(0);
-        for (const item of this.section().data) {
-            (item.values ?? []).forEach((v, i) => { totals[i] += v; });
-        }
-        return totals;
+    hasGroupNegatives = computed(() => this.minGroupValue() < 0);
+    hasSingleNegatives = computed(() => this.minSingleValue() < 0);
+
+    readonly CHART_HEIGHT_PX = 220;
+
+    positiveAreaPx = computed(() => {
+        const range = this.groupRange();
+        if (range === 0) return this.CHART_HEIGHT_PX;
+        return (this.maxGroupValue() / range) * this.CHART_HEIGHT_PX;
     });
 
-    private readonly CHART_HEIGHT_PX = 220;
+    negativeAreaPx = computed(() => {
+        const range = this.groupRange();
+        if (range === 0) return 0;
+        return (-this.minGroupValue() / range) * this.CHART_HEIGHT_PX;
+    });
+
+    zeroPctSingle = computed(() => {
+        const range = this.singleRange();
+        if (range === 0) return 0;
+        return (-this.minSingleValue() / range) * 100;
+    });
+
+    yAxisTicks = computed(() => {
+        const min = this.minGroupValue();
+        const max = this.maxGroupValue();
+        const range = this.groupRange();
+        if (range === 0) return [{ value: 0, bottomPct: 50 }];
+
+        const step = this.niceStep(range / 4);
+        const firstTick = Math.ceil(min / step) * step;
+        const ticks: { value: number; bottomPct: number }[] = [];
+
+        for (let v = firstTick; v <= max + step * 0.01; v += step) {
+            const rounded = Math.round(v * 1e10) / 1e10;
+            const bottomPct = ((rounded - min) / range) * 100;
+            ticks.push({ value: rounded, bottomPct });
+        }
+        return ticks;
+    });
+
+    private niceStep(roughStep: number): number {
+        const magnitude = Math.pow(10, Math.floor(Math.log10(Math.abs(roughStep))));
+        const normalized = roughStep / magnitude;
+        if (normalized <= 1) return magnitude;
+        if (normalized <= 2) return 2 * magnitude;
+        if (normalized <= 5) return 5 * magnitude;
+        return 10 * magnitude;
+    }
+
     private readonly groupBgColors = ['bg-primary-500', 'bg-blue-400', 'bg-amber-400', 'bg-emerald-400'];
 
     private numGroups = computed(() =>
@@ -119,30 +241,40 @@ export class BarChartSectionComponent {
         return this.groupBgColors[index % this.groupBgColors.length];
     }
 
-    pctLabel(value: number, groupIndex: number): string {
-        const total = this.groupTotals()[groupIndex] ?? 0;
-        if (total === 0) return '';
-        return `${((value / total) * 100).toFixed(1)}%`;
+    posBarPx(val: number): number {
+        const range = this.groupRange();
+        if (range === 0 || val <= 0) return 0;
+        return Math.max(2, (val / range) * this.CHART_HEIGHT_PX);
     }
 
-    verticalBarHeight(value: number): string {
-        const max = this.maxGroupValue();
-        if (max === 0) return '2px';
-        return `${Math.max(2, (value / max) * this.CHART_HEIGHT_PX).toFixed(0)}px`;
+    negBarPx(val: number): number {
+        const range = this.groupRange();
+        if (range === 0 || val >= 0) return 0;
+        return Math.max(2, (-val / range) * this.CHART_HEIGHT_PX);
     }
 
-    singleBarWidth(value: number): string {
-        const max = this.maxSingleValue();
-        return max === 0 ? '0%' : `${Math.min(100, (value / max) * 100).toFixed(1)}%`;
+    singleBarLeft(value: number): number {
+        if (!this.hasSingleNegatives()) return 0;
+        const range = this.singleRange();
+        if (range === 0) return this.zeroPctSingle();
+        return this.zeroPctSingle() + Math.min(0, (value / range) * 100);
+    }
+
+    singleBarWidthPct(value: number): number {
+        const range = this.singleRange();
+        if (range === 0) return 0;
+        return Math.abs((value / range) * 100);
     }
 
     formatValue(value: number, unit?: string): string {
         const u = unit ?? '';
         const prefix = u === '$' ? '$' : '';
         const suffix = u !== '$' && u ? u : '';
-        if (value >= 1_000_000) return `${prefix}${(value / 1_000_000).toFixed(1)}M${suffix}`;
-        if (value >= 1_000) return `${prefix}${(value / 1_000).toFixed(0)}K${suffix}`;
-        const num = value % 1 === 0 ? `${value}` : `${value.toFixed(1)}`;
-        return `${prefix}${num}${suffix}`;
+        const sign = value < 0 ? '-' : '';
+        const abs = Math.abs(value);
+        if (abs >= 1_000_000) return `${sign}${prefix}${(abs / 1_000_000).toFixed(1)}M${suffix}`;
+        if (abs >= 1_000) return `${sign}${prefix}${(abs / 1_000).toFixed(0)}K${suffix}`;
+        const num = abs % 1 === 0 ? `${abs}` : `${abs.toFixed(1)}`;
+        return `${sign}${prefix}${num}${suffix}`;
     }
 }

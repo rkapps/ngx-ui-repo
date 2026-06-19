@@ -144,9 +144,11 @@ export class ChatComponent implements OnDestroy {
       this.prevMsgCount = msgs.length;
       const behavior = (streaming || isInitialLoad) ? 'instant' : 'smooth';
       requestAnimationFrame(() => {
-        const el = this.scrollArea?.nativeElement;
-        if (!el) return;
-        el.scrollTo({ top: el.scrollHeight, behavior });
+        requestAnimationFrame(() => {
+          const el = this.scrollArea?.nativeElement;
+          if (!el) return;
+          el.scrollTo({ top: el.scrollHeight, behavior });
+        });
       });
     });
   }
