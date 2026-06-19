@@ -19,6 +19,20 @@ export const routes: Routes = [
       },
     ],
   },
+  {
+    path: 'chats',
+    canActivate: [authGuard],
+    children: [
+      { path: 'new', loadComponent: () => import('ngx-common').then(m => m.NewChatComponent) },
+      {
+        path: '',
+        loadComponent: () => import('ngx-common').then(m => m.ChatsPageComponent),
+        children: [
+          { path: ':id', data: { alwaysMarkdown: true }, loadComponent: () => import('ngx-common').then(m => m.ConversationDetailComponent) },
+        ],
+      },
+    ],
+  },
   { path: '', redirectTo: 'agents', pathMatch: 'full' },
   { path: '**', redirectTo: '/login' },
 ];

@@ -131,7 +131,7 @@ export class NewConversationComponent implements OnInit {
   protected readonly selectedAgent = signal<Agent | null>(null);
   protected readonly selectedLlmArr = signal<string[]>([]);
   protected readonly title = signal('');
-  protected readonly stream = signal(false);
+  protected readonly stream = signal(true);
   protected readonly strategy = signal<ConversationStrategy>('stateful');
   protected readonly historyMode = signal<HistoryMode>('full');
   protected readonly maxTurns = signal<number | null>(null);

@@ -16,11 +16,12 @@ export {
   type LlmProvider,
 } from './lib/services/agent.service';
 export { ThemeService, type Theme } from './lib/services/theme.service';
+export { ChatTemplateService, type ChatTemplate } from './lib/services/chat-template.service';
 
 // Auth
 export { AuthService, type AuthUser } from './lib/auth/auth.service';
 export { authGuard, noAuthGuard } from './lib/auth/auth.guard';
-export { authInterceptor } from './lib/auth/auth.interceptor';
+export { authInterceptor, SKIP_AUTH } from './lib/auth/auth.interceptor';
 export { LOGIN_CONFIG, type LoginConfig } from './lib/auth/login.config';
 
 // UI
@@ -35,4 +36,6 @@ export { UsageComponent } from './lib/ui/usage/usage.component';
 export { ConversationFormComponent } from './lib/ui/conversation-form/conversation-form.component';
 export { ConversationDetailComponent } from './lib/ui/conversation-detail/conversation-detail.component';
 export { NewConversationComponent } from './lib/ui/new-conversation/new-conversation.component';
+export { ChatsPageComponent } from './lib/ui/chats-page/chats-page.component';
+export { NewChatComponent } from './lib/ui/new-chat/new-chat.component';
 export { LoginComponent } from './lib/ui/login/login.component';

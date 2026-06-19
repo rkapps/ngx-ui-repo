@@ -35,7 +35,7 @@ import { AuthService, LOGIN_CONFIG, UserMenuComponent } from 'ngx-common';
           size="md"
           align="center"
           ariaLabel="Main navigation"
-          class="max-w-xs"
+          class="max-w-sm"
         />
       }
 
@@ -55,6 +55,7 @@ export class TitleBarComponent {
 
   protected readonly navItems: readonly TwangNavTabItem[] = [
     { label: 'Home', icon: 'house', link: '/home' },
+    { label: 'Chats', icon: 'message-square', link: '/chats' },
     { label: 'Agents', icon: 'bot', link: '/agents' },
     { label: 'Usage', icon: 'chart-bar', link: '/usage' },
   ];

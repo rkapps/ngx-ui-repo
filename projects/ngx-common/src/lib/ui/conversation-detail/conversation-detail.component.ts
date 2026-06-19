@@ -145,6 +145,7 @@ import { ConversationService, type Conversation, type ConversationStrategy, type
 })
 export class ConversationDetailComponent implements OnInit, OnDestroy {
   readonly showEditButton = input(false);
+  readonly alwaysMarkdown = input(false);
 
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -287,8 +288,8 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
           this.streamingStatus.set(statusAccumulated);
         }
         accumulated += chunk.content;
-        const isJson = accumulated.trimStart().startsWith('{');
-        this.streamingTurn.set({ id: tempId, userContent: text, assistantContent: isJson ? '' : accumulated, streaming: true });
+        const hide = !this.alwaysMarkdown() && accumulated.trimStart().startsWith('{');
+        this.streamingTurn.set({ id: tempId, userContent: text, assistantContent: hide ? '' : accumulated, streaming: true });
       },
       complete: () => {
         this.streamingStatus.set('');
