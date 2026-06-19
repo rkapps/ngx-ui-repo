@@ -32,6 +32,7 @@ export { MarkdownPipe } from './lib/ui/chat/markdown.pipe';
 export type { ChatMessage } from './lib/ui/chat/chat-message';
 export { MessageRendererComponent } from './lib/ui/message-renderer/message-renderer.component';
 export type { StructuredResponse, Section } from './lib/ui/message-renderer/message-renderer.types';
+export { CONSUMER_BUZZ_ICON_NAMES } from './lib/ui/message-renderer/sections/consumer-buzz-section.component';
 export { UsageComponent } from './lib/ui/usage/usage.component';
 export { ConversationFormComponent } from './lib/ui/conversation-form/conversation-form.component';
 export { ConversationDetailComponent } from './lib/ui/conversation-detail/conversation-detail.component';

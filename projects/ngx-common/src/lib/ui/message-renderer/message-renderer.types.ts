@@ -13,7 +13,7 @@ export interface InsightCardsSection  { type: 'insight_cards'; title?: string; d
 export interface EconomicSignalItem   { label: string; value: string; date?: string; source?: string; signal?: Signal; }
 export interface EconomicSignalsSection { type: 'economic_signals'; title?: string; data: EconomicSignalItem[]; }
 
-export interface SentimentItem        { source: string; rating: string; signal?: Signal; theme?: string; }
+export interface SentimentItem        { source: string; icon?: string; rating: string; max_rating?: string; signal?: Signal; theme?: string; }
 export interface ConsumerBuzzSection  { type: 'consumer_buzz'; title?: string; sentiment: SentimentItem[]; related_searches?: string[]; }
 
 export type Section =
