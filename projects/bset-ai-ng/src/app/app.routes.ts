@@ -12,7 +12,7 @@ export const routes: Routes = [
       { path: 'new', data: { showAllFields: false }, loadComponent: () => import('ngx-common').then(m => m.NewConversationComponent) },
       {
         path: '',
-        loadComponent: () => import('./pages/agents/agents.component').then(m => m.AgentsPageComponent),
+        loadComponent: () => import('ngx-common').then(m => m.AgentsPageComponent),
         children: [
           { path: ':id', loadComponent: () => import('ngx-common').then(m => m.ConversationDetailComponent) },
         ],

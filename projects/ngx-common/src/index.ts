@@ -36,6 +36,8 @@ export { UsageComponent } from './lib/ui/usage/usage.component';
 export { ConversationFormComponent } from './lib/ui/conversation-form/conversation-form.component';
 export { ConversationDetailComponent } from './lib/ui/conversation-detail/conversation-detail.component';
 export { NewConversationComponent } from './lib/ui/new-conversation/new-conversation.component';
+export { AgentsPageComponent } from './lib/ui/agents-page/agents-page.component';
 export { ChatsPageComponent } from './lib/ui/chats-page/chats-page.component';
 export { NewChatComponent } from './lib/ui/new-chat/new-chat.component';
+export { TitleBarComponent } from './lib/ui/title-bar/title-bar.component';
 export { LoginComponent } from './lib/ui/login/login.component';

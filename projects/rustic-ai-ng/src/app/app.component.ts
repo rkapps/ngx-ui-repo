@@ -1,8 +1,8 @@
 import { Component, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
-import { AuthService } from 'ngx-common';
-import { TitleBarComponent } from './shell/title-bar.component';
+import { AuthService, TitleBarComponent } from 'ngx-common';
+import type { TwangNavTabItem } from 'ngx-twang-ui';
 
 @Component({
   selector: 'app-root',
@@ -10,7 +10,7 @@ import { TitleBarComponent } from './shell/title-bar.component';
   imports: [RouterOutlet, TitleBarComponent, LucideAngularModule],
   template: `
     <div class="flex h-screen flex-col overflow-hidden">
-      <app-title-bar />
+      <app-title-bar [navItems]="navItems" />
 
       <main class="flex min-h-0 flex-1 flex-col overflow-hidden">
         @if (auth.ready()) {
@@ -30,4 +30,11 @@ import { TitleBarComponent } from './shell/title-bar.component';
 })
 export class AppComponent {
   protected readonly auth = inject(AuthService);
+
+  protected readonly navItems: readonly TwangNavTabItem[] = [
+    { label: 'Home', icon: 'house', link: '/home' },
+    { label: 'Chats', icon: 'message-square', link: '/chats' },
+    { label: 'Agents', icon: 'bot', link: '/agents' },
+    { label: 'Usage', icon: 'chart-bar', link: '/usage' },
+  ];
 }

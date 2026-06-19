@@ -1,8 +1,10 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, input } from '@angular/core';
 import { Router } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { TwangButtonComponent, TwangNavTabsComponent, type TwangNavTabItem } from 'ngx-twang-ui';
-import { AuthService, LOGIN_CONFIG, UserMenuComponent } from 'ngx-common';
+import { AuthService } from '../../auth/auth.service';
+import { LOGIN_CONFIG } from '../../auth/login.config';
+import { UserMenuComponent } from '../user-menu/user-menu.component';
 
 @Component({
   selector: 'app-title-bar',
@@ -10,7 +12,6 @@ import { AuthService, LOGIN_CONFIG, UserMenuComponent } from 'ngx-common';
   imports: [LucideAngularModule, TwangButtonComponent, TwangNavTabsComponent, UserMenuComponent],
   template: `
     <header class="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border bg-white px-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-      <!-- Logo -->
       <div class="flex shrink-0 items-center gap-2">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="20" height="20">
           <rect width="100" height="100" rx="22" fill="#1971c2"/>
@@ -27,10 +28,9 @@ import { AuthService, LOGIN_CONFIG, UserMenuComponent } from 'ngx-common';
         <span class="text-base font-bold tracking-tight text-primary-600">{{ loginConfig.appName }}</span>
       </div>
 
-      <!-- Nav tabs — only when signed in -->
       @if (auth.isLoggedIn()) {
         <twang-nav-tabs
-          [items]="navItems"
+          [items]="navItems()"
           variant="segment"
           size="md"
           align="center"
@@ -39,7 +39,6 @@ import { AuthService, LOGIN_CONFIG, UserMenuComponent } from 'ngx-common';
         />
       }
 
-      <!-- User menu or sign-in -->
       @if (auth.isLoggedIn()) {
         <app-user-menu />
       } @else {
@@ -49,16 +48,11 @@ import { AuthService, LOGIN_CONFIG, UserMenuComponent } from 'ngx-common';
   `,
 })
 export class TitleBarComponent {
+  readonly navItems = input<readonly TwangNavTabItem[]>([]);
+
   protected readonly auth = inject(AuthService);
   protected readonly loginConfig = inject(LOGIN_CONFIG);
   private readonly router = inject(Router);
-
-  protected readonly navItems: readonly TwangNavTabItem[] = [
-    { label: 'Home', icon: 'house', link: '/home' },
-    { label: 'Chats', icon: 'message-square', link: '/chats' },
-    { label: 'Agents', icon: 'bot', link: '/agents' },
-    { label: 'Usage', icon: 'chart-bar', link: '/usage' },
-  ];
 
   goToLogin(): void {
     this.router.navigate(['/login']);
