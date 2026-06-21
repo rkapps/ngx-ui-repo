@@ -20,7 +20,7 @@ import { TableSection, TableCell } from '../message-renderer.types';
                         <thead>
                             <tr class="border-b border-gray-200 bg-gray-50">
                                 @for (h of headers(); track $index; let i = $index) {
-                                    <th class="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500"
+                                    <th class="px-2 md:px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500"
                                         [class.text-left]="i === 0"
                                         [class.text-right]="i !== 0">
                                         {{ h }}
@@ -33,7 +33,7 @@ import { TableSection, TableCell } from '../message-renderer.types';
                         @for (row of normalizedRows(); track $index) {
                             <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
                                 @for (cell of row; track $index; let i = $index) {
-                                    <td class="px-3 py-1.5"
+                                    <td class="px-2 md:px-3 py-1.5"
                                         [class.text-left]="i === 0"
                                         [class.text-right]="i !== 0"
                                         [class.font-medium]="cell.signal === 'up' || cell.signal === 'down'"
@@ -62,7 +62,7 @@ import { TableSection, TableCell } from '../message-renderer.types';
                             @for (row of normalizedTotals(); track $index) {
                                 <tr class="border-t-2 border-gray-200 bg-gray-50">
                                     @for (cell of row; track $index; let i = $index) {
-                                        <td class="px-3 py-1.5 text-sm font-semibold text-gray-800"
+                                        <td class="px-2 md:px-3 py-1.5 text-sm font-semibold text-gray-800"
                                             [class.text-left]="i === 0"
                                             [class.text-right]="i !== 0"
                                             [class.text-emerald-600]="cell.signal === 'up'"

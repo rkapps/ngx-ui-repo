@@ -13,20 +13,21 @@ import { InsightCardsSection } from '../message-renderer.types';
                     </div>
                 </div>
             }
+            <div class="overflow-x-auto">
             <div class="px-2 py-2 md:px-6 md:py-5">
-            <table class="w-full text-sm">
+            <table class="w-full text-sm min-w-[480px]">
                 <thead>
                     <tr class="border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        <th class="px-3 py-1.5 w-10 text-center">#</th>
-                        <th class="px-3 py-1.5">Insight</th>
-                        <th class="px-3 py-1.5">Evidence</th>
-                        <th class="px-3 py-1.5 w-40">Source</th>
+                        <th class="px-1 md:px-3 py-1.5 w-10 text-center">#</th>
+                        <th class="px-1 md:px-3 py-1.5">Insight</th>
+                        <th class="px-1 md:px-3 py-1.5 w-[45%]">Evidence</th>
+                        <th class="px-1 md:px-3 py-1.5 w-40">Source</th>
                     </tr>
                 </thead>
                 <tbody>
                     @for (card of section().data; track $index) {
                         <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
-                            <td class="px-3 py-1.5 w-10 text-center align-top">
+                            <td class="px-1 md:px-3 py-1.5 w-10 text-center align-top">
                                 <span class="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold"
                                       [class.bg-emerald-100]="card.signal === 'up'"
                                       [class.text-emerald-700]="card.signal === 'up'"
@@ -37,9 +38,9 @@ import { InsightCardsSection } from '../message-renderer.types';
                                     {{ card.number }}
                                 </span>
                             </td>
-                            <td class="px-3 py-1.5 font-medium text-gray-900 align-top">{{ card.title }}</td>
-                            <td class="px-3 py-1.5 text-gray-500 leading-relaxed align-top">{{ card.evidence }}</td>
-                            <td class="px-3 py-1.5 align-top">
+                            <td class="px-1 md:px-3 py-1.5 font-medium text-gray-900 align-top">{{ card.title }}</td>
+                            <td class="px-1 md:px-3 py-1.5 text-gray-500 leading-relaxed align-top">{{ card.evidence }}</td>
+                            <td class="px-1 md:px-3 py-1.5 align-top">
                                 @if (card.source) {
                                     <span class="text-xs font-medium text-primary-500">{{ card.source }}</span>
                                 }
@@ -48,6 +49,7 @@ import { InsightCardsSection } from '../message-renderer.types';
                     }
                 </tbody>
             </table>
+            </div>
             </div>
         </div>
     `,
