@@ -18,7 +18,7 @@ import { ConversationService, type Conversation, type ConversationStrategy, type
     @if (conversation(); as conv) {
       <div class="flex h-full flex-col">
         <!-- Header -->
-        <div class="flex min-h-16 shrink-0 items-center justify-between gap-4 border-b border-border px-2 md:px-5">
+        <div class="flex min-h-10 md:min-h-16 shrink-0 items-center justify-between gap-4 border-b border-border px-2 md:px-5">
           <div class="min-w-0">
             <h2 class="truncate text-base font-semibold text-primary-600">{{ conv.title }}</h2>
             <p class="text-xs text-text-muted">{{ conv.model }}</p>

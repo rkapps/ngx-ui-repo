@@ -67,7 +67,7 @@ type LlmType = 'all' | 'openai' | 'gemini' | 'anthropic' | 'local';
 
       <!-- Right: usage table -->
       <div content class="flex flex-1 flex-col min-h-0 overflow-hidden">
-        <div class="flex-none px-2 md:px-6 py-3 border-b border-border flex items-center gap-2 min-h-16">
+        <div class="flex-none px-2 md:px-6 py-2 md:py-3 border-b border-border flex items-center gap-2 min-h-10 md:min-h-16">
           <span class="flex-1 text-sm font-semibold text-primary-600">Token Usage</span>
           <twang-button icon="refresh-cw" variant="default" size="sm" ariaLabel="Refresh"
             [loading]="usageTable.loading()"

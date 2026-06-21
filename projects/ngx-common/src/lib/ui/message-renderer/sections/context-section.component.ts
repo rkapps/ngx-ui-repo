@@ -9,13 +9,13 @@ import { MarkdownPipe } from '../../chat/markdown.pipe';
     template: `
         <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
             @if (section().title) {
-                <div class="px-2 pt-2">
+                <div class="px-2 md:px-6 pt-2">
                     <div class="pb-2 border-b-2 border-primary-500">
                         <h3 class="text-lg font-bold text-gray-800">{{ section().title }}</h3>
                     </div>
                 </div>
             }
-            <div class="px-2 py-2 prose prose-sm max-w-none text-gray-800">
+            <div class="px-2 py-2 md:px-6 md:py-3 prose prose-sm max-w-none text-gray-800">
                 <div [innerHTML]="section().content | markdown"></div>
             </div>
         </div>

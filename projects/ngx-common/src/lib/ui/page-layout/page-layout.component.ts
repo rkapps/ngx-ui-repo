@@ -11,7 +11,7 @@ import { TwangButtonComponent } from 'ngx-twang-ui';
       <!-- Left sidebar -->
       <aside [hidden]="asideHidden()" [class]="asideClasses()">
         <div
-          class="flex min-h-16 shrink-0 items-center border-b border-border px-2"
+          class="flex min-h-10 md:min-h-16 shrink-0 items-center border-b border-border px-2"
           [class.justify-center]="collapsed()"
         >
           @if (!collapsed() && panelTitle()) {

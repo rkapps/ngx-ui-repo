@@ -9,14 +9,14 @@ import { MetricCard, MetricCardsSection } from '../message-renderer.types';
     template: `
         <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
             @if (section().title) {
-                <div class="px-2 pt-2">
+                <div class="px-2 md:px-6 pt-2">
                     <div class="pb-2 border-b-2 border-primary-500">
                         <h3 class="text-lg font-bold text-gray-800">{{ section().title }}</h3>
                     </div>
                 </div>
             }
-            <div class="px-2 py-2">
-                <div class="grid gap-2" style="grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));">
+            <div class="px-2 py-2 md:px-6 md:py-5">
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                     @for (card of section().data; track $index) {
                         <div class="rounded-lg border border-gray-200 bg-gray-100 px-3 py-3">
                             <p class="text-xs font-medium text-gray-500 mb-1">{{ card.label }}</p>

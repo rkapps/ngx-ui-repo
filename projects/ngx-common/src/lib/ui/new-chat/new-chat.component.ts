@@ -18,7 +18,7 @@ import { ConversationFormComponent } from '../conversation-form/conversation-for
   template: `
     <!-- Left panel: template list -->
     <div [class]="templateListClass()">
-      <div class="flex min-h-16 shrink-0 items-center justify-between gap-2 border-b border-border px-2">
+      <div class="flex min-h-10 md:min-h-16 shrink-0 items-center justify-between gap-2 border-b border-border px-2">
         <p class="text-xs font-semibold uppercase tracking-wider text-text-muted">Templates</p>
         <button
           class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-muted hover:text-text"
@@ -61,7 +61,7 @@ import { ConversationFormComponent } from '../conversation-form/conversation-for
     <!-- Right panel: form -->
     <div [class]="formPanelClass()">
       <!-- Header -->
-      <div class="flex min-h-16 shrink-0 items-center gap-2 border-b border-border px-2 md:px-6">
+      <div class="flex min-h-10 md:min-h-16 shrink-0 items-center gap-2 border-b border-border px-2 md:px-6">
         <h2 class="flex-1 text-base font-semibold text-gray-700">New Chat</h2>
         <button
           class="md:hidden flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-muted hover:text-text"

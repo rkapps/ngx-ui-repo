@@ -7,13 +7,13 @@ import { BarChartSection } from '../message-renderer.types';
     template: `
         <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
             @if (section().title) {
-                <div class="px-2 pt-2">
+                <div class="px-2 md:px-6 pt-2">
                     <div class="pb-2 border-b-2 border-primary-500">
                         <h3 class="text-lg font-bold text-gray-800">{{ section().title }}</h3>
                     </div>
                 </div>
             }
-            <div class="px-2 py-2">
+            <div class="px-2 py-2 md:px-6 md:py-5">
                 @if (isGrouped()) {
                     @if (section().groups?.length) {
                         <div class="flex gap-4 mb-5">
@@ -25,7 +25,7 @@ import { BarChartSection } from '../message-renderer.types';
                             }
                         </div>
                     }
-                    <div class="overflow-x-auto -mx-2 px-2">
+                    <div class="overflow-x-auto -mx-2 md:-mx-6 px-2 md:px-6">
                         <div class="flex items-start gap-2" style="min-width: max-content;">
 
                             <!-- Y-axis -->
