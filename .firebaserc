@@ -1,0 +1,14 @@
+{
+  "projects": {
+    "default": "rustic-ai-rkapps"
+  },
+  "targets": {
+    "rustic-ai-rkapps": {
+      "hosting": {
+        "rustic-ai-ng": [
+          "rustic-ai-ng"
+        ]
+      }
+    }
+  }
+}
