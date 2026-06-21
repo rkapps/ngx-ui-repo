@@ -152,8 +152,8 @@ export class NewConversationComponent {
 
   protected readonly agentListClass = computed(() =>
     this.mobileShowForm()
-      ? 'hidden md:flex md:w-96 shrink-0 flex-col border-r border-border bg-white'
-      : 'flex w-full md:w-96 shrink-0 flex-col border-r border-border bg-white'
+      ? 'hidden md:flex md:w-72 xl:w-96 shrink-0 flex-col border-r border-border bg-white'
+      : 'flex w-full md:w-72 xl:w-96 shrink-0 flex-col border-r border-border bg-white'
   );
 
   protected readonly formPanelClass = computed(() =>

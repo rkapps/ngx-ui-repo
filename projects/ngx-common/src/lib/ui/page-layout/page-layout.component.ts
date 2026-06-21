@@ -93,7 +93,7 @@ export class PageLayoutComponent implements OnInit {
       desktopWidth === 'w-12' ? 'w-full md:w-12' :
       desktopWidth === 'w-64' ? 'w-full md:w-64' :
       desktopWidth === 'w-72' ? 'w-full md:w-72' :
-      desktopWidth === 'w-96' ? 'w-full md:w-96' :
+      desktopWidth === 'w-96' ? 'w-full md:w-72 xl:w-96' :
       'w-full';
     return `${display} ${responsiveWidth} shrink-0 flex-col border-r border-border bg-white transition-all duration-200`;
   });
