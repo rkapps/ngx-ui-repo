@@ -7,13 +7,13 @@ import { TableSection, TableCell } from '../message-renderer.types';
     template: `
         <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
             @if (section().title) {
-                <div class="px-6 pt-2">
+                <div class="px-2 pt-2">
                     <div class="pb-2 border-b-2 border-primary-500">
                         <h3 class="text-lg font-bold text-gray-800">{{ section().title }}</h3>
                     </div>
                 </div>
             }
-            <div class="px-6 py-5">
+            <div class="px-2 py-2">
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     @if (headers().length) {

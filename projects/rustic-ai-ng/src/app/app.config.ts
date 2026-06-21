@@ -49,6 +49,9 @@ import {
   TrendingUp,
   User,
   X,
+  SlidersHorizontal,
+  ArrowLeft,
+  ArrowRight,
 } from 'lucide-angular';
 import { LucideAngularModule } from 'lucide-angular';
 import { environment } from '../environments/environment';
@@ -99,6 +102,9 @@ const icons = {
   TrendingUp,
   User,
   X,
+  SlidersHorizontal,
+  ArrowLeft,
+  ArrowRight,
 };
 
 export const appConfig: ApplicationConfig = {

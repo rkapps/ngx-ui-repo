@@ -15,7 +15,10 @@ const SELECTED_KEY = 'agents.selectedId';
   imports: [LucideAngularModule, PageLayoutComponent, RouterOutlet, TitleCasePipe],
   host: { class: 'flex flex-1 flex-col min-h-0 overflow-hidden' },
   template: `
-    <app-page-layout class="flex h-full flex-col" expandedWidth="w-96" storageKey="layout.chat" panelTitle="Conversations">
+    <app-page-layout class="flex h-full flex-col" expandedWidth="w-96" storageKey="layout.chat" panelTitle="Conversations"
+      [mobileShowContent]="hasChild() ? true : false"
+      (mobileBack)="backToList()"
+    >
       <button
         panel-action
         class="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-muted hover:text-text"
@@ -34,7 +37,7 @@ const SELECTED_KEY = 'agents.selectedId';
         <lucide-icon name="refresh-cw" [size]="15" [class.animate-spin]="refreshing()" />
       </button>
 
-      <div sidebar class="flex flex-col gap-1 p-3">
+      <div sidebar class="flex flex-col gap-1 p-2 md:p-3">
         @if (loadingConvs()) {
           <div class="flex items-center justify-center py-8">
             <lucide-icon name="loader-circle" [size]="20" class="animate-spin text-text-muted" />
@@ -123,6 +126,10 @@ export class AgentsPageComponent implements OnInit {
     { initialValue: !!this.route.firstChild }
   );
 
+  protected backToList(): void {
+    this.router.navigate(['/agents']);
+  }
+
   protected newConversation(): void {
     this.location.replaceState('/agents');
     this.router.navigate(['/agents/new']);
@@ -133,14 +140,16 @@ export class AgentsPageComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    const skipRestore = (history.state as { skipRestore?: boolean })?.skipRestore === true;
+
     this.conversationService.deleted$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.selectFirst());
 
-    this.loadConversations(false);
+    this.loadConversations(false, skipRestore);
   }
 
-  private loadConversations(isRefresh: boolean): void {
+  private loadConversations(isRefresh: boolean, skipRestore = false): void {
     if (isRefresh) {
       this.refreshing.set(true);
     } else {
@@ -160,7 +169,7 @@ export class AgentsPageComponent implements OnInit {
           const currentId = this.route.firstChild?.snapshot.params?.['id'];
           if (currentId) {
             sessionStorage.setItem(SELECTED_KEY, currentId);
-          } else {
+          } else if (!skipRestore) {
             const savedId = sessionStorage.getItem(SELECTED_KEY);
             if (savedId && data.find(c => c.id === savedId)) {
               this.router.navigate([savedId], { relativeTo: this.route, replaceUrl: true });

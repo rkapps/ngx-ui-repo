@@ -1,4 +1,4 @@
-import { Component, computed, inject, input, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, input, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { TwangButtonComponent } from 'ngx-twang-ui';
@@ -14,9 +14,16 @@ import { ConversationFormComponent } from '../conversation-form/conversation-for
   host: { class: 'flex h-full min-h-0' },
   template: `
     <!-- Left panel: agent list -->
-    <div class="flex w-96 shrink-0 flex-col border-r border-border bg-white">
-      <div class="flex min-h-16 shrink-0 items-center border-b border-border px-4">
+    <div [class]="agentListClass()">
+      <div class="flex min-h-16 shrink-0 items-center justify-between gap-2 border-b border-border px-2">
         <p class="text-xs font-semibold uppercase tracking-wider text-text-muted">Select Agent</p>
+        <button
+          class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-muted hover:text-text"
+          title="Back to agents"
+          (click)="cancel()"
+        >
+          <lucide-icon name="arrow-left" [size]="16" />
+        </button>
       </div>
       <div class="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
         @if (loadingAgents()) {
@@ -30,7 +37,7 @@ import { ConversationFormComponent } from '../conversation-form/conversation-for
               [class]="selectedAgent()?.id === agent.id
                 ? 'bg-primary-50 ring-1 ring-primary-200'
                 : 'hover:bg-surface-muted'"
-              (click)="selectAgent(agent)"
+              (click)="selectAgent(agent); mobileShowForm.set(true)"
             >
               <div class="flex items-center gap-2">
                 <lucide-icon name="bot" [size]="14" class="shrink-0 text-primary-600" />
@@ -44,69 +51,71 @@ import { ConversationFormComponent } from '../conversation-form/conversation-for
     </div>
 
     <!-- Right panel -->
-    <div class="flex flex-1 flex-col">
+    <div [class]="formPanelClass()">
       <!-- Header -->
-      <div class="flex min-h-16 shrink-0 items-center justify-between border-b border-border px-6">
-        <h2 class="text-base font-semibold text-gray-700">New Conversation</h2>
+      <div class="flex min-h-16 shrink-0 items-center gap-2 border-b border-border px-2 md:px-6">
+        <h2 class="flex-1 text-base font-semibold text-gray-700">New Conversation</h2>
         <button
-          class="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-muted hover:text-text"
-          title="Cancel"
-          (click)="cancel()"
+          class="md:hidden flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-muted hover:text-text"
+          title="Back to agents"
+          (click)="mobileShowForm.set(false)"
         >
-          <lucide-icon name="x" [size]="16" />
+          <lucide-icon name="arrow-left" [size]="15" />
         </button>
       </div>
 
       @if (selectedAgent(); as agent) {
-        <div class="flex flex-1 flex-col overflow-y-auto px-16 py-8 gap-6">
+        <div class="flex-1 min-h-0 overflow-y-auto">
+          <div class="flex flex-col gap-6 px-2 py-2 md:px-16 md:py-8">
 
-          <!-- Agent details -->
-          <div class="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-100 px-5 py-4">
-            <lucide-icon name="bot" [size]="20" class="mt-0.5 shrink-0 text-primary-600" />
-            <div class="min-w-0">
-              <p class="text-sm font-semibold text-gray-800">{{ agent.name }}</p>
-              <p class="mt-0.5 text-sm leading-relaxed text-gray-500">{{ agent.description }}</p>
+            <!-- Agent details -->
+            <div class="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-100 px-5 py-4">
+              <lucide-icon name="bot" [size]="20" class="mt-0.5 shrink-0 text-primary-600" />
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-gray-800">{{ agent.name }}</p>
+                <p class="mt-0.5 text-sm leading-relaxed text-gray-500">{{ agent.description }}</p>
+              </div>
             </div>
+
+            <!-- Conversation section -->
+            <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
+              <div class="px-5 py-3 border-b border-gray-100 bg-gray-50">
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-500">Conversation</h3>
+              </div>
+              <div class="px-5 py-4 flex flex-col gap-4">
+                <app-conversation-form
+                  [showAllFields]="showAllFields()"
+                  [llmTree]="llmTree()"
+                  [loadingProviders]="loadingProviders()"
+                  [(title)]="title"
+                  [(stream)]="stream"
+                  [(strategy)]="strategy"
+                  [(historyMode)]="historyMode"
+                  [(maxTurns)]="maxTurns"
+                  [(systemPrompt)]="systemPrompt"
+                  [(selectedLlm)]="selectedLlmArr"
+                />
+              </div>
+            </div>
+
+            <!-- Error + button -->
+            <div class="flex flex-col gap-3">
+              @if (createError()) {
+                <p class="text-sm text-danger-600">{{ createError() }}</p>
+              }
+              <div class="flex justify-end">
+                <twang-button
+                  variant="primary"
+                  label="Start Conversation"
+                  icon="message-square-plus"
+                  [disabled]="!canCreate()"
+                  [loading]="creating()"
+                  (buttonClick)="create()"
+                />
+              </div>
+            </div>
+
           </div>
-
-          <!-- Conversation section -->
-          <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
-            <div class="px-5 py-3 border-b border-gray-100 bg-gray-50">
-              <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-500">Conversation</h3>
-            </div>
-            <div class="px-5 py-4 flex flex-col gap-4">
-              <app-conversation-form
-                [showAllFields]="showAllFields()"
-                [llmTree]="llmTree()"
-                [loadingProviders]="loadingProviders()"
-                [(title)]="title"
-                [(stream)]="stream"
-                [(strategy)]="strategy"
-                [(historyMode)]="historyMode"
-                [(maxTurns)]="maxTurns"
-                [(systemPrompt)]="systemPrompt"
-                [(selectedLlm)]="selectedLlmArr"
-              />
-            </div>
-          </div>
-
-          <!-- Error + button -->
-          <div class="flex flex-col gap-3">
-            @if (createError()) {
-              <p class="text-sm text-danger-600">{{ createError() }}</p>
-            }
-            <div class="flex justify-end">
-              <twang-button
-                variant="primary"
-                label="Start Conversation"
-                icon="message-square-plus"
-                [disabled]="!canCreate()"
-                [loading]="creating()"
-                (buttonClick)="create()"
-              />
-            </div>
-          </div>
-
         </div>
       } @else {
         <div class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
@@ -117,7 +126,7 @@ import { ConversationFormComponent } from '../conversation-form/conversation-for
     </div>
   `,
 })
-export class NewConversationComponent implements OnInit {
+export class NewConversationComponent {
   readonly showAllFields = input(true);
 
   private readonly agentService = inject(AgentService);
@@ -139,6 +148,18 @@ export class NewConversationComponent implements OnInit {
   protected readonly creating = signal(false);
   protected readonly createError = signal('');
 
+  protected readonly mobileShowForm = signal(false);
+
+  protected readonly agentListClass = computed(() =>
+    this.mobileShowForm()
+      ? 'hidden md:flex md:w-96 shrink-0 flex-col border-r border-border bg-white'
+      : 'flex w-full md:w-96 shrink-0 flex-col border-r border-border bg-white'
+  );
+
+  protected readonly formPanelClass = computed(() =>
+    this.mobileShowForm() ? 'flex flex-1 flex-col' : 'hidden md:flex flex-1 flex-col'
+  );
+
   protected readonly llmTree = computed<TwangTreeDropdownNode[]>(() =>
     this.providers().map(p => ({
       id: p.id,
@@ -151,9 +172,15 @@ export class NewConversationComponent implements OnInit {
     !!this.selectedAgent() && !!this.title().trim() && this.selectedLlmArr().length > 0
   );
 
-  ngOnInit(): void {
+  constructor() {
     this.agentService.getAgents().subscribe({
-      next: data => { this.agents.set(data); this.loadingAgents.set(false); },
+      next: data => {
+        this.agents.set(data);
+        this.loadingAgents.set(false);
+        if (data.length && !this.selectedAgent()) {
+          this.selectAgent(data[0]);
+        }
+      },
       error: () => this.loadingAgents.set(false),
     });
     this.agentService.getLlmProviders().subscribe({
@@ -172,10 +199,11 @@ export class NewConversationComponent implements OnInit {
   protected selectAgent(agent: Agent): void {
     this.selectedAgent.set(agent);
     this.title.set(agent.name);
+    this.systemPrompt.set(agent.system_prompt ?? '');
   }
 
   protected cancel(): void {
-    this.router.navigate(['/agents']);
+    this.router.navigate(['/agents'], { state: { skipRestore: true } });
   }
 
   protected create(): void {

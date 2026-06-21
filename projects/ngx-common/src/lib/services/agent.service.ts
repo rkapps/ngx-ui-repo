@@ -11,6 +11,7 @@ export interface Agent {
   preset: string;
   standalone: boolean;
   execution: string;
+  system_prompt?: string;
 }
 
 export interface LlmProvider {

@@ -15,7 +15,10 @@ const SELECTED_KEY = 'chats.selectedId';
   imports: [LucideAngularModule, PageLayoutComponent, RouterOutlet],
   host: { class: 'flex flex-1 flex-col min-h-0 overflow-hidden' },
   template: `
-    <app-page-layout class="flex h-full flex-col" expandedWidth="w-96" storageKey="layout.chats" panelTitle="Chats">
+    <app-page-layout class="flex h-full flex-col" expandedWidth="w-96" storageKey="layout.chats" panelTitle="Chats"
+      [mobileShowContent]="hasChild() ? true : false"
+      (mobileBack)="backToList()"
+    >
       <!-- Panel header actions -->
       <button
         panel-action
@@ -36,7 +39,7 @@ const SELECTED_KEY = 'chats.selectedId';
       </button>
 
       <!-- Sidebar: chat list -->
-      <div sidebar class="flex flex-col gap-1 p-3">
+      <div sidebar class="flex flex-col gap-1 p-2 md:p-3">
         @if (loadingConvs()) {
           <div class="flex items-center justify-center py-8">
             <lucide-icon name="loader-circle" [size]="20" class="animate-spin text-text-muted" />
@@ -124,6 +127,10 @@ export class ChatsPageComponent implements OnInit {
     { initialValue: !!this.route.firstChild }
   );
 
+  protected backToList(): void {
+    this.router.navigate(['/chats']);
+  }
+
   protected newChat(): void {
     this.location.replaceState('/chats');
     this.router.navigate(['/chats/new']);
@@ -134,14 +141,16 @@ export class ChatsPageComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    const skipRestore = (history.state as { skipRestore?: boolean })?.skipRestore === true;
+
     this.conversationService.deleted$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.selectFirst());
 
-    this.loadConversations(false);
+    this.loadConversations(false, skipRestore);
   }
 
-  private loadConversations(isRefresh: boolean): void {
+  private loadConversations(isRefresh: boolean, skipRestore = false): void {
     if (isRefresh) {
       this.refreshing.set(true);
     } else {
@@ -161,7 +170,7 @@ export class ChatsPageComponent implements OnInit {
           const currentId = this.route.firstChild?.snapshot.params?.['id'];
           if (currentId) {
             sessionStorage.setItem(SELECTED_KEY, currentId);
-          } else {
+          } else if (!skipRestore) {
             const savedId = sessionStorage.getItem(SELECTED_KEY);
             if (savedId && data.find(c => c.id === savedId)) {
               this.router.navigate([savedId], { relativeTo: this.route, replaceUrl: true });

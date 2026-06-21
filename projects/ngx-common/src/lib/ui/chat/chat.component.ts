@@ -25,7 +25,7 @@ import { MessageRendererComponent } from '../message-renderer/message-renderer.c
       </div>
 
       <!-- Messages -->
-      <div #scrollArea class="min-h-0 flex-1 overflow-y-auto px-16 py-10">
+      <div #scrollArea class="min-h-0 flex-1 overflow-y-auto px-2 py-2 md:px-16 md:py-10">
         @if (loading()) {
           <div class="flex items-center justify-center py-12">
             <lucide-icon name="loader-circle" [size]="24" class="animate-spin text-text-muted" />
@@ -47,13 +47,8 @@ import { MessageRendererComponent } from '../message-renderer/message-renderer.c
 
               <!-- Assistant response — only shown once content starts arriving -->
               @if (msg.assistantContent || !msg.streaming) {
-                <div class="flex items-start gap-3">
-                  <div class="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-700">
-                    AI
-                  </div>
-                  <div class="min-w-0 flex-1 mr-16">
-                    <app-message-renderer [content]="msg.assistantContent" />
-                  </div>
+                <div class="min-w-0">
+                  <app-message-renderer [content]="msg.assistantContent" />
                 </div>
               }
             }

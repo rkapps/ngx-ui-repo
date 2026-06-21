@@ -18,7 +18,7 @@ import { ConversationService, type Conversation, type ConversationStrategy, type
     @if (conversation(); as conv) {
       <div class="flex h-full flex-col">
         <!-- Header -->
-        <div class="flex min-h-16 shrink-0 items-center justify-between gap-4 border-b border-border px-5">
+        <div class="flex min-h-16 shrink-0 items-center justify-between gap-4 border-b border-border px-2 md:px-5">
           <div class="min-w-0">
             <h2 class="truncate text-base font-semibold text-primary-600">{{ conv.title }}</h2>
             <p class="text-xs text-text-muted">{{ conv.model }}</p>
@@ -53,16 +53,23 @@ import { ConversationService, type Conversation, type ConversationStrategy, type
             >
               <lucide-icon name="trash-2" [size]="15" />
             </button>
+            <button
+              class="md:hidden flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-muted hover:text-text"
+              title="Back to list"
+              (click)="goBack()"
+            >
+              <lucide-icon name="arrow-left" [size]="15" />
+            </button>
           </div>
         </div>
 
         @if (showUsage()) {
-          <div class="flex flex-1 min-h-0 p-4">
+          <div class="flex flex-1 min-h-0 p-2 md:p-4">
             <app-usage-table [conversationId]="conv.id" />
           </div>
         } @else if (showEdit()) {
           <!-- Edit panel -->
-          <div class="flex flex-1 flex-col overflow-y-auto px-16 py-8 gap-6">
+          <div class="flex flex-1 flex-col overflow-y-auto px-2 py-2 md:px-16 md:py-8 gap-6">
             <!-- Model info card (mirrors agent card in create) -->
             <div class="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-100 px-5 py-4">
               <lucide-icon name="bot" [size]="20" class="mt-0.5 shrink-0 text-primary-600" />
@@ -226,6 +233,10 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.paramSub?.unsubscribe();
+  }
+
+  protected goBack(): void {
+    this.router.navigate(['../'], { relativeTo: this.route });
   }
 
   protected toggleEdit(conv: Conversation): void {

@@ -1,4 +1,4 @@
-import { Component, DestroyRef, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DataService } from '../../services/data.services';
 import { ConversationUsage, TurnUsage } from '../../models/usage';
@@ -27,7 +27,7 @@ interface UsageRow {
 @Component({
     selector: 'app-usage-table',
     standalone: true,
-    host: { class: 'flex flex-col flex-1 min-h-0 overflow-hidden min-w-0' },
+    host: { class: 'flex flex-col flex-1 min-h-0 overflow-auto min-w-0' },
     imports: [TwangTreeTableComponent, LucideAngularModule],
     templateUrl: './usage-table.component.html',
 })
@@ -128,13 +128,16 @@ export class UsageTableComponent {
 
     constructor() {
         effect(() => {
+            // Track all filter inputs so the effect re-runs when any changes.
             const convId = this.conversationId();
             this.filterType();
             this.filterLlm();
             this.filterStartDate();
             this.filterEndDate();
             if (convId === '') return;
-            this.load();
+            // Call load() outside the reactive context so its internal signal
+            // writes (loading.set, treeNodes.set, etc.) are not blocked.
+            untracked(() => this.load());
         });
     }
 

@@ -17,9 +17,16 @@ import { ConversationFormComponent } from '../conversation-form/conversation-for
   host: { class: 'flex h-full min-h-0' },
   template: `
     <!-- Left panel: template list -->
-    <div class="flex w-96 shrink-0 flex-col border-r border-border bg-white">
-      <div class="flex min-h-16 shrink-0 items-center border-b border-border px-4">
+    <div [class]="templateListClass()">
+      <div class="flex min-h-16 shrink-0 items-center justify-between gap-2 border-b border-border px-2">
         <p class="text-xs font-semibold uppercase tracking-wider text-text-muted">Templates</p>
+        <button
+          class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-muted hover:text-text"
+          title="Back to chats"
+          (click)="cancel()"
+        >
+          <lucide-icon name="arrow-left" [size]="16" />
+        </button>
       </div>
       <div class="flex flex-1 flex-col overflow-y-auto p-3">
         @if (loadingTemplates()) {
@@ -35,7 +42,7 @@ import { ConversationFormComponent } from '../conversation-form/conversation-for
                 [class]="selectedTemplate()?.id === tmpl.id
                   ? 'bg-primary-50 ring-1 ring-primary-200'
                   : 'hover:bg-surface-muted'"
-                (click)="selectTemplate(tmpl)"
+                (click)="selectTemplate(tmpl); mobileShowForm.set(true)"
               >
                 <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600 ring-1 ring-primary-100">
                   <lucide-icon [name]="resolveIcon(tmpl.icon)" [size]="16" />
@@ -52,66 +59,68 @@ import { ConversationFormComponent } from '../conversation-form/conversation-for
     </div>
 
     <!-- Right panel: form -->
-    <div class="flex flex-1 flex-col">
+    <div [class]="formPanelClass()">
       <!-- Header -->
-      <div class="flex min-h-16 shrink-0 items-center justify-between border-b border-border px-6">
-        <h2 class="text-base font-semibold text-gray-700">New Chat</h2>
+      <div class="flex min-h-16 shrink-0 items-center gap-2 border-b border-border px-2 md:px-6">
+        <h2 class="flex-1 text-base font-semibold text-gray-700">New Chat</h2>
         <button
-          class="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-muted hover:text-text"
-          title="Cancel"
-          (click)="cancel()"
+          class="md:hidden flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-muted hover:text-text"
+          title="Back to templates"
+          (click)="mobileShowForm.set(false)"
         >
-          <lucide-icon name="x" [size]="16" />
+          <lucide-icon name="arrow-left" [size]="15" />
         </button>
       </div>
 
-      <div class="flex flex-1 flex-col overflow-y-auto px-16 py-8 gap-6">
-        <!-- Selected template details card -->
-        @if (selectedTemplate(); as tmpl) {
-          <div class="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-100 px-5 py-4">
-            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white ring-1 ring-gray-200">
-              <lucide-icon [name]="resolveIcon(tmpl.icon)" [size]="18" class="text-primary-600" />
+      <div class="flex-1 min-h-0 overflow-y-auto">
+        <div class="flex flex-col gap-6 px-2 py-2 md:px-16 md:py-8">
+          <!-- Selected template details card -->
+          @if (selectedTemplate(); as tmpl) {
+            <div class="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-100 px-5 py-4">
+              <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white ring-1 ring-gray-200">
+                <lucide-icon [name]="resolveIcon(tmpl.icon)" [size]="18" class="text-primary-600" />
+              </div>
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-gray-800">{{ tmpl.title }}</p>
+                <p class="mt-0.5 text-sm leading-relaxed text-gray-500">{{ tmpl.description }}</p>
+              </div>
             </div>
-            <div class="min-w-0">
-              <p class="text-sm font-semibold text-gray-800">{{ tmpl.title }}</p>
-              <p class="mt-0.5 text-sm leading-relaxed text-gray-500">{{ tmpl.description }}</p>
-            </div>
-          </div>
-        }
-
-        <!-- Conversation card -->
-        <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
-          <div class="px-5 py-3 border-b border-gray-100 bg-gray-50">
-            <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-500">Chat</h3>
-          </div>
-          <div class="px-5 py-4 flex flex-col gap-4">
-            <app-conversation-form
-              [llmTree]="llmTree()"
-              [loadingProviders]="loadingProviders()"
-              [(title)]="title"
-              [(stream)]="stream"
-              [(strategy)]="strategy"
-              [(historyMode)]="historyMode"
-              [(maxTurns)]="maxTurns"
-              [(systemPrompt)]="systemPrompt"
-              [(selectedLlm)]="selectedLlmArr"
-            />
-          </div>
-        </div>
-
-        <div class="flex flex-col gap-3">
-          @if (createError()) {
-            <p class="text-sm text-danger-600">{{ createError() }}</p>
           }
-          <div class="flex justify-end">
-            <twang-button
-              variant="primary"
-              label="Start Chat"
-              icon="message-square-plus"
-              [disabled]="!canCreate()"
-              [loading]="creating()"
-              (buttonClick)="create()"
-            />
+
+          <!-- Conversation card -->
+          <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
+            <div class="px-5 py-3 border-b border-gray-100 bg-gray-50">
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-500">Chat</h3>
+            </div>
+            <div class="px-5 py-4 flex flex-col gap-4">
+              <app-conversation-form
+                [llmTree]="llmTree()"
+                [loadingProviders]="loadingProviders()"
+                [(title)]="title"
+                [(stream)]="stream"
+                [(strategy)]="strategy"
+                [(historyMode)]="historyMode"
+                [(maxTurns)]="maxTurns"
+                [(systemPrompt)]="systemPrompt"
+                [(selectedLlm)]="selectedLlmArr"
+              />
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-3">
+            @if (createError()) {
+              <p class="text-sm text-danger-600">{{ createError() }}</p>
+            }
+            <div class="flex justify-end">
+              <twang-button
+                variant="primary"
+                label="Start Chat"
+                icon="message-square-plus"
+                [disabled]="!canCreate()"
+                [loading]="creating()"
+                (buttonClick)="create()"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -180,6 +189,18 @@ export class NewChatComponent {
     });
   }
 
+  protected readonly mobileShowForm = signal(false);
+
+  protected readonly templateListClass = computed(() =>
+    this.mobileShowForm()
+      ? 'hidden md:flex md:w-96 shrink-0 flex-col border-r border-border bg-white'
+      : 'flex w-full md:w-96 shrink-0 flex-col border-r border-border bg-white'
+  );
+
+  protected readonly formPanelClass = computed(() =>
+    this.mobileShowForm() ? 'flex flex-1 flex-col' : 'hidden md:flex flex-1 flex-col'
+  );
+
   protected readonly llmTree = computed<TwangTreeDropdownNode[]>(() =>
     this.providers().map(p => ({
       id: p.id,
@@ -241,7 +262,7 @@ export class NewChatComponent {
   }
 
   protected cancel(): void {
-    this.router.navigate(['/chats']);
+    this.router.navigate(['/chats'], { state: { skipRestore: true } });
   }
 
   protected create(): void {

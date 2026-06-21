@@ -51,6 +51,10 @@ export class AgentsPageComponent implements OnInit {
     { initialValue: !!this.route.firstChild }
   );
 
+  protected backToList(): void {
+    this.router.navigate(['/agents']);
+  }
+
   protected newConversation(): void {
     this.location.replaceState('/agents');
     this.router.navigate(['/agents/new']);

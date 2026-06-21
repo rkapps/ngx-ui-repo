@@ -17,7 +17,7 @@
                 } @else if (section.type === 'consumer_buzz') {
                     <app-consumer-buzz-section [section]="$any(section)"></app-consumer-buzz-section>
                 } @else {
-                    <pre class="overflow-x-auto rounded-lg bg-surface-muted p-4 text-xs text-text-muted">{{ section | json }}</pre>
+                    <pre class="overflow-x-auto rounded-lg bg-surface-muted p-2text-xs text-text-muted">{{ section | json }}</pre>
                 }
                 <button
                     class="absolute right-3 top-3 flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-text-muted opacity-0 transition-opacity group-hover/section:opacity-100 hover:bg-surface-muted hover:text-text"
@@ -30,7 +30,7 @@
         }
     </div>
 } @else if (looksLikeJson) {
-    <pre class="overflow-x-auto rounded-lg bg-surface-muted p-4 text-xs text-text-muted">{{ content() }}</pre>
+    <pre class="overflow-x-auto rounded-lg bg-surface-muted p-2text-xs text-text-muted">{{ content() }}</pre>
 } @else {
     <div class="prose prose-sm max-w-none" [innerHTML]="content() | markdown"></div>
 }
