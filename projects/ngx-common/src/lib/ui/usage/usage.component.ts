@@ -50,12 +50,12 @@ type LlmType = 'all' | 'openai' | 'gemini' | 'anthropic' | 'local';
         </div>
 
         <div class="py-4 border-b border-border flex flex-col gap-4">
-          <twang-datepicker label="From" placeholder="Start date" [fullWidth]="true"
-            [value]="startDate()"
+          <twang-datepicker label="From" placeholder="Start date" 
+[value]="startDate()"
             (valueChange)="startDate.set($event)" />
 
-          <twang-datepicker label="To" placeholder="End date" [fullWidth]="true"
-            [value]="endDate()"
+          <twang-datepicker label="To" placeholder="End date" 
+[value]="endDate()"
             (valueChange)="endDate.set($event)" />
         </div>
 

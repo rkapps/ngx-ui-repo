@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "target": "rustic-ai-ng",
+    "target": "rustic-ai-rkapps",
     "public": "dist/rustic-ai-ng/browser",
     "ignore": [
       "firebase.json",
