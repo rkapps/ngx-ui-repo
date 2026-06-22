@@ -52,6 +52,8 @@ import {
   SlidersHorizontal,
   ArrowLeft,
   ArrowRight,
+  CircleCheck,
+  Mail,
 } from 'lucide-angular';
 import { LucideAngularModule } from 'lucide-angular';
 import { environment } from '../environments/environment';
@@ -105,6 +107,8 @@ const icons = {
   SlidersHorizontal,
   ArrowLeft,
   ArrowRight,
+  CircleCheck,
+  Mail,
 };
 
 export const appConfig: ApplicationConfig = {
@@ -115,6 +119,6 @@ export const appConfig: ApplicationConfig = {
     provideAuth(() => getAuth()),
     importProvidersFrom(LucideAngularModule.pick(icons)),
     { provide: API_BASE_URL, useValue: environment.apiUrl },
-    { provide: LOGIN_CONFIG, useValue: { appName: 'Rustic AI', enableEmail: true, enableGoogle: true, redirectTo: '/agents' } },
+    { provide: LOGIN_CONFIG, useValue: environment.loginConfig },
   ],
 };

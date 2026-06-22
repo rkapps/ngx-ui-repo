@@ -42,6 +42,8 @@ import {
   TrendingUp,
   User,
   X,
+  CircleCheck,
+  Mail,
 } from 'lucide-angular';
 import { LucideAngularModule } from 'lucide-angular';
 import { environment } from '../environments/environment';
@@ -85,6 +87,8 @@ const icons = {
   TrendingUp,
   User,
   X,
+  CircleCheck,
+  Mail,
 };
 
 export const appConfig: ApplicationConfig = {

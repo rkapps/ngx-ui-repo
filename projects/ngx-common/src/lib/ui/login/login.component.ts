@@ -68,14 +68,34 @@ const FIREBASE_ERRORS: Record<string, string> = {
 
         <!-- Email / password -->
         @if (config.enableEmail !== false) {
-          <form (ngSubmit)="submit()" class="flex flex-col gap-4">
-            <twang-input label="Email" type="email" placeholder="you@example.com"
-              [ngModel]="email()" (ngModelChange)="email.set($event)" name="email" />
-            <twang-input label="Password" type="password" placeholder="••••••••"
-              [ngModel]="password()" (ngModelChange)="password.set($event)" name="password" />
-            <twang-button type="submit" variant="primary" size="md" icon="log-in" label="Sign in"
-              [fluid]="true" [loading]="loading()" />
-          </form>
+          @if (resetSent()) {
+            <div class="flex flex-col items-center gap-3 text-center">
+              <lucide-icon name="circle-check" [size]="32" class="text-success-600" />
+              <p class="text-sm text-text">If <strong>{{ email() }}</strong> is registered, a reset link is on its way.</p>
+              <p class="text-xs text-text-muted">Check your inbox and follow the link to set a new password.</p>
+              <button class="text-xs text-primary-600 underline" (click)="resetSent.set(false)">Back to sign in</button>
+            </div>
+          } @else if (forgotMode()) {
+            <form (ngSubmit)="sendReset()" class="flex flex-col gap-4">
+              <twang-input label="Email" type="email" placeholder="you@example.com"
+                [ngModel]="email()" (ngModelChange)="email.set($event)" name="email" />
+              <twang-button type="submit" variant="primary" size="md" icon="mail" label="Send reset link"
+                [fluid]="true" [loading]="loading()" />
+              <button type="button" class="text-xs text-text-muted underline text-center"
+                (click)="forgotMode.set(false); error.set('')">Back to sign in</button>
+            </form>
+          } @else {
+            <form (ngSubmit)="submit()" class="flex flex-col gap-4">
+              <twang-input label="Email" type="email" placeholder="you@example.com"
+                [ngModel]="email()" (ngModelChange)="email.set($event)" name="email" />
+              <twang-input label="Password" type="password" placeholder="••••••••"
+                [ngModel]="password()" (ngModelChange)="password.set($event)" name="password" />
+              <twang-button type="submit" variant="primary" size="md" icon="log-in" label="Sign in"
+                [fluid]="true" [loading]="loading()" />
+              <button type="button" class="text-xs text-text-muted underline text-center"
+                (click)="forgotMode.set(true); error.set('')">Forgot password?</button>
+            </form>
+          }
         }
 
       </div>
@@ -92,6 +112,8 @@ export class LoginComponent {
   protected readonly loading = signal(false);
   protected readonly googleLoading = signal(false);
   protected readonly error = signal('');
+  protected readonly forgotMode = signal(false);
+  protected readonly resetSent = signal(false);
 
   protected async submit(): Promise<void> {
     this.error.set('');
@@ -108,6 +130,27 @@ export class LoginComponent {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  protected async sendReset(): Promise<void> {
+    this.error.set('');
+    if (!this.email()) {
+      this.error.set('Please enter your email address.');
+      return;
+    }
+    this.loading.set(true);
+    try {
+      await this.auth.sendPasswordReset(this.email());
+    } catch (err) {
+      // Swallow user-not-found so we don't reveal whether the account exists
+      if (!(err instanceof FirebaseError && err.code === 'auth/user-not-found')) {
+        this.error.set(this._errorMessage(err));
+        return;
+      }
+    } finally {
+      this.loading.set(false);
+    }
+    this.resetSent.set(true);
   }
 
   protected async signInWithGoogle(): Promise<void> {

@@ -1,12 +1,21 @@
 {
   "projects": {
-    "default": "rustic-ai-rkapps"
+    "default": "rustic-ai-rkapps",
+    "instance1": "rustic-ai-rkapps",
+    "instance2": "ijn-rustic-ai"
   },
   "targets": {
     "rustic-ai-rkapps": {
       "hosting": {
         "rustic-ai-rkapps": [
           "rustic-ai-rkapps"
+        ]
+      }
+    },
+    "ijn-rustic-ai": {
+      "hosting": {
+        "instance2": [
+          "ijn-rustic-ai"
         ]
       }
     }

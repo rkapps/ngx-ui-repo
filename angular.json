@@ -20,7 +20,9 @@
             "index": "projects/angular-starter/src/index.html",
             "browser": "projects/angular-starter/src/main.ts",
             "tsConfig": "projects/angular-starter/tsconfig.app.json",
-            "styles": ["projects/angular-starter/src/styles.css"],
+            "styles": [
+              "projects/angular-starter/src/styles.css"
+            ],
             "scripts": []
           },
           "configurations": {
@@ -46,8 +48,12 @@
         "serve": {
           "builder": "@angular/build:dev-server",
           "configurations": {
-            "production": { "buildTarget": "angular-starter:build:production" },
-            "development": { "buildTarget": "angular-starter:build:development" }
+            "production": {
+              "buildTarget": "angular-starter:build:production"
+            },
+            "development": {
+              "buildTarget": "angular-starter:build:development"
+            }
           },
           "defaultConfiguration": "development"
         }
@@ -66,7 +72,9 @@
             "index": "projects/bset-ai-ng/src/index.html",
             "browser": "projects/bset-ai-ng/src/main.ts",
             "tsConfig": "projects/bset-ai-ng/tsconfig.app.json",
-            "styles": ["projects/bset-ai-ng/src/styles.css"],
+            "styles": [
+              "projects/bset-ai-ng/src/styles.css"
+            ],
             "scripts": []
           },
           "configurations": {
@@ -92,8 +100,12 @@
         "serve": {
           "builder": "@angular/build:dev-server",
           "configurations": {
-            "production": { "buildTarget": "bset-ai-ng:build:production" },
-            "development": { "buildTarget": "bset-ai-ng:build:development" }
+            "production": {
+              "buildTarget": "bset-ai-ng:build:production"
+            },
+            "development": {
+              "buildTarget": "bset-ai-ng:build:development"
+            }
           },
           "defaultConfiguration": "development"
         }
@@ -112,7 +124,9 @@
             "index": "projects/rustic-ai-ng/src/index.html",
             "browser": "projects/rustic-ai-ng/src/main.ts",
             "tsConfig": "projects/rustic-ai-ng/tsconfig.app.json",
-            "styles": ["projects/rustic-ai-ng/src/styles.css"],
+            "styles": [
+              "projects/rustic-ai-ng/src/styles.css"
+            ],
             "scripts": []
           },
           "configurations": {
@@ -131,6 +145,17 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
+            },
+            "production-instance2": {
+              "tsConfig": "projects/rustic-ai-ng/tsconfig.app.prod.json",
+              "optimization": true,
+              "outputHashing": "all",
+              "fileReplacements": [
+                {
+                  "replace": "projects/rustic-ai-ng/src/environments/environment.ts",
+                  "with": "projects/rustic-ai-ng/src/environments/environment.instance2.ts"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"
@@ -138,8 +163,12 @@
         "serve": {
           "builder": "@angular/build:dev-server",
           "configurations": {
-            "production": { "buildTarget": "rustic-ai-ng:build:production" },
-            "development": { "buildTarget": "rustic-ai-ng:build:development" }
+            "production": {
+              "buildTarget": "rustic-ai-ng:build:production"
+            },
+            "development": {
+              "buildTarget": "rustic-ai-ng:build:development"
+            }
           },
           "defaultConfiguration": "development"
         }
