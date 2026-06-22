@@ -47,6 +47,9 @@ testem.log
 /typings
 __screenshots__/
 
+# Firebase CLI cache
+.firebase/
+
 # System files
 .DS_Store
 Thumbs.db
