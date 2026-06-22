@@ -147,20 +147,34 @@ export class ConversationService {
             const lines = buffer.split('\n');
             buffer = lines.pop() ?? '';
 
+            let eventType = '';
+            let eventData = '';
             for (const line of lines) {
               const trimmed = line.trim();
-              if (!trimmed.startsWith('data:')) continue;
-              const json = trimmed.slice(5).trim();
-              if (!json || json === '[DONE]') continue;
-              try {
-                const chunk = JSON.parse(json) as CompletionChunkResponse;
-                subscriber.next(chunk);
-                if (chunk.is_final) {
-                  subscriber.complete();
-                  return;
+              if (trimmed.startsWith('event:')) {
+                eventType = trimmed.slice(6).trim();
+              } else if (trimmed.startsWith('data:')) {
+                eventData = trimmed.slice(5).trim();
+              } else if (trimmed === '') {
+                // blank line — dispatch buffered event
+                if (eventData && eventData !== '[DONE]') {
+                  if (eventType === 'error') {
+                    subscriber.error(new Error(eventData));
+                    return;
+                  }
+                  try {
+                    const chunk = JSON.parse(eventData) as CompletionChunkResponse;
+                    subscriber.next(chunk);
+                    if (chunk.is_final) {
+                      subscriber.complete();
+                      return;
+                    }
+                  } catch {
+                    // partial line — wait for more data
+                  }
                 }
-              } catch {
-                // partial line — wait for more data
+                eventType = '';
+                eventData = '';
               }
             }
           }

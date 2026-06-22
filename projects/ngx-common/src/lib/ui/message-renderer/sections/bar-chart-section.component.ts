@@ -15,12 +15,13 @@ import { BarChartSection } from '../message-renderer.types';
             }
             <div class="px-2 py-2 md:px-6 md:py-5">
                 @if (isGrouped()) {
-                    @if (section().groups?.length) {
-                        <div class="flex gap-4 mb-5">
-                            @for (group of section().groups; track group; let i = $index) {
+                    <!-- Legend: data items (e.g. stock tickers) -->
+                    @if (section().data.length) {
+                        <div class="flex flex-wrap gap-x-4 gap-y-1 mb-5">
+                            @for (item of section().data; track item.name; let i = $index) {
                                 <div class="flex items-center gap-1.5">
                                     <div class="w-3 h-3 rounded-sm" [class]="groupBgColor(i)"></div>
-                                    <span class="text-xs text-gray-600">{{ group }}</span>
+                                    <span class="text-xs text-gray-600">{{ item.name }}</span>
                                 </div>
                             }
                         </div>
@@ -42,13 +43,13 @@ import { BarChartSection } from '../message-renderer.types';
                                         </div>
                                     }
                                 </div>
-                                <!-- spacer to align with item name labels below bars -->
+                                <!-- spacer to align with x-axis labels below bars -->
                                 <div style="height: 20px"></div>
                             </div>
 
-                            <!-- Bars with gridlines -->
+                            <!-- Bars with gridlines — iterate groups (x-axis) -->
                             <div class="relative flex" [class]="groupGapClass()">
-                                <!-- Gridline overlay spanning all items -->
+                                <!-- Gridline overlay spanning all columns -->
                                 <div class="absolute left-0 right-0 top-0 pointer-events-none z-0"
                                      [style.height.px]="CHART_HEIGHT_PX">
                                     @for (tick of yAxisTicks(); track tick.value) {
@@ -59,15 +60,16 @@ import { BarChartSection } from '../message-renderer.types';
                                     }
                                 </div>
 
-                                @for (item of section().data; track $index) {
+                                @for (group of (section().groups ?? []); track group; let gi = $index) {
                                     <div class="relative flex flex-col items-center gap-2 z-10"
-                                         [style.width]="itemWidth(item.name)">
+                                         [style.width]="columnWidth(group)">
                                         <div class="flex flex-col w-full" [style.height.px]="CHART_HEIGHT_PX">
-                                            <!-- Positive area: bars grow up toward zero line -->
-                                            <div class="flex items-end gap-1 w-full justify-center"
+                                            <!-- Positive area: bars grow up from zero line -->
+                                            <div class="flex items-end w-full justify-center"
                                                  [style.height.px]="positiveAreaPx()">
-                                                @for (val of (item.values ?? []); track $index; let i = $index) {
-                                                    <div class="flex flex-col items-center justify-end gap-0.5 h-full">
+                                                @for (item of section().data; track item.name; let i = $index) {
+                                                    @let val = item.values?.[gi] ?? 0;
+                                                    <div class="flex flex-col items-center justify-end h-full">
                                                         @if (val > 0) {
                                                             <span class="text-[10px] leading-none text-gray-600 font-semibold">
                                                                 {{ formatValue(val, section().unit) }}
@@ -86,10 +88,11 @@ import { BarChartSection } from '../message-renderer.types';
                                             </div>
                                             <!-- Negative area: bars grow down from zero line -->
                                             @if (hasGroupNegatives()) {
-                                                <div class="flex items-start gap-1 w-full justify-center"
+                                                <div class="flex items-start w-full justify-center"
                                                      [style.height.px]="negativeAreaPx()">
-                                                    @for (val of (item.values ?? []); track $index; let i = $index) {
-                                                        <div class="flex flex-col items-center justify-start gap-0.5 h-full">
+                                                    @for (item of section().data; track item.name; let i = $index) {
+                                                        @let val = item.values?.[gi] ?? 0;
+                                                        <div class="flex flex-col items-center justify-start h-full">
                                                             @if (val < 0) {
                                                                 <div class="w-6 rounded-b transition-all duration-700"
                                                                      [class]="groupBgColor(i)"
@@ -104,7 +107,8 @@ import { BarChartSection } from '../message-renderer.types';
                                                 </div>
                                             }
                                         </div>
-                                        <span class="text-[10px] text-gray-500 text-center leading-tight font-medium">{{ item.name }}</span>
+                                        <!-- X-axis label (time period) -->
+                                        <span class="text-[10px] text-gray-500 text-center leading-tight font-medium">{{ group }}</span>
                                     </div>
                                 }
                             </div>
@@ -221,20 +225,30 @@ export class BarChartSectionComponent {
         return 10 * magnitude;
     }
 
-    private readonly groupBgColors = ['bg-primary-500', 'bg-blue-400', 'bg-amber-400', 'bg-emerald-400'];
+    private readonly groupBgColors = [
+        'bg-primary-500', 'bg-blue-400', 'bg-amber-400',
+        'bg-emerald-400', 'bg-rose-400', 'bg-violet-400',
+        'bg-cyan-500', 'bg-orange-400',
+    ];
 
-    private numGroups = computed(() =>
-        this.section().groups?.length
-            ?? this.section().data[0]?.values?.length
-            ?? 1
-    );
+    // Number of bars per x-axis column = number of data series (stocks)
+    private numSeries = computed(() => this.section().data?.length ?? 1);
 
-    groupGapClass = computed(() => this.numGroups() <= 1 ? 'gap-3' : 'gap-12');
+    groupGapClass = computed(() => {
+        const n = this.numSeries();
+        if (n <= 1) return 'gap-3';
+        if (n <= 3) return 'gap-8';
+        if (n <= 5) return 'gap-4';
+        return 'gap-2';
+    });
 
-    itemWidth(name: string): string {
-        const minPx = this.numGroups() <= 1 ? 24 : 48;
-        const px = Math.max(minPx, Math.min(120, name.length * 8));
-        return `${px}px`;
+    columnWidth(groupLabel: string): string {
+        const n = this.numSeries();
+        const BAR_PX = 24;  // w-6
+        const GAP_PX = 4;   // gap-1
+        const minForBars = n * BAR_PX + Math.max(0, n - 1) * GAP_PX + 8;
+        const minForLabel = Math.max(32, groupLabel.length * 7);
+        return `${Math.max(minForBars, minForLabel)}px`;
     }
 
     groupBgColor(index: number): string {
