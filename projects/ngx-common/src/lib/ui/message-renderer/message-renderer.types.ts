@@ -5,7 +5,7 @@ export interface MetricCard           { label: string; value: string; benchmark?
 export interface MetricCardsSection   { type: 'metric_cards';  title?: string; data: MetricCard[]; }
 export interface BarChartItem         { name: string; value?: number; values?: number[]; signal?: Signal; }
 export interface BarChartSection      { type: 'bar_chart';     title?: string; unit?: string; groups?: string[]; data: BarChartItem[]; }
-export interface TableCell            { value: string; signal?: Signal; indicator?: 'dot' | 'arrow'; }
+export interface TableCell            { value: string; signal?: Signal; indicator?: 'dot' | 'arrow'; note?: string; }
 export interface TableSection         { type: 'table';         title?: string; headers?: string[]; rows?: (TableCell[] | Record<string, TableCell | string>)[]; totals?: (TableCell[] | Record<string, TableCell | string>)[]; }
 export interface InsightCard          { number: number; title: string; evidence: string; source?: string; signal?: Signal; }
 export interface InsightCardsSection  { type: 'insight_cards'; title?: string; data: InsightCard[]; }
