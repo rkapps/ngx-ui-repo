@@ -1,13 +1,12 @@
 import { Component, AfterViewInit, effect, ElementRef, input, OnDestroy, output, signal, ViewChild, afterRenderEffect } from '@angular/core';
 import { LucideAngularModule } from 'lucide-angular';
 import { ChatMessage } from './chat-message';
-import { MarkdownPipe } from './markdown.pipe';
 import { MessageRendererComponent } from '../message-renderer/message-renderer.component';
 
 @Component({
   selector: 'ngx-chat',
   standalone: true,
-  imports: [LucideAngularModule, MarkdownPipe, MessageRendererComponent],
+  imports: [LucideAngularModule, MessageRendererComponent],
   template: `
     <div class="flex h-full flex-col">
       <!-- Streaming status — slides open with content, always in DOM to avoid layout shift -->
