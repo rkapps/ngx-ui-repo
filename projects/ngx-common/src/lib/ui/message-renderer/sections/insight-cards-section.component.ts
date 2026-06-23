@@ -19,8 +19,8 @@ import { InsightCardsSection } from '../message-renderer.types';
                 <thead>
                     <tr class="border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                         <th class="px-1 md:px-3 py-1.5 w-10 text-center">#</th>
-                        <th class="px-1 md:px-3 py-1.5">Insight</th>
-                        <th class="px-1 md:px-3 py-1.5 w-[45%]">Evidence</th>
+                        <th class="px-1 md:px-3 py-1.5 w-[20%]">Insight</th>
+                        <th class="px-1 md:px-3 py-1.5 w-[55%]">Evidence</th>
                         <th class="px-1 md:px-3 py-1.5 w-40">Source</th>
                     </tr>
                 </thead>
