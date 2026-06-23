@@ -17,10 +17,7 @@ import { MessageRendererComponent } from '../message-renderer/message-renderer.c
       >
         <div class="flex items-start gap-3 border-b border-border bg-primary-50/70 px-6 py-4">
           <lucide-icon name="loader-circle" [size]="15" class="mt-0.5 shrink-0 animate-spin text-primary-600" />
-          <div
-            class="prose prose-sm flex-1 text-primary-700"
-            [innerHTML]="status() | markdown"
-          ></div>
+          <div class="flex-1 whitespace-pre-line text-sm text-primary-700">{{ status() }}</div>
         </div>
       </div>
 

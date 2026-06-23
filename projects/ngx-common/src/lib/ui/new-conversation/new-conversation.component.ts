@@ -222,9 +222,9 @@ export class NewConversationComponent {
       llm,
       model,
       stream: this.stream(),
+      strategy: this.strategy(),
+      history_mode: this.historyMode(),
       ...(this.showAllFields() ? {
-        strategy: this.strategy(),
-        history_mode: this.historyMode(),
         ...(this.maxTurns() != null ? { max_turns: this.maxTurns()! } : {}),
         ...(this.systemPrompt().trim() ? { system_prompt: this.systemPrompt().trim() } : {}),
       } : {}),

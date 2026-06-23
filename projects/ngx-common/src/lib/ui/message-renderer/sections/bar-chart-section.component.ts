@@ -1,5 +1,5 @@
 import { Component, computed, input } from '@angular/core';
-import { BarChartSection } from '../message-renderer.types';
+import { BarChartItem, BarChartSection } from '../message-renderer.types';
 
 @Component({
     selector: 'app-bar-chart-section',
@@ -118,10 +118,11 @@ import { BarChartSection } from '../message-renderer.types';
                 } @else {
                     <div class="space-y-3">
                         @for (item of section().data; track $index) {
+                            @let sv = singleValue(item);
                             <div>
                                 <div class="flex justify-between text-xs text-gray-600 mb-1.5">
                                     <span>{{ item.name }}</span>
-                                    <span class="font-medium">{{ formatValue(item.value ?? 0, section().unit) }}</span>
+                                    <span class="font-medium">{{ formatValue(sv, section().unit) }}</span>
                                 </div>
                                 <div class="relative h-2 w-full rounded-full bg-gray-100">
                                     @if (hasSingleNegatives()) {
@@ -132,8 +133,8 @@ import { BarChartSection } from '../message-renderer.types';
                                         [class.bar-signal-up]="item.signal === 'up'"
                                         [class.bar-signal-down]="item.signal === 'down'"
                                         [class.bar-signal-neutral]="!item.signal || item.signal === 'neutral'"
-                                        [style.left]="singleBarLeft(item.value ?? 0) + '%'"
-                                        [style.width]="singleBarWidthPct(item.value ?? 0) + '%'">
+                                        [style.left]="singleBarLeft(sv) + '%'"
+                                        [style.width]="singleBarWidthPct(sv) + '%'">
                                     </div>
                                 </div>
                                 @if (hasSingleNegatives()) {
@@ -155,7 +156,7 @@ export class BarChartSectionComponent {
     section = input.required<BarChartSection>();
 
     isGrouped = computed(() =>
-        !!this.section().groups?.length ||
+        !!this.section().groups?.length &&
         this.section().data?.some(d => d.values?.length)
     );
 
@@ -167,11 +168,13 @@ export class BarChartSectionComponent {
     );
     private groupRange = computed(() => this.maxGroupValue() - this.minGroupValue());
 
+    protected singleValue(d: BarChartItem): number { return d.value ?? d.values?.[0] ?? 0; }
+
     private maxSingleValue = computed(() =>
-        Math.max(...this.section().data.map(d => d.value ?? 0), 0)
+        Math.max(...this.section().data.map(d => this.singleValue(d)), 0)
     );
     private minSingleValue = computed(() =>
-        Math.min(...this.section().data.map(d => d.value ?? 0), 0)
+        Math.min(...this.section().data.map(d => this.singleValue(d)), 0)
     );
     private singleRange = computed(() => this.maxSingleValue() - this.minSingleValue());
 

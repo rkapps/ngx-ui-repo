@@ -295,7 +295,8 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
       next: (chunk) => {
         if (chunk.status && chunk.status !== lastStatus) {
           lastStatus = chunk.status;
-          statusAccumulated += chunk.status;
+          const sep = statusAccumulated && !statusAccumulated.endsWith('\n') ? ' ' : '';
+          statusAccumulated += sep + chunk.status;
           this.streamingStatus.set(statusAccumulated);
         }
         accumulated += chunk.content;
