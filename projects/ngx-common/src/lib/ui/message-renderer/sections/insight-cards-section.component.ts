@@ -1,9 +1,11 @@
 import { Component, input } from '@angular/core';
+import { InlineMarkdownPipe } from '../../chat/inline-markdown.pipe';
 import { InsightCardsSection } from '../message-renderer.types';
 
 @Component({
     selector: 'app-insight-cards-section',
     standalone: true,
+    imports: [InlineMarkdownPipe],
     template: `
         <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
             @if (section().title) {
@@ -39,7 +41,7 @@ import { InsightCardsSection } from '../message-renderer.types';
                                 </span>
                             </td>
                             <td class="px-1 md:px-3 py-1.5 font-medium text-gray-900 align-top">{{ card.title }}</td>
-                            <td class="px-1 md:px-3 py-1.5 text-gray-500 leading-relaxed align-top">{{ card.evidence }}</td>
+                            <td class="px-1 md:px-3 py-1.5 text-gray-500 leading-relaxed align-top" [innerHTML]="card.evidence | inlineMarkdown"></td>
                             <td class="px-1 md:px-3 py-1.5 align-top">
                                 @if (card.source) {
                                     <span class="text-xs font-medium text-primary-500">{{ card.source }}</span>

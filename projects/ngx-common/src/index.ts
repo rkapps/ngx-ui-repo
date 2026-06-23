@@ -29,6 +29,7 @@ export { PageLayoutComponent } from './lib/ui/page-layout/page-layout.component'
 export { UserMenuComponent } from './lib/ui/user-menu/user-menu.component';
 export { ChatComponent } from './lib/ui/chat/chat.component';
 export { MarkdownPipe } from './lib/ui/chat/markdown.pipe';
+export { InlineMarkdownPipe } from './lib/ui/chat/inline-markdown.pipe';
 export type { ChatMessage } from './lib/ui/chat/chat-message';
 export { MessageRendererComponent } from './lib/ui/message-renderer/message-renderer.component';
 export type { StructuredResponse, Section } from './lib/ui/message-renderer/message-renderer.types';
