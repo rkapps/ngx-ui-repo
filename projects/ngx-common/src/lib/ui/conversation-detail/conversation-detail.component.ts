@@ -299,7 +299,8 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
           this.streamingStatus.set(statusAccumulated);
         }
         accumulated += chunk.content;
-        const hide = !this.alwaysMarkdown() && accumulated.trimStart().startsWith('{');
+        const trimmed = accumulated.trimStart();
+        const hide = !this.alwaysMarkdown() && (trimmed.startsWith('{') || /^```json\s*\{/s.test(trimmed));
         this.streamingTurn.set({ id: tempId, userContent: text, assistantContent: hide ? '' : accumulated, streaming: true });
       },
       complete: () => {

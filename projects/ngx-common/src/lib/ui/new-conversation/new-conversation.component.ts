@@ -6,11 +6,12 @@ import type { TwangTreeDropdownNode } from 'ngx-twang-ui';
 import { AgentService, type Agent, type LlmProvider } from '../../services/agent.service';
 import { ConversationService, type ConversationStrategy, type HistoryMode } from '../../services/conversation.service';
 import { ConversationFormComponent } from '../conversation-form/conversation-form.component';
+import { MarkdownPipe } from '../chat/markdown.pipe';
 
 @Component({
   selector: 'app-new-conversation',
   standalone: true,
-  imports: [LucideAngularModule, TwangButtonComponent, ConversationFormComponent],
+  imports: [LucideAngularModule, TwangButtonComponent, ConversationFormComponent, MarkdownPipe],
   host: { class: 'flex h-full min-h-0' },
   template: `
     <!-- Left panel: agent list -->
@@ -43,7 +44,6 @@ import { ConversationFormComponent } from '../conversation-form/conversation-for
                 <lucide-icon name="bot" [size]="14" class="shrink-0 text-primary-600" />
                 <p class="text-sm font-medium text-text">{{ agent.name }}</p>
               </div>
-              <p class="line-clamp-2 text-xs leading-relaxed text-text-muted">{{ agent.description }}</p>
             </button>
           }
         }
@@ -73,7 +73,7 @@ import { ConversationFormComponent } from '../conversation-form/conversation-for
               <lucide-icon name="bot" [size]="20" class="mt-0.5 shrink-0 text-primary-600" />
               <div class="min-w-0">
                 <p class="text-sm font-semibold text-gray-800">{{ agent.name }}</p>
-                <p class="mt-0.5 text-sm leading-relaxed text-gray-500">{{ agent.description }}</p>
+                <div class="prose prose-sm max-w-none mt-0.5 text-gray-700" [innerHTML]="agent.description | markdown"></div>
               </div>
             </div>
 

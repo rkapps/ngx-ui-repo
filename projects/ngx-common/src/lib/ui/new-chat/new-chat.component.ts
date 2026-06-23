@@ -9,11 +9,12 @@ import { AgentService, type LlmProvider } from '../../services/agent.service';
 import { ChatTemplateService, type ChatTemplate } from '../../services/chat-template.service';
 import { ConversationService, type ConversationStrategy, type HistoryMode } from '../../services/conversation.service';
 import { ConversationFormComponent } from '../conversation-form/conversation-form.component';
+import { MarkdownPipe } from '../chat/markdown.pipe';
 
 @Component({
   selector: 'app-new-chat',
   standalone: true,
-  imports: [LucideAngularModule, TwangButtonComponent, ConversationFormComponent],
+  imports: [LucideAngularModule, TwangButtonComponent, ConversationFormComponent, MarkdownPipe],
   host: { class: 'flex h-full min-h-0' },
   template: `
     <!-- Left panel: template list -->
@@ -49,7 +50,6 @@ import { ConversationFormComponent } from '../conversation-form/conversation-for
                 </div>
                 <div class="min-w-0 flex-1">
                   <p class="truncate text-sm font-medium text-text">{{ tmpl.title }}</p>
-                  <p class="mt-0.5 line-clamp-2 text-xs leading-relaxed text-text-muted">{{ tmpl.description }}</p>
                 </div>
               </button>
             }
@@ -82,7 +82,7 @@ import { ConversationFormComponent } from '../conversation-form/conversation-for
               </div>
               <div class="min-w-0">
                 <p class="text-sm font-semibold text-gray-800">{{ tmpl.title }}</p>
-                <p class="mt-0.5 text-sm leading-relaxed text-gray-500">{{ tmpl.description }}</p>
+                <div class="prose prose-sm max-w-none mt-0.5 text-gray-700" [innerHTML]="tmpl.description | markdown"></div>
               </div>
             </div>
           }

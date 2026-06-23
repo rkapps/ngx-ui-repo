@@ -2,7 +2,8 @@
   "projects": {
     "default": "rustic-ai-rkapps",
     "instance1": "rustic-ai-rkapps",
-    "instance2": "ijn-rustic-ai"
+    "instance2": "ijn-rustic-ai",
+    "bset-ai-ijn": "bset-ai-ijn"
   },
   "targets": {
     "rustic-ai-rkapps": {
@@ -16,6 +17,13 @@
       "hosting": {
         "instance2": [
           "ijn-rustic-ai"
+        ]
+      }
+    },
+    "bset-ai-ijn": {
+      "hosting": {
+        "bset-ai-ijn": [
+          "bset-ai-ijn"
         ]
       }
     }

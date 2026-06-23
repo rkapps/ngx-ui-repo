@@ -1,4 +1,4 @@
-import { Component, effect, ElementRef, input, OnDestroy, output, signal, ViewChild, afterRenderEffect } from '@angular/core';
+import { Component, AfterViewInit, effect, ElementRef, input, OnDestroy, output, signal, ViewChild, afterRenderEffect } from '@angular/core';
 import { LucideAngularModule } from 'lucide-angular';
 import { ChatMessage } from './chat-message';
 import { MarkdownPipe } from './markdown.pipe';
@@ -105,7 +105,7 @@ import { MessageRendererComponent } from '../message-renderer/message-renderer.c
     </div>
   `,
 })
-export class ChatComponent implements OnDestroy {
+export class ChatComponent implements AfterViewInit, OnDestroy {
   @ViewChild('scrollArea') private scrollArea!: ElementRef<HTMLDivElement>;
   @ViewChild('promptEl') private promptEl!: ElementRef<HTMLTextAreaElement>;
 
@@ -122,6 +122,8 @@ export class ChatComponent implements OnDestroy {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private recognition: any = null;
   private prevMsgCount = 0;
+  private isAutoScrolling = false;
+  private resizeObserver?: ResizeObserver;
 
   constructor() {
     effect(() => {
@@ -133,10 +135,11 @@ export class ChatComponent implements OnDestroy {
 
     afterRenderEffect(() => {
       const msgs = this.messages();
-      if (msgs.length === 0) { this.prevMsgCount = 0; return; }
+      if (msgs.length === 0) { this.prevMsgCount = 0; this.isAutoScrolling = false; return; }
       const streaming = msgs.some(m => m.streaming);
       const isInitialLoad = this.prevMsgCount === 0;
       this.prevMsgCount = msgs.length;
+      this.isAutoScrolling = streaming || isInitialLoad;
       const behavior = (streaming || isInitialLoad) ? 'instant' : 'smooth';
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
@@ -146,6 +149,18 @@ export class ChatComponent implements OnDestroy {
         });
       });
     });
+
+  }
+
+  ngAfterViewInit(): void {
+    const el = this.scrollArea?.nativeElement;
+    if (!el) return;
+    this.resizeObserver = new ResizeObserver(() => {
+      if (this.isAutoScrolling) {
+        el.scrollTo({ top: el.scrollHeight, behavior: 'instant' });
+      }
+    });
+    this.resizeObserver.observe(el);
   }
 
   protected onInput(e: Event): void {
@@ -225,5 +240,6 @@ export class ChatComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     if (this.recording()) this.recognition?.stop();
+    this.resizeObserver?.disconnect();
   }
 }

@@ -5,6 +5,7 @@ import { API_BASE_URL, authInterceptor, LOGIN_CONFIG } from 'ngx-common';
 import { initializeApp, provideFirebaseApp } from '@angular/fire/app';
 import { getAuth, provideAuth } from '@angular/fire/auth';
 import {
+  ArrowLeft,
   ArrowUp,
   Bot,
   Calendar,
@@ -50,6 +51,7 @@ import { environment } from '../environments/environment';
 import { routes } from './app.routes';
 
 const icons = {
+  ArrowLeft,
   ArrowUp,
   Bot,
   Calendar,
@@ -99,6 +101,6 @@ export const appConfig: ApplicationConfig = {
     provideAuth(() => getAuth()),
     importProvidersFrom(LucideAngularModule.pick(icons)),
     { provide: API_BASE_URL, useValue: environment.apiUrl },
-    { provide: LOGIN_CONFIG, useValue: { appName: 'Basset AI', enableEmail: true, enableGoogle: false, redirectTo: '/agents' } },
+    { provide: LOGIN_CONFIG, useValue: environment.loginConfig },
   ],
 };
