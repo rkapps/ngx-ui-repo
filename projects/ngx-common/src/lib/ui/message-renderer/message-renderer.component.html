@@ -1,32 +1,34 @@
 @if (parsed; as structured) {
     <div class="flex flex-col gap-6">
         @for (section of structured.sections; track $index; let i = $index) {
-            <div class="group/section relative">
-                @if (section.type === 'context') {
-                    <app-context-section [section]="$any(section)"></app-context-section>
-                } @else if (section.type === 'metric_cards') {
-                    <app-metric-cards-section [section]="$any(section)"></app-metric-cards-section>
-                } @else if (section.type === 'bar_chart') {
-                    <app-bar-chart-section [section]="$any(section)"></app-bar-chart-section>
-                } @else if (section.type === 'table') {
-                    <app-table-section [section]="$any(section)"></app-table-section>
-                } @else if (section.type === 'insight_cards') {
-                    <app-insight-cards-section [section]="$any(section)"></app-insight-cards-section>
-                } @else if (section.type === 'economic_signals') {
-                    <app-economic-signals-section [section]="$any(section)"></app-economic-signals-section>
-                } @else if (section.type === 'consumer_buzz') {
-                    <app-consumer-buzz-section [section]="$any(section)"></app-consumer-buzz-section>
-                } @else {
-                    <pre class="overflow-x-auto rounded-lg bg-surface-muted p-2 md:p-4 text-xs text-text-muted">{{ section | json }}</pre>
-                }
-                <button
-                    class="absolute right-3 top-3 flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-text-muted hover:bg-surface-muted hover:text-text"
-                    [title]="copiedIndex() === i ? 'Copied!' : 'Copy section'"
-                    (click)="copySection(i, section)"
-                >
-                    <lucide-icon [name]="copiedIndex() === i ? 'check' : 'copy'" [size]="13" />
-                </button>
-            </div>
+            @if (section.type !== 'suggested_prompts') {
+                <div class="group/section relative">
+                    @if (section.type === 'context') {
+                        <app-context-section [section]="$any(section)"></app-context-section>
+                    } @else if (section.type === 'metric_cards') {
+                        <app-metric-cards-section [section]="$any(section)"></app-metric-cards-section>
+                    } @else if (section.type === 'bar_chart') {
+                        <app-bar-chart-section [section]="$any(section)"></app-bar-chart-section>
+                    } @else if (section.type === 'table') {
+                        <app-table-section [section]="$any(section)"></app-table-section>
+                    } @else if (section.type === 'insight_cards') {
+                        <app-insight-cards-section [section]="$any(section)"></app-insight-cards-section>
+                    } @else if (section.type === 'economic_signals') {
+                        <app-economic-signals-section [section]="$any(section)"></app-economic-signals-section>
+                    } @else if (section.type === 'consumer_buzz') {
+                        <app-consumer-buzz-section [section]="$any(section)"></app-consumer-buzz-section>
+                    } @else {
+                        <pre class="overflow-x-auto rounded-lg bg-surface-muted p-2 md:p-4 text-xs text-text-muted">{{ section | json }}</pre>
+                    }
+                    <button
+                        class="absolute right-3 top-3 flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-text-muted hover:bg-surface-muted hover:text-text"
+                        [title]="copiedIndex() === i ? 'Copied!' : 'Copy section'"
+                        (click)="copySection(i, section)"
+                    >
+                        <lucide-icon [name]="copiedIndex() === i ? 'check' : 'copy'" [size]="13" />
+                    </button>
+                </div>
+            }
         }
     </div>
 } @else if (looksLikeJson) {

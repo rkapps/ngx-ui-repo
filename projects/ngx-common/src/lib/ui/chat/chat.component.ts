@@ -62,6 +62,17 @@ import { MessageRendererComponent } from '../message-renderer/message-renderer.c
 
       <!-- Prompt bar -->
       <div class="shrink-0 border-t border-border bg-white px-4 pt-4 pb-8">
+        @if (suggestedPrompts().length) {
+          <div class="mx-auto mb-2 flex w-3/4 flex-wrap gap-2">
+            @for (p of suggestedPrompts(); track p) {
+              <button
+                class="rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-xs text-primary-700 transition-colors hover:bg-primary-100 hover:border-primary-300"
+                type="button"
+                (click)="fillPrompt(p)"
+              >{{ p }}</button>
+            }
+          </div>
+        }
         <div class="mx-auto flex w-3/4 items-end gap-2 rounded-2xl border border-border bg-white px-3 py-2 shadow-sm focus-within:border-primary-400 focus-within:ring-2 focus-within:ring-primary-400/20 transition-shadow">
           <textarea
             #promptEl
@@ -110,6 +121,8 @@ export class ChatComponent implements AfterViewInit, OnDestroy {
   readonly status = input('');
   readonly errorMessage = input<string | null>(null);
   readonly clearTrigger = input<number>(0);
+  readonly suggestedPrompts = input<string[]>([]);
+  readonly restorePrompt = input('');
   readonly send = output<string>();
 
   protected readonly prompt = signal('');
@@ -126,6 +139,19 @@ export class ChatComponent implements AfterViewInit, OnDestroy {
       if (this.clearTrigger() > 0) {
         this.prompt.set('');
         if (this.promptEl) this.promptEl.nativeElement.style.height = 'auto';
+      }
+    });
+
+    effect(() => {
+      const text = this.restorePrompt();
+      if (!text) return;
+      this.prompt.set(text);
+      const ta = this.promptEl?.nativeElement;
+      if (ta) {
+        ta.value = text;
+        ta.style.height = 'auto';
+        ta.style.height = `${ta.scrollHeight}px`;
+        ta.focus();
       }
     });
 
@@ -189,9 +215,22 @@ export class ChatComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  protected fillPrompt(text: string): void {
+    this.prompt.set(text);
+    const ta = this.promptEl?.nativeElement;
+    if (ta) {
+      ta.style.height = 'auto';
+      ta.style.height = `${ta.scrollHeight}px`;
+      ta.focus();
+    }
+  }
+
   protected onSend(): void {
     const text = this.prompt().trim();
     if (!text) return;
+    this.prompt.set('');
+    const ta = this.promptEl?.nativeElement;
+    if (ta) ta.style.height = 'auto';
     this.send.emit(text);
   }
 

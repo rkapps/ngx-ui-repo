@@ -114,6 +114,8 @@ import { ConversationService, type Conversation, type ConversationStrategy, type
             [status]="streamingStatus()"
             [errorMessage]="streamError()"
             [clearTrigger]="clearPromptTrigger()"
+            [suggestedPrompts]="suggestedPrompts()"
+            [restorePrompt]="restorePrompt()"
             (send)="onSend($event)"
           />
         }
@@ -178,6 +180,9 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
   protected readonly streamingStatus = signal('');
   protected readonly streamError = signal<string | null>(null);
   protected readonly clearPromptTrigger = signal(0);
+  protected readonly suggestedPrompts = signal<string[]>([]);
+  protected readonly restorePrompt = signal('');
+  private lastSentText = '';
   private readonly streamingTurn = signal<ChatMessage | null>(null);
 
   protected readonly chatMessages = computed<ChatMessage[]>(() => {
@@ -278,6 +283,22 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
     });
   }
 
+  private extractSuggestedPrompts(content: string): string[] {
+    let raw = content.trim();
+    if (raw.startsWith('```')) {
+      raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    }
+    if (!raw.startsWith('{')) return [];
+    try {
+      const obj = JSON.parse(raw);
+      if (!Array.isArray(obj?.sections)) return [];
+      const section = obj.sections.find((s: { type: string }) => s.type === 'suggested_prompts');
+      return Array.isArray(section?.prompts) ? section.prompts : [];
+    } catch {
+      return [];
+    }
+  }
+
   protected onSend(text: string): void {
     const conv = this.conversation();
     if (!conv) return;
@@ -287,7 +308,10 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
     let statusAccumulated = '';
     let lastStatus = '';
 
+    this.lastSentText = text;
+    this.restorePrompt.set('');
     this.streamError.set(null);
+    this.suggestedPrompts.set([]);
     this.streamingStatus.set('Assistant is responding');
     this.streamingTurn.set({ id: tempId, userContent: text, assistantContent: '', streaming: true });
 
@@ -306,6 +330,7 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
       },
       complete: () => {
         this.streamingStatus.set('');
+        this.suggestedPrompts.set(this.extractSuggestedPrompts(accumulated));
         const newTurn: Turn = {
           id: tempId,
           conversation_id: conv.id,
@@ -322,6 +347,7 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.streamingStatus.set('');
         this.streamingTurn.set(null);
+        this.restorePrompt.set(this.lastSentText);
         const msg = err?.error?.message ?? err?.message ?? 'Something went wrong. Please try again.';
         this.streamError.set(msg);
       },

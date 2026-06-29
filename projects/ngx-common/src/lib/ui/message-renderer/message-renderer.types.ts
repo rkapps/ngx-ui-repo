@@ -16,6 +16,8 @@ export interface EconomicSignalsSection { type: 'economic_signals'; title?: stri
 export interface SentimentItem        { source: string; icon?: string; rating: string; max_rating?: string; signal?: Signal; theme?: string; }
 export interface ConsumerBuzzSection  { type: 'consumer_buzz'; title?: string; sentiment: SentimentItem[]; related_searches?: string[]; }
 
+export interface SuggestedPromptsSection { type: 'suggested_prompts'; title?: string; prompts: string[]; }
+
 export type Section =
     | ContextSection
     | MetricCardsSection
@@ -23,6 +25,7 @@ export type Section =
     | TableSection
     | InsightCardsSection
     | EconomicSignalsSection
-    | ConsumerBuzzSection;
+    | ConsumerBuzzSection
+    | SuggestedPromptsSection;
 
 export interface StructuredResponse { sections: Section[]; }
