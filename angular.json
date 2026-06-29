@@ -78,13 +78,8 @@
             "scripts": [],
             "assets": [
               {
-                "glob": "favicon.ico",
-                "input": "public",
-                "output": "/"
-              },
-              {
                 "glob": "favicon.svg",
-                "input": "public",
+                "input": "projects/bset-ai-ng/src",
                 "output": "/"
               }
             ]
