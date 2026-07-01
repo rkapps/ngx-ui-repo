@@ -203,6 +203,7 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
       this.turns.set([]);
       this.streamingTurn.set(null);
       this.loadingTurns.set(true);
+      this.suggestedPrompts.set([]);
 
       const cached = this.conversationService.getById(id);
       if (cached) {
@@ -229,8 +230,13 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
   private fetchTurns(id: string): void {
     this.conversationService.getTurns(id).subscribe({
       next: (data) => {
-        this.turns.set([...data].sort((a, b) => a.sequence - b.sequence));
+        const sorted = [...data].sort((a, b) => a.sequence - b.sequence);
+        this.turns.set(sorted);
         this.loadingTurns.set(false);
+        const last = sorted[sorted.length - 1];
+        if (last?.response_content) {
+          this.suggestedPrompts.set(this.extractSuggestedPrompts(last.response_content));
+        }
       },
       error: () => this.loadingTurns.set(false),
     });
