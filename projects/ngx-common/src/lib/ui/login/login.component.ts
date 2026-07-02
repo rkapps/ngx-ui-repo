@@ -13,6 +13,8 @@ const FIREBASE_ERRORS: Record<string, string> = {
   'auth/user-not-found': 'No account found with this email.',
   'auth/wrong-password': 'Incorrect password.',
   'auth/too-many-requests': 'Too many failed attempts. Try again later.',
+  'auth/email-already-in-use': 'An account with this email already exists.',
+  'auth/weak-password': 'Password must be at least 6 characters.',
   'auth/popup-closed-by-user': '',
   'auth/cancelled-popup-request': '',
 };
@@ -31,8 +33,12 @@ const FIREBASE_ERRORS: Record<string, string> = {
           <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-600 text-xl font-bold text-white shadow-sm">
             {{ config.appName?.[0]?.toUpperCase() ?? 'A' }}
           </div>
-          <h1 class="text-xl font-bold text-text">Sign in to {{ config.appName ?? 'App' }}</h1>
-          <p class="text-xs text-text-muted">Enter your credentials to continue</p>
+          <h1 class="text-xl font-bold text-text">
+            {{ registerMode() ? 'Create an account' : 'Sign in to ' + (config.appName ?? 'App') }}
+          </h1>
+          <p class="text-xs text-text-muted">
+            {{ registerMode() ? 'Fill in the details below to get started' : 'Enter your credentials to continue' }}
+          </p>
         </div>
 
         <!-- Google sign-in -->
@@ -84,6 +90,19 @@ const FIREBASE_ERRORS: Record<string, string> = {
               <button type="button" class="text-xs text-text-muted underline text-center"
                 (click)="forgotMode.set(false); error.set('')">Back to sign in</button>
             </form>
+          } @else if (registerMode() && config.enableRegistration) {
+            <form (ngSubmit)="register()" class="flex flex-col gap-4">
+              <twang-input label="Email" type="email" placeholder="you@example.com"
+                [ngModel]="email()" (ngModelChange)="email.set($event)" name="email" />
+              <twang-input label="Password" type="password" placeholder="••••••••"
+                [ngModel]="password()" (ngModelChange)="password.set($event)" name="password" />
+              <twang-input label="Confirm password" type="password" placeholder="••••••••"
+                [ngModel]="confirmPassword()" (ngModelChange)="confirmPassword.set($event)" name="confirmPassword" />
+              <twang-button type="submit" variant="primary" size="md" icon="user-plus" label="Create account"
+                [fluid]="true" [loading]="loading()" />
+              <button type="button" class="text-xs text-text-muted underline text-center"
+                (click)="registerMode.set(false); error.set('')">Already have an account? Sign in</button>
+            </form>
           } @else {
             <form (ngSubmit)="submit()" class="flex flex-col gap-4">
               <twang-input label="Email" type="email" placeholder="you@example.com"
@@ -92,8 +111,14 @@ const FIREBASE_ERRORS: Record<string, string> = {
                 [ngModel]="password()" (ngModelChange)="password.set($event)" name="password" />
               <twang-button type="submit" variant="primary" size="md" icon="log-in" label="Sign in"
                 [fluid]="true" [loading]="loading()" />
-              <button type="button" class="text-xs text-text-muted underline text-center"
-                (click)="forgotMode.set(true); error.set('')">Forgot password?</button>
+              <div class="flex flex-col items-center gap-1">
+                <button type="button" class="text-xs text-text-muted underline text-center"
+                  (click)="forgotMode.set(true); error.set('')">Forgot password?</button>
+                @if (config.enableRegistration) {
+                  <button type="button" class="text-xs text-primary-600 underline text-center"
+                    (click)="registerMode.set(true); error.set('')">Don't have an account? Sign up</button>
+                }
+              </div>
             </form>
           }
         }
@@ -109,10 +134,12 @@ export class LoginComponent {
 
   protected readonly email = signal('');
   protected readonly password = signal('');
+  protected readonly confirmPassword = signal('');
   protected readonly loading = signal(false);
   protected readonly googleLoading = signal(false);
   protected readonly error = signal('');
   protected readonly forgotMode = signal(false);
+  protected readonly registerMode = signal(false);
   protected readonly resetSent = signal(false);
 
   protected async submit(): Promise<void> {
@@ -124,6 +151,27 @@ export class LoginComponent {
     this.loading.set(true);
     try {
       await this.auth.login(this.email(), this.password());
+      this.router.navigate([this.config.redirectTo ?? '/']);
+    } catch (err) {
+      this.error.set(this._errorMessage(err));
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  protected async register(): Promise<void> {
+    this.error.set('');
+    if (!this.email() || !this.password()) {
+      this.error.set('Please enter your email and password.');
+      return;
+    }
+    if (this.password() !== this.confirmPassword()) {
+      this.error.set('Passwords do not match.');
+      return;
+    }
+    this.loading.set(true);
+    try {
+      await this.auth.register(this.email(), this.password());
       this.router.navigate([this.config.redirectTo ?? '/']);
     } catch (err) {
       this.error.set(this._errorMessage(err));
