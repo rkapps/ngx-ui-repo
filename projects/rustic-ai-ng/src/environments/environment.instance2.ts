@@ -13,6 +13,7 @@ export const environment = {
     appName: 'Rustic AI',
     enableEmail: true,
     enableGoogle: false,
+    enableRegistration: true,
     redirectTo: '/agents',
   },
 };
