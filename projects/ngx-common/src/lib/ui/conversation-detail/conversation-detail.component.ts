@@ -315,7 +315,7 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
     this.streamingStatus.set('Assistant is responding');
     this.streamingTurn.set({ id: tempId, userContent: text, assistantContent: '', streaming: true });
 
-    this.conversationService.sendMessage(conv.id, text).subscribe({
+    this.conversationService.sendMessage(conv.id, text, conv.stream ?? true).subscribe({
       next: (chunk) => {
         if (chunk.status && chunk.status !== lastStatus) {
           lastStatus = chunk.status;

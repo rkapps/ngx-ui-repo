@@ -116,7 +116,17 @@ export class ConversationService {
     );
   }
 
-  sendMessage(conversationId: string, userPrompt: string): Observable<CompletionChunkResponse> {
+  sendMessage(conversationId: string, userPrompt: string, stream = true): Observable<CompletionChunkResponse> {
+    if (!stream) {
+      return new Observable(subscriber => {
+        const url = `${this.base}/conversations/${conversationId}/turns`;
+        this.http.post<CompletionChunkResponse>(url, { prompt: userPrompt }).subscribe({
+          next: chunk => { subscriber.next(chunk); subscriber.complete(); },
+          error: err => subscriber.error(err),
+        });
+      });
+    }
+
     return new Observable(subscriber => {
       const doFetch = async (token: string) => {
         let buffer = '';
