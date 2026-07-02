@@ -1,6 +1,7 @@
 import { inject, Injectable, signal } from '@angular/core';
 import {
   Auth,
+  createUserWithEmailAndPassword,
   GoogleAuthProvider,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
@@ -58,6 +59,10 @@ export class AuthService {
 
   async login(email: string, password: string): Promise<void> {
     await signInWithEmailAndPassword(this.firebaseAuth, email, password);
+  }
+
+  async register(email: string, password: string): Promise<void> {
+    await createUserWithEmailAndPassword(this.firebaseAuth, email, password);
   }
 
   async sendPasswordReset(email: string): Promise<void> {

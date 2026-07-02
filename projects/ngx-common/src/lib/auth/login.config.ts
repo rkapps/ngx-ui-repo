@@ -4,6 +4,7 @@ export interface LoginConfig {
   appName?: string;
   enableEmail?: boolean;
   enableGoogle?: boolean;
+  enableRegistration?: boolean;
   redirectTo?: string;
 }
 
