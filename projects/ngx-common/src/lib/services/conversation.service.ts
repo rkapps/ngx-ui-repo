@@ -83,7 +83,10 @@ export class ConversationService {
 
   getConversations(): Observable<Conversation[]> {
     return this.http.get<Conversation[]>(`${this.base}/conversations`).pipe(
-      tap(data => this._conversations.set(data))
+      tap(data => {
+        const existingMap = new Map(this._conversations().map(c => [c.id, c]));
+        this._conversations.set(data.map(c => ({ ...(existingMap.get(c.id) ?? {}), ...c })));
+      })
     );
   }
 
@@ -103,7 +106,7 @@ export class ConversationService {
 
   updateConversation(id: string, payload: ConversationUpdateRequest): Observable<Conversation> {
     return this.http.patch<Conversation>(`${this.base}/conversations/${id}`, payload).pipe(
-      tap(updated => this._conversations.update(list => list.map(c => c.id === id ? updated : c)))
+      tap(updated => this._conversations.update(list => list.map(c => c.id === id ? { ...c, ...updated } : c)))
     );
   }
 
