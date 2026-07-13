@@ -202,6 +202,7 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
       this.showUsage.set(false);
       this.turns.set([]);
       this.streamingTurn.set(null);
+      this.streamError.set(null);
       this.loadingTurns.set(true);
       this.suggestedPrompts.set([]);
 
@@ -284,7 +285,7 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
   protected confirmDelete(id: string): void {
     this.deleting.set(true);
     this.conversationService.deleteConversation(id).subscribe({
-      next: () => this.router.navigate(['/agents']),
+      next: () => this.router.navigate(['../'], { relativeTo: this.route }),
       error: () => this.deleting.set(false),
     });
   }
@@ -354,7 +355,8 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
         this.streamingStatus.set('');
         this.streamingTurn.set(null);
         this.restorePrompt.set(this.lastSentText);
-        const msg = err?.error?.message ?? err?.message ?? 'Something went wrong. Please try again.';
+        const body = err?.error;
+        const msg = body?.message ?? (typeof body === 'string' && body ? body : null) ?? err?.message ?? 'Something went wrong. Please try again.';
         this.streamError.set(msg);
       },
     });
