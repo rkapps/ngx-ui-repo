@@ -4,7 +4,6 @@ import { Router } from '@angular/router';
 import { catchError, of, startWith } from 'rxjs';
 import { LucideAngularModule } from 'lucide-angular';
 import { TwangButtonComponent } from 'ngx-twang-ui';
-import type { TwangTreeDropdownNode } from 'ngx-twang-ui';
 import { AgentService, type LlmProvider } from '../../services/agent.service';
 import { ChatTemplateService, type ChatTemplate } from '../../services/chat-template.service';
 import { ConversationService, type ConversationStrategy, type HistoryMode } from '../../services/conversation.service';
@@ -94,7 +93,7 @@ import { MarkdownPipe } from '../chat/markdown.pipe';
             </div>
             <div class="px-5 py-4 flex flex-col gap-4">
               <app-conversation-form
-                [llmTree]="llmTree()"
+                [providers]="providers()"
                 [loadingProviders]="loadingProviders()"
                 [(title)]="title"
                 [(stream)]="stream"
@@ -102,7 +101,8 @@ import { MarkdownPipe } from '../chat/markdown.pipe';
                 [(historyMode)]="historyMode"
                 [(maxTurns)]="maxTurns"
                 [(systemPrompt)]="systemPrompt"
-                [(selectedLlm)]="selectedLlmArr"
+                [(selectedLlmId)]="selectedLlmId"
+                [(selectedModel)]="selectedModel"
               />
             </div>
           </div>
@@ -154,7 +154,8 @@ export class NewChatComponent {
   protected readonly loadingTemplates = computed(() => this._templates() === null);
 
   protected readonly selectedTemplate = signal<ChatTemplate | null>(null);
-  protected readonly selectedLlmArr = signal<string[]>([]);
+  protected readonly selectedLlmId = signal('');
+  protected readonly selectedModel = signal('');
   protected readonly title = signal('');
   protected readonly stream = signal(true);
   protected readonly strategy = signal<ConversationStrategy>('stateful');
@@ -169,9 +170,10 @@ export class NewChatComponent {
       const providers = this._providers();
       if (providers?.length) {
         untracked(() => {
-          if (!this.selectedLlmArr().length) {
+          if (!this.selectedLlmId()) {
             const p = providers[0];
-            this.selectedLlmArr.set([`${p.id}::${p.default_model}`]);
+            this.selectedLlmId.set(p.id);
+            this.selectedModel.set(p.default_model);
           }
         });
       }
@@ -201,14 +203,6 @@ export class NewChatComponent {
     this.mobileShowForm() ? 'flex flex-1 flex-col' : 'hidden md:flex flex-1 flex-col'
   );
 
-  protected readonly llmTree = computed<TwangTreeDropdownNode[]>(() =>
-    this.providers().map(p => ({
-      id: p.id,
-      label: p.llm,
-      children: p.models.map(m => ({ id: `${p.id}::${m}`, label: m })),
-    }))
-  );
-
   protected readonly groupedTemplates = computed(() => {
     const map = new Map<string, ChatTemplate[]>();
     for (const t of this.templates()) {
@@ -220,7 +214,7 @@ export class NewChatComponent {
   });
 
   protected readonly canCreate = computed(() =>
-    !!this.title().trim() && this.selectedLlmArr().length > 0
+    !!this.title().trim() && !!this.selectedLlmId() && !!this.selectedModel()
   );
 
   protected selectTemplate(tmpl: ChatTemplate): void {
@@ -229,23 +223,26 @@ export class NewChatComponent {
     this.systemPrompt.set(tmpl.system_prompt ?? '');
 
     const match = this.findLlmMatch(tmpl.recommended_llm);
-    if (match) this.selectedLlmArr.set([match]);
+    if (match) {
+      this.selectedLlmId.set(match.providerId);
+      this.selectedModel.set(match.model);
+    }
   }
 
-  private findLlmMatch(recommended: string): string | null {
+  private findLlmMatch(recommended: string): { providerId: string; model: string } | null {
     if (!recommended) return null;
     const lower = recommended.toLowerCase();
     for (const p of this.providers()) {
       for (const m of p.models) {
         if (m.toLowerCase() === lower || `${p.llm}/${m}`.toLowerCase() === lower) {
-          return `${p.id}::${m}`;
+          return { providerId: p.id, model: m };
         }
       }
     }
     for (const p of this.providers()) {
       for (const m of p.models) {
         if (m.toLowerCase().includes(lower) || lower.includes(m.toLowerCase())) {
-          return `${p.id}::${m}`;
+          return { providerId: p.id, model: m };
         }
       }
     }
@@ -266,10 +263,13 @@ export class NewChatComponent {
   }
 
   protected create(): void {
-    const llmValue = this.selectedLlmArr()[0];
-    if (!llmValue) return;
+    const llmId = this.selectedLlmId();
+    const model = this.selectedModel();
+    if (!llmId || !model) return;
 
-    const [llm, model] = llmValue.split('::');
+    const provider = this.providers().find(p => p.id === llmId);
+    if (!provider) return;
+
     this.creating.set(true);
     this.createError.set('');
 
@@ -277,7 +277,7 @@ export class NewChatComponent {
       conversation_type: 'chat',
       agent_id: 'chat',
       title: this.title().trim(),
-      llm,
+      llm: provider.id,
       model,
       stream: this.stream(),
       strategy: this.strategy(),

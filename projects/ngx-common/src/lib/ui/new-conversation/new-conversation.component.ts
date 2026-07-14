@@ -2,7 +2,6 @@ import { Component, computed, inject, input, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { TwangButtonComponent } from 'ngx-twang-ui';
-import type { TwangTreeDropdownNode } from 'ngx-twang-ui';
 import { AgentService, type Agent, type LlmProvider } from '../../services/agent.service';
 import { ConversationService, type ConversationStrategy, type HistoryMode } from '../../services/conversation.service';
 import { ConversationFormComponent } from '../conversation-form/conversation-form.component';
@@ -85,7 +84,7 @@ import { MarkdownPipe } from '../chat/markdown.pipe';
               <div class="px-5 py-4 flex flex-col gap-4">
                 <app-conversation-form
                   [showAllFields]="showAllFields()"
-                  [llmTree]="llmTree()"
+                  [providers]="providers()"
                   [loadingProviders]="loadingProviders()"
                   [(title)]="title"
                   [(stream)]="stream"
@@ -93,7 +92,8 @@ import { MarkdownPipe } from '../chat/markdown.pipe';
                   [(historyMode)]="historyMode"
                   [(maxTurns)]="maxTurns"
                   [(systemPrompt)]="systemPrompt"
-                  [(selectedLlm)]="selectedLlmArr"
+                  [(selectedLlmId)]="selectedLlmId"
+                  [(selectedModel)]="selectedModel"
                 />
               </div>
             </div>
@@ -138,7 +138,8 @@ export class NewConversationComponent {
   protected readonly loadingAgents = signal(true);
   protected readonly loadingProviders = signal(true);
   protected readonly selectedAgent = signal<Agent | null>(null);
-  protected readonly selectedLlmArr = signal<string[]>([]);
+  protected readonly selectedLlmId = signal('');
+  protected readonly selectedModel = signal('');
   protected readonly title = signal('');
   protected readonly stream = signal(true);
   protected readonly strategy = signal<ConversationStrategy>('stateful');
@@ -160,16 +161,8 @@ export class NewConversationComponent {
     this.mobileShowForm() ? 'flex flex-1 flex-col' : 'hidden md:flex flex-1 flex-col'
   );
 
-  protected readonly llmTree = computed<TwangTreeDropdownNode[]>(() =>
-    this.providers().map(p => ({
-      id: p.id,
-      label: p.llm,
-      children: p.models.map(m => ({ id: `${p.id}::${m}`, label: m })),
-    }))
-  );
-
   protected readonly canCreate = computed(() =>
-    !!this.selectedAgent() && !!this.title().trim() && this.selectedLlmArr().length > 0
+    !!this.selectedAgent() && !!this.title().trim() && !!this.selectedLlmId() && !!this.selectedModel()
   );
 
   constructor() {
@@ -189,7 +182,8 @@ export class NewConversationComponent {
         this.loadingProviders.set(false);
         if (data.length) {
           const p = data[0];
-          this.selectedLlmArr.set([`${p.id}::${p.default_model}`]);
+          this.selectedLlmId.set(p.id);
+          this.selectedModel.set(p.default_model);
         }
       },
       error: () => this.loadingProviders.set(false),
@@ -208,10 +202,13 @@ export class NewConversationComponent {
 
   protected create(): void {
     const agent = this.selectedAgent();
-    const llmValue = this.selectedLlmArr()[0];
-    if (!agent || !llmValue) return;
+    const llmId = this.selectedLlmId();
+    const model = this.selectedModel();
+    if (!agent || !llmId || !model) return;
 
-    const [llm, model] = llmValue.split('::');
+    const provider = this.providers().find(p => p.id === llmId);
+    if (!provider) return;
+
     this.creating.set(true);
     this.createError.set('');
 
@@ -219,7 +216,7 @@ export class NewConversationComponent {
       conversation_type: 'agent',
       title: this.title().trim(),
       agent_id: agent.id,
-      llm,
+      llm: provider.id,
       model,
       stream: this.stream(),
       strategy: this.strategy(),
