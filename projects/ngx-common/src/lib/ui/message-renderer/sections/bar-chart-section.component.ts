@@ -6,19 +6,19 @@ import { BarChartItem, BarChartSection } from '../message-renderer.types';
     standalone: true,
     template: `
         <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
-            @if (section().title) {
+            @if (normalizedSection().title) {
                 <div class="px-2 md:px-6 pt-2">
                     <div class="pb-2 border-b-2 border-primary-500">
-                        <h3 class="text-lg font-bold text-gray-800">{{ section().title }}</h3>
+                        <h3 class="text-lg font-bold text-gray-800">{{ normalizedSection().title }}</h3>
                     </div>
                 </div>
             }
             <div class="px-2 py-2 md:px-6 md:py-5">
                 @if (isGrouped()) {
                     <!-- Legend: data items (e.g. stock tickers) -->
-                    @if (section().data.length) {
+                    @if (normalizedSection().data.length > 1) {
                         <div class="flex flex-wrap gap-x-4 gap-y-1 mb-5">
-                            @for (item of section().data; track item.name; let i = $index) {
+                            @for (item of normalizedSection().data; track item.name; let i = $index) {
                                 <div class="flex items-center gap-1.5">
                                     <div class="w-3 h-3 rounded-sm" [class]="groupBgColor(i)"></div>
                                     <span class="text-xs text-gray-600">{{ item.name }}</span>
@@ -37,7 +37,7 @@ import { BarChartItem, BarChartSection } from '../message-renderer.types';
                                              [style.bottom]="tick.bottomPct + '%'"
                                              style="transform: translateY(50%)">
                                             <span class="text-[9px] leading-none text-gray-400 whitespace-nowrap text-right">
-                                                {{ formatValue(tick.value, section().unit) }}
+                                                {{ formatValue(tick.value, normalizedSection().unit) }}
                                             </span>
                                             <div class="w-1.5 border-b border-gray-300"></div>
                                         </div>
@@ -60,19 +60,19 @@ import { BarChartItem, BarChartSection } from '../message-renderer.types';
                                     }
                                 </div>
 
-                                @for (group of (section().groups ?? []); track group; let gi = $index) {
+                                @for (group of (normalizedSection().groups ?? []); track group; let gi = $index) {
                                     <div class="relative flex flex-col items-center gap-2 z-10"
                                          [style.width]="columnWidth(group)">
                                         <div class="flex flex-col w-full" [style.height.px]="CHART_HEIGHT_PX">
                                             <!-- Positive area: bars grow up from zero line -->
                                             <div class="flex items-end w-full justify-center"
                                                  [style.height.px]="positiveAreaPx()">
-                                                @for (item of section().data; track item.name; let i = $index) {
+                                                @for (item of normalizedSection().data; track item.name; let i = $index) {
                                                     @let val = item.values?.[gi] ?? 0;
                                                     <div class="flex flex-col items-center justify-end h-full">
                                                         @if (val > 0) {
                                                             <span class="text-[10px] leading-none text-gray-600 font-semibold">
-                                                                {{ formatValue(val, section().unit) }}
+                                                                {{ formatValue(val, normalizedSection().unit) }}
                                                             </span>
                                                             <div class="w-6 rounded-t transition-all duration-700"
                                                                  [class]="groupBgColor(i)"
@@ -90,7 +90,7 @@ import { BarChartItem, BarChartSection } from '../message-renderer.types';
                                             @if (hasGroupNegatives()) {
                                                 <div class="flex items-start w-full justify-center"
                                                      [style.height.px]="negativeAreaPx()">
-                                                    @for (item of section().data; track item.name; let i = $index) {
+                                                    @for (item of normalizedSection().data; track item.name; let i = $index) {
                                                         @let val = item.values?.[gi] ?? 0;
                                                         <div class="flex flex-col items-center justify-start h-full">
                                                             @if (val < 0) {
@@ -99,7 +99,7 @@ import { BarChartItem, BarChartSection } from '../message-renderer.types';
                                                                      [style.height.px]="negBarPx(val)">
                                                                 </div>
                                                                 <span class="text-[10px] leading-none text-gray-600 font-semibold">
-                                                                    {{ formatValue(val, section().unit) }}
+                                                                    {{ formatValue(val, normalizedSection().unit) }}
                                                                 </span>
                                                             }
                                                         </div>
@@ -117,12 +117,12 @@ import { BarChartItem, BarChartSection } from '../message-renderer.types';
                     </div>
                 } @else {
                     <div class="space-y-3">
-                        @for (item of section().data; track $index) {
+                        @for (item of normalizedSection().data; track $index) {
                             @let sv = singleValue(item);
                             <div>
                                 <div class="flex justify-between text-xs text-gray-600 mb-1.5">
                                     <span>{{ item.name }}</span>
-                                    <span class="font-medium">{{ formatValue(sv, section().unit) }}</span>
+                                    <span class="font-medium">{{ formatValue(sv, normalizedSection().unit) }}</span>
                                 </div>
                                 <div class="relative h-2 w-full rounded-full bg-gray-100">
                                     @if (hasSingleNegatives()) {
@@ -155,26 +155,41 @@ import { BarChartItem, BarChartSection } from '../message-renderer.types';
 export class BarChartSectionComponent {
     section = input.required<BarChartSection>();
 
+    // Normalize the LLM's {label,value}[] format into the renderer's number[] + groups format.
+    protected normalizedSection = computed<BarChartSection>(() => {
+        const s = this.section();
+        const firstValues = s.data?.[0]?.values;
+        if (!firstValues?.length || typeof firstValues[0] === 'number') return s;
+        // Rich format: values is { label: string; value: number }[]
+        type RichVal = { label: string; value: number };
+        const groups = (firstValues as unknown as RichVal[]).map(v => v.label);
+        const data = s.data.map(item => ({
+            ...item,
+            values: (item.values as unknown as RichVal[]).map(v => v.value),
+        }));
+        return { ...s, groups, data };
+    });
+
     isGrouped = computed(() =>
-        !!this.section().groups?.length &&
-        this.section().data?.some(d => d.values?.length)
+        !!this.normalizedSection().groups?.length &&
+        this.normalizedSection().data?.some(d => d.values?.length)
     );
 
     private maxGroupValue = computed(() =>
-        Math.max(...this.section().data.flatMap(d => d.values ?? []), 0)
+        Math.max(...this.normalizedSection().data.flatMap(d => d.values ?? []), 0)
     );
     private minGroupValue = computed(() =>
-        Math.min(...this.section().data.flatMap(d => d.values ?? []), 0)
+        Math.min(...this.normalizedSection().data.flatMap(d => d.values ?? []), 0)
     );
     private groupRange = computed(() => this.maxGroupValue() - this.minGroupValue());
 
     protected singleValue(d: BarChartItem): number { return d.value ?? d.values?.[0] ?? 0; }
 
     private maxSingleValue = computed(() =>
-        Math.max(...this.section().data.map(d => this.singleValue(d)), 0)
+        Math.max(...this.normalizedSection().data.map(d => this.singleValue(d)), 0)
     );
     private minSingleValue = computed(() =>
-        Math.min(...this.section().data.map(d => this.singleValue(d)), 0)
+        Math.min(...this.normalizedSection().data.map(d => this.singleValue(d)), 0)
     );
     private singleRange = computed(() => this.maxSingleValue() - this.minSingleValue());
 
