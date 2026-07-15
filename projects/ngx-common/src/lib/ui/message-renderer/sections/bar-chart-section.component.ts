@@ -159,16 +159,43 @@ export class BarChartSectionComponent {
     protected normalizedSection = computed<BarChartSection>(() => {
         const s = this.section();
         const firstValues = s.data?.[0]?.values;
-        if (!firstValues?.length || typeof firstValues[0] === 'number') return s;
-        // Rich format: values is { label: string; value: number }[]
-        type RichVal = { label: string; value: number };
-        const groups = (firstValues as unknown as RichVal[]).map(v => v.label);
-        const data = s.data.map(item => ({
-            ...item,
-            values: (item.values as unknown as RichVal[]).map(v => v.value),
-        }));
-        return { ...s, groups, data };
+
+        // Derive unit from format field if not already set
+        const unit = s.unit ?? (s.format === 'currency' ? '$' : undefined);
+        let result = unit !== s.unit ? { ...s, unit } : s;
+
+        if (!firstValues?.length || typeof firstValues[0] === 'number') return result;
+
+        // Case 1: values is { label, value }[] — extract groups from labels
+        if (typeof firstValues[0] === 'object' && firstValues[0] !== null) {
+            type RichVal = { label: string; value: number };
+            const groups = (firstValues as unknown as RichVal[]).map(v => v.label);
+            const data = s.data.map(item => ({
+                ...item,
+                values: (item.values as unknown as RichVal[]).map(v => v.value),
+            }));
+            return { ...result, groups, data };
+        }
+
+        // Case 2: values is string[] — parse formatted currency/number strings to numbers
+        if (typeof firstValues[0] === 'string') {
+            const data = s.data.map(item => ({
+                ...item,
+                values: (item.values as unknown as string[]).map(v => this.parseFormattedValue(v)),
+            }));
+            return { ...result, data };
+        }
+
+        return result;
     });
+
+    private parseFormattedValue(val: string): number {
+        const s = val.replace(/[$,%\s,]/g, '');
+        const suffix = s.slice(-1).toUpperCase();
+        const multipliers: Record<string, number> = { T: 1e12, B: 1e9, M: 1e6, K: 1e3 };
+        if (multipliers[suffix]) return parseFloat(s.slice(0, -1)) * multipliers[suffix];
+        return parseFloat(s) || 0;
+    }
 
     isGrouped = computed(() =>
         !!this.normalizedSection().groups?.length &&
@@ -254,10 +281,10 @@ export class BarChartSectionComponent {
 
     groupGapClass = computed(() => {
         const n = this.numSeries();
-        if (n <= 1) return 'gap-3';
-        if (n <= 3) return 'gap-8';
-        if (n <= 5) return 'gap-4';
-        return 'gap-2';
+        if (n <= 1) return 'gap-6';
+        if (n <= 3) return 'gap-10';
+        if (n <= 5) return 'gap-8';
+        return 'gap-6';
     });
 
     columnWidth(groupLabel: string): string {
@@ -304,6 +331,7 @@ export class BarChartSectionComponent {
         const suffix = u !== '$' && u ? u : '';
         const sign = value < 0 ? '-' : '';
         const abs = Math.abs(value);
+        if (abs >= 1_000_000_000) return `${sign}${prefix}${(abs / 1_000_000_000).toFixed(2)}B${suffix}`;
         if (abs >= 1_000_000) return `${sign}${prefix}${(abs / 1_000_000).toFixed(1)}M${suffix}`;
         if (abs >= 1_000) return `${sign}${prefix}${(abs / 1_000).toFixed(0)}K${suffix}`;
         const num = abs % 1 === 0 ? `${abs}` : `${abs.toFixed(1)}`;

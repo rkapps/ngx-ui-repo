@@ -300,7 +300,8 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
       const obj = JSON.parse(raw);
       if (!Array.isArray(obj?.sections)) return [];
       const section = obj.sections.find((s: { type: string }) => s.type === 'suggested_prompts');
-      return Array.isArray(section?.prompts) ? section.prompts : [];
+      const list = section?.prompts ?? section?.prompt;
+      return Array.isArray(list) ? list : [];
     } catch {
       return [];
     }
