@@ -144,8 +144,15 @@ export class ConversationService {
             body: JSON.stringify({ prompt: userPrompt }),
           });
 
-          if (!response.ok || !response.body) {
-            subscriber.error(new Error(`HTTP ${response.status}`));
+          if (!response.ok) {
+            const text = await response.text().catch(() => '');
+            let detail = text;
+            try { const j = JSON.parse(text); detail = j.message ?? j.detail ?? j.error ?? text; } catch { /* not JSON */ }
+            subscriber.error(new Error(detail || `HTTP ${response.status}`));
+            return;
+          }
+          if (!response.body) {
+            subscriber.error(new Error(`HTTP ${response.status}: no response body`));
             return;
           }
 

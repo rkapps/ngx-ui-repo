@@ -234,9 +234,10 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
         const sorted = [...data].sort((a, b) => a.sequence - b.sequence);
         this.turns.set(sorted);
         this.loadingTurns.set(false);
-        const last = sorted[sorted.length - 1];
-        if (last?.response_content) {
-          this.suggestedPrompts.set(this.extractSuggestedPrompts(last.response_content));
+        // Scan from last turn backwards — use the most recent turn that has suggested prompts
+        for (let i = sorted.length - 1; i >= Math.max(0, sorted.length - 3); i--) {
+          const prompts = this.extractSuggestedPrompts(sorted[i]?.response_content ?? '');
+          if (prompts.length) { this.suggestedPrompts.set(prompts); break; }
         }
       },
       error: () => this.loadingTurns.set(false),
@@ -290,18 +291,83 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
     });
   }
 
+  private cleanJson(raw: string): string {
+    return raw
+      .replace(/:\s*--(?=[,\}\]\s\n])/g, ': null')   // object value: "key": --
+      .replace(/\[\s*--/g, '[null')                   // first array element: [--
+      .replace(/,\s*--/g, ', null');                  // subsequent array elements: , --
+  }
+
+  private extractCompleteSections(raw: string): string | null {
+    const sectionsIdx = raw.indexOf('"sections"');
+    if (sectionsIdx === -1) return null;
+    const arrStart = raw.indexOf('[', sectionsIdx);
+    if (arrStart === -1) return null;
+
+    const sections: unknown[] = [];
+    let pos = arrStart + 1;
+
+    while (pos < raw.length) {
+      while (pos < raw.length && /[\s,]/.test(raw[pos])) pos++;
+      if (pos >= raw.length || raw[pos] !== '{') break;
+
+      let depth = 0, i = pos, inStr = false, esc = false;
+      for (; i < raw.length; i++) {
+        const c = raw[i];
+        if (esc) { esc = false; continue; }
+        if (c === '\\' && inStr) { esc = true; continue; }
+        if (c === '"') { inStr = !inStr; continue; }
+        if (inStr) continue;
+        if (c === '{') depth++;
+        else if (c === '}' && --depth === 0) {
+          try { sections.push(JSON.parse(this.cleanJson(raw.slice(pos, i + 1)))); } catch { /* skip malformed */ }
+          pos = i + 1;
+          break;
+        }
+      }
+      if (depth > 0) break; // section not yet complete — stop
+    }
+
+    if (!sections.length) return null;
+
+    // Buffer the last group: hold back any trailing sections that share the same group
+    // name, since more sections with that group may still be streaming in.
+    type WithGroup = { group?: string };
+    const lastGroup = (sections[sections.length - 1] as WithGroup).group;
+    if (lastGroup) {
+      let groupStart = sections.length - 1;
+      while (groupStart > 0 && (sections[groupStart - 1] as WithGroup).group === lastGroup) {
+        groupStart--;
+      }
+      const display = sections.slice(0, groupStart);
+      return display.length ? JSON.stringify({ sections: display }) : null;
+    }
+
+    return JSON.stringify({ sections });
+  }
+
   private extractSuggestedPrompts(content: string): string[] {
+    if (!content) return [];
     let raw = content.trim();
     if (raw.startsWith('```')) {
       raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
     }
-    if (!raw.startsWith('{')) return [];
+    const jsonStart = raw.indexOf('{');
+    if (jsonStart === -1) return [];
+    raw = raw.slice(jsonStart);
     try {
-      const obj = JSON.parse(raw);
-      if (!Array.isArray(obj?.sections)) return [];
-      const section = obj.sections.find((s: { type: string }) => s.type === 'suggested_prompts');
-      const list = section?.prompts ?? section?.prompt;
-      return Array.isArray(list) ? list : [];
+      const obj = JSON.parse(this.cleanJson(raw));
+      if (Array.isArray(obj?.sections)) {
+        const section = obj.sections.find((s: { type: string }) => s.type === 'suggested_prompts');
+        const list = section?.prompts ?? section?.prompt ?? section?.suggested_prompts;
+        if (Array.isArray(list) && list.length) return list;
+      }
+      // Top-level suggested_prompts object
+      if (obj?.type === 'suggested_prompts') {
+        const list = obj.prompts ?? obj.prompt ?? obj.suggested_prompts;
+        if (Array.isArray(list)) return list;
+      }
+      return [];
     } catch {
       return [];
     }
@@ -333,8 +399,9 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
         }
         accumulated += chunk.content;
         const trimmed = accumulated.trimStart();
-        const hide = !this.alwaysMarkdown() && (trimmed.startsWith('{') || /^```json\s*\{/s.test(trimmed));
-        this.streamingTurn.set({ id: tempId, userContent: text, assistantContent: hide ? '' : accumulated, streaming: true });
+        const isJson = !this.alwaysMarkdown() && (trimmed.startsWith('{') || /^```json\s*\{/s.test(trimmed));
+        const displayContent = isJson ? (this.extractCompleteSections(trimmed) ?? '') : accumulated;
+        this.streamingTurn.set({ id: tempId, userContent: text, assistantContent: displayContent, streaming: true });
       },
       complete: () => {
         this.streamingStatus.set('');

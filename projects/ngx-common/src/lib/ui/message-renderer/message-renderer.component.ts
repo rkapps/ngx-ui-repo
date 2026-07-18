@@ -31,14 +31,37 @@ import { ConsumerBuzzSectionComponent } from './sections/consumer-buzz-section.c
 export class MessageRendererComponent {
     content = input.required<string>();
 
-    protected readonly copiedIndex = signal<number | null>(null);
+    protected readonly copiedSection = signal<unknown>(null);
 
-    protected copySection(index: number, section: unknown): void {
+    protected copySection(section: unknown): void {
         const text = this.formatSection(section as Section);
         navigator.clipboard.writeText(text).then(() => {
-            this.copiedIndex.set(index);
-            setTimeout(() => this.copiedIndex.set(null), 2000);
+            this.copiedSection.set(section);
+            setTimeout(() => this.copiedSection.set(null), 2000);
         });
+    }
+
+    get groupedRows(): Array<{ sections: Section[]; paired: boolean }> {
+        const p = this.parsed;
+        if (!p) return [];
+        const rows: Array<{ sections: Section[]; paired: boolean }> = [];
+        const secs = p.sections;
+        let i = 0;
+        while (i < secs.length) {
+            const s = secs[i] as Section & { group?: string };
+            const g = s.group || '';
+            const group: Section[] = [s];
+            if (g) {
+                while (i + group.length < secs.length) {
+                    const next = secs[i + group.length] as Section & { group?: string };
+                    if ((next.group || '') === g) group.push(next);
+                    else break;
+                }
+            }
+            rows.push({ sections: group, paired: group.length > 1 });
+            i += group.length;
+        }
+        return rows;
     }
 
     private formatSection(section: Section): string {
@@ -109,17 +132,53 @@ export class MessageRendererComponent {
         return raw.startsWith('{') || raw.startsWith('```');
     }
 
+    private cleanJson(raw: string): string {
+        return raw
+            .replace(/:\s*--(?=[,\}\]\s\n])/g, ': null')   // object value: "key": --
+            .replace(/\[\s*--/g, '[null')                   // first array element: [--
+            .replace(/,\s*--/g, ', null');                  // subsequent array elements: , --
+    }
+
+    private extractPartialSections(raw: string): StructuredResponse | null {
+        const arrStart = raw.indexOf('[', raw.indexOf('"sections"'));
+        if (arrStart === -1) return null;
+        const sections: unknown[] = [];
+        let pos = arrStart + 1;
+        while (pos < raw.length) {
+            while (pos < raw.length && /[\s,]/.test(raw[pos])) pos++;
+            if (pos >= raw.length || raw[pos] !== '{') break;
+            let depth = 0, i = pos, inStr = false, esc = false;
+            for (; i < raw.length; i++) {
+                const c = raw[i];
+                if (esc) { esc = false; continue; }
+                if (c === '\\' && inStr) { esc = true; continue; }
+                if (c === '"') { inStr = !inStr; continue; }
+                if (inStr) continue;
+                if (c === '{') depth++;
+                else if (c === '}' && --depth === 0) {
+                    try { sections.push(JSON.parse(raw.slice(pos, i + 1))); } catch { /* skip individual malformed section */ }
+                    pos = i + 1;
+                    break;
+                }
+            }
+            if (depth > 0) break;
+        }
+        return sections.length ? { sections: sections as Section[] } : null;
+    }
+
     get parsed(): StructuredResponse | null {
         let raw = this.content().trim();
         if (raw.startsWith('```')) {
             raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
         }
         if (!raw.startsWith('{')) return null;
+        const cleaned = this.cleanJson(raw);
         try {
-            const obj = JSON.parse(raw);
+            const obj = JSON.parse(cleaned);
             return Array.isArray(obj?.sections) ? obj : null;
         } catch {
-            return null;
+            // Full parse failed (truncated or residual syntax errors) — extract whatever sections are complete
+            return this.extractPartialSections(cleaned);
         }
     }
 }

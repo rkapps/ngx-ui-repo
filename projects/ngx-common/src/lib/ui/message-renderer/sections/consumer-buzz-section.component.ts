@@ -1,4 +1,4 @@
-import { Component, input } from '@angular/core';
+import { Component, computed, input } from '@angular/core';
 import {
     Award,
     Globe,
@@ -85,9 +85,9 @@ export const CONSUMER_BUZZ_ICON_NAMES = Object.keys(CONSUMER_BUZZ_ICONS);
                 </div>
             }
             <div class="px-2 py-2 md:px-6 md:py-5 space-y-5">
-                @if (section().sentiment.length) {
+                @if (sentimentItems().length) {
                     <div class="grid" style="grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 1.5rem 2rem;">
-                        @for (item of section().sentiment; track $index) {
+                        @for (item of sentimentItems(); track $index) {
                             <div class="flex flex-col items-center gap-1.5">
                                 <!-- Semi-circle dial -->
                                 <div class="relative w-full">
@@ -144,6 +144,11 @@ export const CONSUMER_BUZZ_ICON_NAMES = Object.keys(CONSUMER_BUZZ_ICONS);
 })
 export class ConsumerBuzzSectionComponent {
     section = input.required<ConsumerBuzzSection>();
+
+    protected readonly sentimentItems = computed(() => {
+        const s = this.section().sentiment;
+        return Array.isArray(s) ? s : [];
+    });
 
     readonly arcPath = ARC_PATH;
     readonly arcLength = ARC_LENGTH;
