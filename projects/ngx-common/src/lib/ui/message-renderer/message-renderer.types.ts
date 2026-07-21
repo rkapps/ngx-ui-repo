@@ -5,6 +5,8 @@ export interface MetricCard           { label: string; value: string; benchmark?
 export interface MetricCardsSection   { type: 'metric_cards';      title?: string; group?: string; data: MetricCard[]; }
 export interface BarChartItem         { name: string; value?: number; values?: number[]; signal?: Signal; }
 export interface BarChartSection      { type: 'bar_chart';         title?: string; group?: string; unit?: string; format?: string; orientation?: string; groups?: string[]; data: BarChartItem[]; }
+export interface LineChartItem        { name: string; value?: number; values?: number[]; signal?: Signal; }
+export interface LineChartSection     { type: 'line_chart';        title?: string; group?: string; unit?: string; format?: string; groups?: string[]; data: LineChartItem[]; }
 export interface TableCell            { value: string; signal?: Signal; indicator?: 'dot' | 'arrow'; note?: string; }
 export interface TableSection         { type: 'table';             title?: string; group?: string; headers?: string[]; rows?: (TableCell[] | Record<string, TableCell | string>)[]; totals?: (TableCell[] | Record<string, TableCell | string>)[]; }
 export interface InsightCard          { number: number; title: string; evidence: string; source?: string; signal?: Signal; }
@@ -19,6 +21,7 @@ export type Section =
     | ContextSection
     | MetricCardsSection
     | BarChartSection
+    | LineChartSection
     | TableSection
     | InsightCardsSection
     | EconomicSignalsSection

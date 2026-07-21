@@ -69,7 +69,7 @@ import { ConversationService, type Conversation, type ConversationStrategy, type
           </div>
         } @else if (showEdit()) {
           <!-- Edit panel -->
-          <div class="flex flex-1 flex-col overflow-y-auto px-2 py-2 md:px-16 md:py-8 gap-6">
+          <div class="flex flex-1 flex-col overflow-y-auto px-2 py-2 md:px-8 md:py-4 gap-6">
             <!-- Model info card (mirrors agent card in create) -->
             <div class="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-100 px-5 py-4">
               <lucide-icon name="bot" [size]="20" class="mt-0.5 shrink-0 text-primary-600" />

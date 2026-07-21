@@ -65,7 +65,7 @@ import { MarkdownPipe } from '../chat/markdown.pipe';
 
       @if (selectedAgent(); as agent) {
         <div class="flex-1 min-h-0 overflow-y-auto">
-          <div class="flex flex-col gap-6 px-2 py-2 md:px-16 md:py-8">
+          <div class="flex flex-col gap-6 px-2 py-2 md:px-8 md:py-4">
 
             <!-- Agent details -->
             <div class="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-100 px-5 py-4">

@@ -1,16 +1,18 @@
 @if (parsed) {
     <div class="flex flex-col gap-6">
         @for (row of groupedRows; track $index) {
-            <div [class]="row.paired ? 'flex gap-4 items-start' : ''">
+            <div [class]="rowGridClass(row)">
                 @for (section of row.sections; track $index) {
                     @if (section.type !== 'suggested_prompts') {
-                        <div class="group/section relative" [class]="row.paired ? 'flex-1 min-w-0' : ''">
+                        <div class="group/section relative" [class]="row.paired ? 'min-w-0' : ''">
                             @if (section.type === 'context') {
                                 <app-context-section [section]="$any(section)"></app-context-section>
                             } @else if (section.type === 'metric_cards') {
                                 <app-metric-cards-section [section]="$any(section)"></app-metric-cards-section>
                             } @else if (section.type === 'bar_chart') {
                                 <app-bar-chart-section [section]="$any(section)"></app-bar-chart-section>
+                            } @else if (section.type === 'line_chart') {
+                                <app-line-chart-section [section]="$any(section)"></app-line-chart-section>
                             } @else if (section.type === 'table') {
                                 <app-table-section [section]="$any(section)"></app-table-section>
                             } @else if (section.type === 'insight_cards') {

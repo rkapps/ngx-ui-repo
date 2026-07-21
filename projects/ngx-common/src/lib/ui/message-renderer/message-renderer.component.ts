@@ -6,6 +6,7 @@ import { Section, StructuredResponse, TableCell } from './message-renderer.types
 import { ContextSectionComponent } from './sections/context-section.component';
 import { MetricCardsSectionComponent } from './sections/metric-cards-section.component';
 import { BarChartSectionComponent } from './sections/bar-chart-section.component';
+import { LineChartSectionComponent } from './sections/line-chart-section.component';
 import { TableSectionComponent } from './sections/table-section.component';
 import { InsightCardsSectionComponent } from './sections/insight-cards-section.component';
 import { EconomicSignalsSectionComponent } from './sections/economic-signals-section.component';
@@ -21,6 +22,7 @@ import { ConsumerBuzzSectionComponent } from './sections/consumer-buzz-section.c
         ContextSectionComponent,
         MetricCardsSectionComponent,
         BarChartSectionComponent,
+        LineChartSectionComponent,
         TableSectionComponent,
         InsightCardsSectionComponent,
         EconomicSignalsSectionComponent,
@@ -39,6 +41,12 @@ export class MessageRendererComponent {
             this.copiedSection.set(section);
             setTimeout(() => this.copiedSection.set(null), 2000);
         });
+    }
+
+    protected rowGridClass(row: { sections: Section[]; paired: boolean }): string {
+        if (!row.paired) return '';
+        const cols = row.sections.length >= 3 ? 'md:grid-cols-2 3xl:grid-cols-3' : 'md:grid-cols-2';
+        return `grid grid-cols-1 ${cols} gap-4 items-start`;
     }
 
     get groupedRows(): Array<{ sections: Section[]; paired: boolean }> {
@@ -79,6 +87,16 @@ export class MessageRendererComponent {
                 }
                 break;
             case 'bar_chart':
+                for (const item of section.data ?? []) {
+                    if (item.values?.length) {
+                        const vals = (section.groups ?? []).map((g, i) => `${g}: ${item.values![i]}`).join(', ');
+                        lines.push(`${item.name} — ${vals}`);
+                    } else {
+                        lines.push(`${item.name}: ${item.value}`);
+                    }
+                }
+                break;
+            case 'line_chart':
                 for (const item of section.data ?? []) {
                     if (item.values?.length) {
                         const vals = (section.groups ?? []).map((g, i) => `${g}: ${item.values![i]}`).join(', ');

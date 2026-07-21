@@ -21,7 +21,7 @@ import { MessageRendererComponent } from '../message-renderer/message-renderer.c
       </div>
 
       <!-- Messages -->
-      <div #scrollArea class="min-h-0 flex-1 overflow-y-auto px-2 py-2 md:px-16 md:py-10">
+      <div #scrollArea class="min-h-0 flex-1 overflow-y-auto px-2 py-2 md:px-8 md:py-4">
         @if (loading()) {
           <div class="flex items-center justify-center py-12">
             <lucide-icon name="loader-circle" [size]="24" class="animate-spin text-text-muted" />
