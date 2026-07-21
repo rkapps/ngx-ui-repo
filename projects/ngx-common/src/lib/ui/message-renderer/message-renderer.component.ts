@@ -45,7 +45,7 @@ export class MessageRendererComponent {
 
     protected rowGridClass(row: { sections: Section[]; paired: boolean }): string {
         if (!row.paired) return '';
-        const cols = row.sections.length >= 3 ? 'md:grid-cols-2 3xl:grid-cols-3' : 'md:grid-cols-2';
+        const cols = row.sections.length >= 3 ? 'md:grid-cols-2 5xl:grid-cols-3' : 'md:grid-cols-2';
         return `grid grid-cols-1 ${cols} gap-4 items-start`;
     }
 
