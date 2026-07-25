@@ -1,4 +1,4 @@
-import { Component, computed, DestroyRef, effect, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, OnInit, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { Location, TitleCasePipe } from '@angular/common';
 import { ActivatedRoute, NavigationEnd, Router, RouterOutlet } from '@angular/router';
@@ -219,6 +219,26 @@ export class AgentsPageComponent implements OnInit {
     effect(() => localStorage.setItem(FILTER_OPEN_KEY, JSON.stringify(this.filtersOpen())));
     effect(() => localStorage.setItem(FILTER_TITLES_KEY, JSON.stringify(this.filterTitles())));
     effect(() => localStorage.setItem(FILTER_LLMS_KEY, JSON.stringify(this.filterLlms())));
+
+    // Prune any restored filter selections that no longer exist among the loaded conversations.
+    effect(() => {
+      const loading = this.loadingConvs();
+      const validTitles = new Set(this.titleNodes().map(n => n.id));
+      untracked(() => {
+        if (loading) return;
+        const kept = this.filterTitles().filter(t => validTitles.has(t));
+        if (kept.length !== this.filterTitles().length) this.filterTitles.set(kept);
+      });
+    });
+    effect(() => {
+      const loading = this.loadingConvs();
+      const validLlms = new Set(this.llmNodes().map(n => n.id));
+      untracked(() => {
+        if (loading) return;
+        const kept = this.filterLlms().filter(l => validLlms.has(l));
+        if (kept.length !== this.filterLlms().length) this.filterLlms.set(kept);
+      });
+    });
   }
 
   protected backToList(): void {
