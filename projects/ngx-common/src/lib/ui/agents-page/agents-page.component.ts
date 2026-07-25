@@ -8,6 +8,7 @@ import { TwangTreeDropdownComponent } from 'ngx-twang-ui';
 import type { TwangTreeDropdownNode } from 'ngx-twang-ui';
 import { PageLayoutComponent } from '../page-layout/page-layout.component';
 import { ConversationService, type Conversation } from '../../services/conversation.service';
+import { AgentService } from '../../services/agent.service';
 
 const SELECTED_KEY = 'agents.selectedId';
 const FILTER_OPEN_KEY = 'agents.filtersOpen';
@@ -156,6 +157,7 @@ function readJson<T>(key: string, fallback: T): T {
 })
 export class AgentsPageComponent implements OnInit {
   private readonly conversationService = inject(ConversationService);
+  private readonly agentService = inject(AgentService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly location = inject(Location);
@@ -179,10 +181,13 @@ export class AgentsPageComponent implements OnInit {
       .map(t => ({ id: t, label: t }))
   );
 
-  protected readonly llmNodes = computed<TwangTreeDropdownNode[]>(() =>
-    [...new Set(this.agentConversations().map(c => c.llm))].sort()
-      .map(l => ({ id: l, label: l }))
-  );
+  private readonly llmProviders = toSignal(this.agentService.getLlmProviders(), { initialValue: [] });
+
+  protected readonly llmNodes = computed<TwangTreeDropdownNode[]>(() => {
+    const nameById = new Map(this.llmProviders().map(p => [p.id, p.llm]));
+    return [...new Set(this.agentConversations().map(c => c.llm))].sort()
+      .map(l => ({ id: l, label: nameById.get(l) ?? l }));
+  });
 
   protected readonly filteredConversations = computed(() => {
     const titles = this.filterTitles();
@@ -204,6 +209,10 @@ export class AgentsPageComponent implements OnInit {
       startWith(this.route.firstChild?.snapshot?.params?.['id'] ?? null),
     ),
     { initialValue: this.route.firstChild?.snapshot?.params?.['id'] ?? null }
+  );
+
+  protected readonly activeConversation = computed(() =>
+    this.agentConversations().find(c => c.id === this.activeId()) ?? null
   );
 
   protected readonly hasChild = toSignal(
@@ -237,6 +246,19 @@ export class AgentsPageComponent implements OnInit {
         if (loading) return;
         const kept = this.filterLlms().filter(l => validLlms.has(l));
         if (kept.length !== this.filterLlms().length) this.filterLlms.set(kept);
+      });
+    });
+
+    // Keep the active conversation's LLM in the filter so opening/creating a conversation
+    // (e.g. right after "New conversation") never hides it behind a stale filter selection.
+    effect(() => {
+      const conv = this.activeConversation();
+      if (!conv) return;
+      untracked(() => {
+        const llms = this.filterLlms();
+        if (llms.length && !llms.includes(conv.llm)) {
+          this.filterLlms.set([...llms, conv.llm]);
+        }
       });
     });
   }
