@@ -22,6 +22,7 @@ interface UsageRow {
     inputCost: number;
     outputCost: number;
     totalCost: number;
+    executionTimeMs: number;
 }
 
 @Component({
@@ -40,10 +41,17 @@ export class UsageTableComponent {
     filterLlm = input<string>('all');
     filterStartDate = input<string>('');
     filterEndDate = input<string>('');
+    /** Client-side only (the backend doesn't support it) — case-insensitive substring match on title. */
+    filterTitle = input<string>('');
     /** When set, shows usage for that specific conversation only (ignores filter inputs). */
     conversationId = input<string | null>(null);
 
     treeNodes = signal<TwangTreeTableNode<UsageRow>[]>([]);
+    filteredTreeNodes = computed<TwangTreeTableNode<UsageRow>[]>(() => {
+        const query = this.filterTitle().toLowerCase();
+        if (!query) return this.treeNodes();
+        return this.treeNodes().filter(n => (n.label ?? '').toLowerCase().includes(query));
+    });
     loading = signal(false);
     preservedCollapsed = signal<ReadonlySet<string> | null>(null);
     private loadedIds = new Set<string>();
@@ -95,10 +103,14 @@ export class UsageTableComponent {
             id: 'totalCost', header: 'Cost', value: r => r.totalCost,
             format: v => '$' + Number(v).toFixed(4), align: 'right', width: '80px',
         },
+        {
+            id: 'executionTime', header: 'Time (s)', value: r => r.executionTimeMs,
+            format: v => (Number(v) / 1000).toFixed(2) + 's', align: 'right', width: '90px',
+        },
     ];
 
     footer = computed<TwangTableFooterCell[]>(() => {
-        const nodes = this.treeNodes();
+        const nodes = this.filteredTreeNodes();
         const t = nodes.reduce((acc, n) => {
             const row = (n.summary ?? n.data) as UsageRow | null;
             if (!row) return acc;
@@ -109,8 +121,9 @@ export class UsageTableComponent {
                 inputCost: acc.inputCost + row.inputCost,
                 outputCost: acc.outputCost + row.outputCost,
                 totalCost: acc.totalCost + row.totalCost,
+                executionTimeMs: acc.executionTimeMs + row.executionTimeMs,
             };
-        }, { inputTokens: 0, outputTokens: 0, totalTokens: 0, inputCost: 0, outputCost: 0, totalCost: 0 });
+        }, { inputTokens: 0, outputTokens: 0, totalTokens: 0, inputCost: 0, outputCost: 0, totalCost: 0, executionTimeMs: 0 });
         return [
             { text: `Total (${nodes.length})` },
             { text: '', width: '80px', minWidth: '80px' },
@@ -123,6 +136,7 @@ export class UsageTableComponent {
             { text: '$' + t.outputCost.toFixed(4), align: 'right', width: '96px', minWidth: '96px' },
             { text: t.totalTokens.toLocaleString(), align: 'right', width: '100px', minWidth: '100px' },
             { text: '$' + t.totalCost.toFixed(4), align: 'right', width: '80px', minWidth: '80px' },
+            { text: (t.executionTimeMs / 1000).toFixed(2) + 's', align: 'right', width: '90px', minWidth: '90px' },
         ];
     });
 
@@ -168,10 +182,15 @@ export class UsageTableComponent {
                     .pipe(takeUntilDestroyed(this.destroyRef))
                     .subscribe({
                         next: (turns) => {
+                            const executionTimeMs = turns.reduce((sum, t) => sum + (t.execution_time_ms ?? 0), 0);
                             this.treeNodes.update(nodes =>
                                 nodes.map(n => {
                                     if (n.id !== id) return n;
-                                    return { ...n, children: turns.map(t => this.buildTurnNode(t)) };
+                                    return {
+                                        ...n,
+                                        summary: n.summary ? { ...n.summary, executionTimeMs } : n.summary,
+                                        children: turns.map(t => this.buildTurnNode(t)),
+                                    };
                                 })
                             );
                         },
@@ -245,6 +264,7 @@ export class UsageTableComponent {
             inputCost: (conv.input_tokens_cost ?? 0) + (conv.cached_read_tokens_cost ?? 0) + (conv.cached_write_tokens_cost ?? 0),
             outputCost: conv.output_tokens_cost ?? 0,
             totalCost: conv.total_tokens_cost ?? 0,
+            executionTimeMs: 0,
         };
         if (totalTokens === 0) {
             return { id: conv.id, label: conv.title, depth: 0, data: convRow };
@@ -274,6 +294,7 @@ export class UsageTableComponent {
                 inputCost: (t.input_tokens_cost ?? 0) + (t.cached_read_tokens_cost ?? 0) + (t.cached_write_tokens_cost ?? 0),
                 outputCost: t.output_tokens_cost ?? 0,
                 totalCost: t.total_tokens_cost ?? 0,
+                executionTimeMs: t.execution_time_ms ?? 0,
             },
         };
     }

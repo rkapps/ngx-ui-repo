@@ -40,4 +40,5 @@ export interface TurnUsage {
   cached_write_tokens_cost: number;
   output_tokens_cost: number;
   total_tokens_cost: number;
+  execution_time_ms: number;
 }

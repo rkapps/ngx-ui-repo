@@ -1,11 +1,32 @@
-import { Component, signal } from '@angular/core';
+import { Component, effect, signal } from '@angular/core';
 import { LucideAngularModule } from 'lucide-angular';
 import { TwangButtonComponent, TwangDatepickerComponent } from 'ngx-twang-ui';
 import { UsageTableComponent } from '../usage-table/usage-table.component';
 import { PageLayoutComponent } from '../page-layout/page-layout.component';
 
 type ConvType = 'all' | 'chat' | 'agent';
-type LlmType = 'all' | 'openai' | 'gemini' | 'anthropic' | 'local';
+
+const LLM_OPTIONS = ['all', 'openai', 'gemini', 'anthropic', 'together', 'fireworks', 'mistral', 'local'] as const;
+type LlmType = typeof LLM_OPTIONS[number];
+const LLM_LABELS: Record<LlmType, string> = {
+  all: 'All',
+  openai: 'OpenAI',
+  gemini: 'Gemini',
+  anthropic: 'Anthropic',
+  together: 'Together',
+  fireworks: 'Fireworks',
+  mistral: 'Mistral',
+  local: 'Local',
+};
+
+const CONV_TYPE_KEY = 'usage.filterType';
+const LLM_KEY = 'usage.filterLlm';
+const TITLE_KEY = 'usage.filterTitle';
+
+function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  const stored = localStorage.getItem(key);
+  return (allowed as readonly string[]).includes(stored ?? '') ? (stored as T) : fallback;
+}
 
 @Component({
   selector: 'app-usage',
@@ -18,6 +39,14 @@ type LlmType = 'all' | 'openai' | 'gemini' | 'anthropic' | 'local';
       (mobileBack)="mobilePanel.set(false)">
 
       <div sidebar class="flex flex-col p-4">
+
+        <div class="pb-4 border-b border-border">
+          <label class="block text-xs font-medium text-text-muted mb-2">Title</label>
+          <input type="text" placeholder="Filter by title…"
+            [value]="title()"
+            (input)="title.set($any($event.target).value)"
+            class="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text placeholder:text-text-muted outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-400/20 transition-shadow" />
+        </div>
 
         <div class="pb-4 border-b border-border">
           <label class="block text-xs font-medium text-text-muted mb-2">Type</label>
@@ -37,13 +66,13 @@ type LlmType = 'all' | 'openai' | 'gemini' | 'anthropic' | 'local';
         <div class="py-4 border-b border-border">
           <label class="block text-xs font-medium text-text-muted mb-2">LLM</label>
           <div class="flex flex-col gap-1.5">
-            @for (opt of ['all', 'openai', 'gemini', 'anthropic', 'local']; track opt) {
+            @for (opt of llmOptions; track opt) {
               <label class="flex items-center gap-2 text-sm text-text cursor-pointer">
                 <input type="radio" name="llm" [value]="opt"
                   [checked]="llm() === opt"
                   (change)="llm.set($any(opt))"
                   class="accent-primary-600" />
-                {{ opt === 'all' ? 'All' : opt === 'openai' ? 'OpenAI' : opt === 'gemini' ? 'Gemini' : opt === 'anthropic' ? 'Anthropic' : 'Local' }}
+                {{ llmLabels[opt] }}
               </label>
             }
           </div>
@@ -85,7 +114,8 @@ type LlmType = 'all' | 'openai' | 'gemini' | 'anthropic' | 'local';
             [filterType]="convType()"
             [filterLlm]="llm()"
             [filterStartDate]="startDate()"
-            [filterEndDate]="endDate()" />
+            [filterEndDate]="endDate()"
+            [filterTitle]="title()" />
         </div>
       </div>
 
@@ -93,9 +123,19 @@ type LlmType = 'all' | 'openai' | 'gemini' | 'anthropic' | 'local';
   `,
 })
 export class UsageComponent {
+  protected readonly llmOptions = LLM_OPTIONS;
+  protected readonly llmLabels = LLM_LABELS;
+
   protected readonly mobilePanel = signal<boolean | null>(null);
-  protected readonly convType = signal<ConvType>('all');
-  protected readonly llm = signal<LlmType>('all');
+  protected readonly title = signal(localStorage.getItem(TITLE_KEY) ?? '');
+  protected readonly convType = signal<ConvType>(readStored(CONV_TYPE_KEY, ['all', 'chat', 'agent'], 'all'));
+  protected readonly llm = signal<LlmType>(readStored(LLM_KEY, LLM_OPTIONS, 'all'));
   protected readonly startDate = signal('');
   protected readonly endDate = signal('');
+
+  constructor() {
+    effect(() => localStorage.setItem(CONV_TYPE_KEY, this.convType()));
+    effect(() => localStorage.setItem(LLM_KEY, this.llm()));
+    effect(() => localStorage.setItem(TITLE_KEY, this.title()));
+  }
 }

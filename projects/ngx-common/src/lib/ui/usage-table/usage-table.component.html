@@ -1,4 +1,4 @@
-@if (treeNodes().length === 0) {
+@if (filteredTreeNodes().length === 0) {
     @if (loading()) {
         <div class="flex-1 flex items-center justify-center">
             <div class="flex items-center gap-2 text-sm text-gray-400">
@@ -14,14 +14,14 @@
     }
 } @else {
     <twang-tree-table
-        [nodes]="treeNodes()"
+        [nodes]="filteredTreeNodes()"
         [columns]="columns"
         [footer]="footer()"
         [initialExpandedDepth]="-1"
         [initialCollapsedIds]="preservedCollapsed()"
         [fillContainerWidth]="true"
         scrollPanelMaxHeight="99999px"
-        tableMinWidthClass="min-w-[1340px]"
+        tableMinWidthClass="min-w-[1430px]"
         (collapsedChange)="onCollapsedChange($event)">
     </twang-tree-table>
 }
