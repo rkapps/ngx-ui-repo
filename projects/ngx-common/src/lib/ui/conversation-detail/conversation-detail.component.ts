@@ -278,7 +278,11 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
       history_mode: this.editHistoryMode(),
       ...(this.editMaxTurns() != null ? { max_turns: this.editMaxTurns()! } : {}),
     }).subscribe({
-      next: () => { this.saving.set(false); this.showEdit.set(false); },
+      next: () => {
+        this.conversation.set(this.conversationService.getById(id));
+        this.saving.set(false);
+        this.showEdit.set(false);
+      },
       error: () => { this.saving.set(false); this.saveError.set('Failed to save changes. Please try again.'); },
     });
   }
