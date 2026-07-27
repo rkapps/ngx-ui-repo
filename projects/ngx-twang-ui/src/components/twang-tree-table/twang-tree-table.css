@@ -93,6 +93,36 @@
   display: contents;
 }
 
+.twang-table-sort-btn {
+  display: inline-flex;
+  /* Prevent default button box metrics from affecting width calculations. */
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  box-sizing: border-box;
+  align-items: center;
+  /* As a flex item inside the header wrapper, stretch to container width. */
+  flex: 1 1 0%;
+  min-width: 0;
+  gap: 0.2rem;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  transition: color 120ms ease;
+}
+
+.twang-table-sort-btn:hover {
+  color: var(--app-primary-600);
+}
+
+.twang-table-sort-btn:focus-visible {
+  outline: 2px solid color-mix(in oklch, var(--app-primary-500) 50%, transparent);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
 .twang-table-panel--footer .twang-table-footer-fill {
   display: flex;
   flex-direction: column;

@@ -1,4 +1,4 @@
-import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DataService } from '../../services/data.services';
 import { ConversationUsage, TurnUsage } from '../../models/usage';
@@ -57,6 +57,21 @@ export class UsageTableComponent {
     private loadedIds = new Set<string>();
     private previousCollapsed = new Set<string>();
 
+    private readonly tree = viewChild<TwangTreeTableComponent<UsageRow>>('tree');
+    allExpanded = signal(false);
+
+    toggleExpandAll(): void {
+        const tree = this.tree();
+        if (!tree) return;
+        if (this.allExpanded()) {
+            tree.collapseAll();
+            this.allExpanded.set(false);
+        } else {
+            tree.expandAll();
+            this.allExpanded.set(true);
+        }
+    }
+
     readonly columns: TwangTreeTableColumn<UsageRow>[] = [
         {
             id: 'title',
@@ -68,9 +83,12 @@ export class UsageTableComponent {
         },
         { id: 'convType', header: 'Type', value: r => r.convType ?? '', width: '80px' },
         { id: 'llm', header: 'LLM', value: r => r.llm ?? '', width: '100px' },
-        { id: 'model', header: 'Model', value: r => r.model ?? '', width: '180px', cellTruncate: false },
         {
-            id: 'lastUpdatedAt', header: 'Created At', value: r => r.lastUpdatedAt ?? '',
+            id: 'model', header: 'Model', value: r => r.model ?? '', width: '380px', cellTruncate: false,
+            cellClass: 'whitespace-normal break-words',
+        },
+        {
+            id: 'lastUpdatedAt', header: 'Last Update', value: r => r.lastUpdatedAt ?? '', sortable: true,
             format: v => {
                 if (!v) return '';
                 const d = new Date(v as string);
@@ -96,16 +114,16 @@ export class UsageTableComponent {
             format: v => '$' + Number(v).toFixed(4), align: 'right', width: '96px',
         },
         {
-            id: 'totalTokens', header: 'Tokens', value: r => r.totalTokens,
+            id: 'totalTokens', header: 'Tokens', value: r => r.totalTokens, sortable: true,
             format: v => Number(v).toLocaleString(), align: 'right', width: '100px',
         },
         {
-            id: 'totalCost', header: 'Cost', value: r => r.totalCost,
-            format: v => '$' + Number(v).toFixed(4), align: 'right', width: '80px',
+            id: 'totalCost', header: 'Cost', value: r => r.totalCost, sortable: true,
+            format: v => '$' + Number(v).toFixed(4), align: 'right', width: '110px',
         },
         {
-            id: 'executionTime', header: 'Time (s)', value: r => r.executionTimeMs,
-            format: v => (Number(v) / 1000).toFixed(2) + 's', align: 'right', width: '90px',
+            id: 'executionTime', header: 'Time (s)', value: r => r.executionTimeMs, sortable: true,
+            format: v => (Number(v) / 1000).toFixed(2) + 's', align: 'right', width: '120px',
         },
     ];
 
@@ -161,6 +179,7 @@ export class UsageTableComponent {
         this.previousCollapsed = new Set();
         this.preservedCollapsed.set(null);
         this.treeNodes.set([]);
+        this.allExpanded.set(false);
         const convId = this.conversationId();
 
         if (convId) {

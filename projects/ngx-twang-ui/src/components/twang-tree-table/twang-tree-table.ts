@@ -1,8 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, computed, signal } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges, computed, signal } from '@angular/core';
 import { LucideAngularModule } from 'lucide-angular';
 
-import type { TwangTableFooterCell, TwangTableSplitCell } from '../twang-table/twang-table';
+import type { TwangTableFooterCell, TwangTableSortDir, TwangTableSplitCell } from '../twang-table/twang-table';
 import type { TwangTreeTableColumn, TwangTreeTableNode } from './twang-tree-table.models';
 
 /** Internal flat row fed to `@for` in the template. */
@@ -21,7 +21,7 @@ export interface TwangTreeFlatRow<T> {
   templateUrl: './twang-tree-table.html',
   styleUrl: './twang-tree-table.css',
 })
-export class TwangTreeTableComponent<T extends object> implements OnChanges {
+export class TwangTreeTableComponent<T extends object> implements OnChanges, OnInit {
   private readonly nodesInput = signal<TwangTreeTableNode<T>[]>([]);
   private readonly collapsedIds = signal(new Set<string>());
 
@@ -88,7 +88,74 @@ export class TwangTreeTableComponent<T extends object> implements OnChanges {
   }
 
   // ---------------------------------------------------------------------------
-  // Visible rows (recomputed when tree or collapsed set changes)
+  // Sorting (applied to sibling nodes at every depth)
+  // ---------------------------------------------------------------------------
+
+  private readonly sortKey = signal<string | null>(null);
+  private readonly sortDir = signal<TwangTableSortDir>('desc');
+
+  private _initialSortKey: string | null = null;
+  private _initialSortDir: TwangTableSortDir | null = null;
+  @Input() set initialSortKey(value: string | null) {
+    this._initialSortKey = value ?? null;
+  }
+  @Input() set initialSortDir(value: TwangTableSortDir | null) {
+    this._initialSortDir = value ?? null;
+  }
+
+  ngOnInit(): void {
+    if (!this._initialSortKey) return;
+    this.sortKey.set(this._initialSortKey);
+    if (this._initialSortDir) this.sortDir.set(this._initialSortDir);
+  }
+
+  protected readonly sortedNodes = computed<TwangTreeTableNode<T>[]>(() => {
+    const key = this.sortKey();
+    const nodes = this.nodesInput();
+    if (!key) return nodes;
+    const col = this.columns.find((c) => c.id === key);
+    if (!col) return nodes;
+    const dir = this.sortDir() === 'asc' ? 1 : -1;
+    const accessor = col.sortValue ?? col.value;
+
+    const rowFor = (node: TwangTreeTableNode<T>): T | null =>
+      (node.children?.length ? node.summary : node.data) as T | null;
+
+    const compare = (a: TwangTreeTableNode<T>, b: TwangTreeTableNode<T>): number => {
+      const ra = rowFor(a);
+      const rb = rowFor(b);
+      const av = ra ? accessor(ra) : null;
+      const bv = rb ? accessor(rb) : null;
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+      return String(av ?? '').localeCompare(String(bv ?? '')) * dir;
+    };
+
+    const sortList = (list: TwangTreeTableNode<T>[]): TwangTreeTableNode<T>[] =>
+      [...list]
+        .sort(compare)
+        .map((n) => (n.children?.length ? { ...n, children: sortList(n.children) } : n));
+
+    return sortList(nodes);
+  });
+
+  protected toggleSort(col: TwangTreeTableColumn<T>): void {
+    if (!col.sortable) return;
+    if (this.sortKey() === col.id) {
+      this.sortDir.set(this.sortDir() === 'asc' ? 'desc' : 'asc');
+      return;
+    }
+    this.sortKey.set(col.id);
+    this.sortDir.set(col.align === 'left' ? 'asc' : 'desc');
+  }
+
+  protected sortIndicator(col: TwangTreeTableColumn<T>): string {
+    if (!col.sortable) return '';
+    if (this.sortKey() !== col.id) return 'chevrons-up-down';
+    return this.sortDir() === 'asc' ? 'chevron-up' : 'chevron-down';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Visible rows (recomputed when tree, sort, or collapsed set changes)
   // ---------------------------------------------------------------------------
 
   protected readonly visibleRows = computed<TwangTreeFlatRow<T>[]>(() => {
@@ -107,7 +174,7 @@ export class TwangTreeTableComponent<T extends object> implements OnChanges {
       }
     };
 
-    visit(this.nodesInput());
+    visit(this.sortedNodes());
     return result;
   });
 
@@ -124,8 +191,19 @@ export class TwangTreeTableComponent<T extends object> implements OnChanges {
     this.collapsedChange.emit(this.collapsedIds());
   }
 
+  /** Collapses every expandable node, regardless of `initialCollapsedIds`/`initialExpandedDepth`. */
   collapseAll(): void {
-    this.initCollapsedState(this.nodesInput());
+    const collapsed = new Set<string>();
+    const walk = (list: TwangTreeTableNode<T>[]) => {
+      for (const node of list) {
+        if (node.children?.length) {
+          collapsed.add(node.id);
+          walk(node.children);
+        }
+      }
+    };
+    walk(this.nodesInput());
+    this.collapsedIds.set(collapsed);
     this.collapsedChange.emit(this.collapsedIds());
   }
 

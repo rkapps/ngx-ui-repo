@@ -14,14 +14,17 @@
     }
 } @else {
     <twang-tree-table
+        #tree
         [nodes]="filteredTreeNodes()"
         [columns]="columns"
         [footer]="footer()"
         [initialExpandedDepth]="-1"
         [initialCollapsedIds]="preservedCollapsed()"
+        [initialSortKey]="'lastUpdatedAt'"
+        [initialSortDir]="'desc'"
         [fillContainerWidth]="true"
         scrollPanelMaxHeight="99999px"
-        tableMinWidthClass="min-w-[1430px]"
+        tableMinWidthClass="min-w-[1690px]"
         (collapsedChange)="onCollapsedChange($event)">
     </twang-tree-table>
 }

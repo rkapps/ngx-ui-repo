@@ -40,7 +40,34 @@
                     [style.minWidth]="col.minWidth ?? null"
                     [style.maxWidth]="col.fillRemaining ? null : (col.maxWidth ?? null)"
                   >
-                    {{ col.header }}
+                    @if (col.sortable) {
+                      <div
+                        class="flex w-full min-w-0"
+                        [class.justify-end]="col.align === 'right'"
+                        [class.justify-start]="col.align !== 'right'"
+                      >
+                        <button
+                          type="button"
+                          class="twang-table-sort-btn w-full min-w-0"
+                          [class.justify-end]="col.align === 'right'"
+                          [class.justify-start]="col.align !== 'right'"
+                          (click)="toggleSort(col)"
+                        >
+                          @if (sortIndicator(col)) {
+                            <lucide-icon
+                              [name]="sortIndicator(col)"
+                              [size]="14"
+                              class="shrink-0"
+                              [class.order-first]="col.align === 'right'"
+                              aria-hidden="true"
+                            />
+                          }
+                          <span class="min-w-0 truncate">{{ col.header }}</span>
+                        </button>
+                      </div>
+                    } @else {
+                      {{ col.header }}
+                    }
                   </th>
                 }
               </tr>

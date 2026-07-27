@@ -97,7 +97,11 @@ function readStored<T extends string>(key: string, allowed: readonly T[], fallba
       <!-- Right: usage table -->
       <div content class="flex flex-1 flex-col min-h-0 overflow-hidden">
         <div class="flex-none px-2 md:px-6 py-2 md:py-3 border-b border-border flex items-center gap-2 min-h-10 md:min-h-16">
-          <span class="flex-1 text-sm font-semibold text-primary-600">Token Usage</span>
+          <span class="flex-1 text-sm font-semibold text-primary-600">Usage and Cost</span>
+          <twang-button [icon]="usageTable.allExpanded() ? 'minimize' : 'maximize'" variant="default" size="sm"
+            [title]="usageTable.allExpanded() ? 'Collapse all' : 'Expand all'"
+            [ariaLabel]="usageTable.allExpanded() ? 'Collapse all' : 'Expand all'"
+            (buttonClick)="usageTable.toggleExpandAll()" />
           <twang-button icon="refresh-cw" variant="default" size="sm" ariaLabel="Refresh"
             [loading]="usageTable.loading()"
             (buttonClick)="usageTable.load()" />
