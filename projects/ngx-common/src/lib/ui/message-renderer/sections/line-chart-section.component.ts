@@ -84,7 +84,7 @@ import { LineChartItem, LineChartSection } from '../message-renderer.types';
 
                                 <!-- X-axis labels -->
                                 <div class="relative mt-1" style="height: 20px">
-                                    @for (group of (normalizedSection().groups ?? []); track group; let gi = $index) {
+                                    @for (group of (normalizedSection().groups ?? []); track $index; let gi = $index) {
                                         <span class="absolute text-[10px] text-gray-500 whitespace-nowrap"
                                               [style.left.px]="xPositions()[gi]"
                                               style="transform: translateX(-50%)">
