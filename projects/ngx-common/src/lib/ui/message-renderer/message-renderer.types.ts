@@ -1,4 +1,4 @@
-export type Signal = 'up' | 'down' | 'neutral';
+export type Signal = 'up' | 'down' | 'neutral' | 'warning';
 
 export interface ContextSection       { type: 'context';           title?: string; group?: string; content: string; }
 export interface MetricCard           { label: string; value: string; benchmark?: string; change?: string; status?: Signal; }
@@ -8,7 +8,7 @@ export interface BarChartSection      { type: 'bar_chart';         title?: strin
 export interface LineChartItem        { name: string; value?: number; values?: number[]; signal?: Signal; }
 export interface LineChartSection     { type: 'line_chart';        title?: string; group?: string; unit?: string; format?: string; groups?: string[]; data: LineChartItem[]; }
 export interface TableCell            { value: string; signal?: Signal; indicator?: 'dot' | 'arrow'; note?: string; }
-export interface TableSection         { type: 'table';             title?: string; group?: string; headers?: string[]; rows?: (TableCell[] | Record<string, TableCell | string>)[]; totals?: (TableCell[] | Record<string, TableCell | string>)[]; }
+export interface TableSection         { type: 'table';             title?: string; group?: string; layout?: 'row' | 'column'; headers?: string[]; rows?: (TableCell[] | Record<string, TableCell | string>)[]; totals?: (TableCell[] | Record<string, TableCell | string>)[]; }
 export interface InsightCard          { number: number; title: string; evidence: string; source?: string; signal?: Signal; }
 export interface InsightCardsSection  { type: 'insight_cards';     title?: string; group?: string; data: InsightCard[]; }
 export interface EconomicSignalItem   { label: string; value: string; date?: string; source?: string; signal?: Signal; }

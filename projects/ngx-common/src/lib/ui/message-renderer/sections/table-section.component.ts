@@ -21,8 +21,8 @@ import { TableSection, TableCell } from '../message-renderer.types';
                             <tr class="border-b border-gray-200 bg-gray-50">
                                 @for (h of headers(); track $index; let i = $index) {
                                     <th class="px-2 md:px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500"
-                                        [class.text-left]="i === 0"
-                                        [class.text-right]="i !== 0">
+                                        [class.text-left]="i === 0 || isColumnLayout()"
+                                        [class.text-right]="i !== 0 && !isColumnLayout()">
                                         {{ h }}
                                     </th>
                                 }
@@ -34,27 +34,34 @@ import { TableSection, TableCell } from '../message-renderer.types';
                             <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
                                 @for (cell of row; track $index; let i = $index) {
                                     <td class="px-2 md:px-3 py-1.5 align-top"
-                                        [class.text-left]="i === 0"
-                                        [class.text-right]="i !== 0"
-                                        [class.font-medium]="cell.signal === 'up' || cell.signal === 'down'"
-                                        [class.text-emerald-600]="cell.signal === 'up'"
-                                        [class.text-red-600]="cell.signal === 'down'"
-                                        [class.text-gray-700]="!cell.signal || cell.signal === 'neutral'">
-                                        <span class="inline-flex items-center gap-1 flex-wrap" [class.justify-end]="i !== 0">
-                                            @if (cell.indicator === 'dot') {
-                                                <span class="inline-block h-2 w-2 rounded-full flex-shrink-0"
-                                                      [class.bg-emerald-500]="cell.signal === 'up'"
-                                                      [class.bg-red-500]="cell.signal === 'down'"
-                                                      [class.bg-gray-400]="!cell.signal || cell.signal === 'neutral'">
-                                                </span>
-                                            } @else if (cell.indicator === 'arrow') {
-                                                <span class="font-bold">{{ cell.signal === 'up' ? '↑' : cell.signal === 'down' ? '↓' : '' }}</span>
-                                            }
-                                            {{ cell.value }}
-                                            @if (cell.note) {
-                                                <span class="font-normal text-gray-500 break-words">({{ cell.note }})</span>
-                                            }
-                                        </span>
+                                        [class.text-left]="i === 0 || isColumnLayout()"
+                                        [class.text-right]="i !== 0 && !isColumnLayout()"
+                                        [class.font-medium]="!showBadges() && (cell.signal === 'up' || cell.signal === 'down')"
+                                        [class.text-emerald-600]="!showBadges() && cell.signal === 'up'"
+                                        [class.text-red-600]="!showBadges() && cell.signal === 'down'"
+                                        [class.text-gray-700]="!showBadges() && (!cell.signal || cell.signal === 'neutral')">
+                                        @if (showBadges() && i !== 0) {
+                                            <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium whitespace-nowrap"
+                                                  [class]="pillClass(cell.signal)">
+                                                {{ cell.value }}{{ cell.note ? ' · ' + cell.note : '' }}
+                                            </span>
+                                        } @else {
+                                            <span class="inline-flex items-center gap-1 flex-wrap" [class.justify-end]="i !== 0">
+                                                @if (cell.indicator === 'dot') {
+                                                    <span class="inline-block h-2 w-2 rounded-full flex-shrink-0"
+                                                          [class.bg-emerald-500]="cell.signal === 'up'"
+                                                          [class.bg-red-500]="cell.signal === 'down'"
+                                                          [class.bg-gray-400]="!cell.signal || cell.signal === 'neutral'">
+                                                    </span>
+                                                } @else if (cell.indicator === 'arrow') {
+                                                    <span class="font-bold">{{ cell.signal === 'up' ? '↑' : cell.signal === 'down' ? '↓' : '' }}</span>
+                                                }
+                                                {{ cell.value }}
+                                                @if (cell.note) {
+                                                    <span class="font-normal text-gray-500 break-words">({{ cell.note }})</span>
+                                                }
+                                            </span>
+                                        }
                                     </td>
                                 }
                             </tr>
@@ -86,6 +93,24 @@ import { TableSection, TableCell } from '../message-renderer.types';
 })
 export class TableSectionComponent {
     section = input.required<TableSection>();
+
+    isColumnLayout(): boolean {
+        return this.section().layout === 'column';
+    }
+
+    /** Badges are reserved for technical-indicator/signal tables — other column-layout tables stay plain text. */
+    showBadges(): boolean {
+        return this.isColumnLayout() && (this.section().group ?? '').toLowerCase().includes('technical');
+    }
+
+    pillClass(signal?: TableCell['signal']): string {
+        switch (signal) {
+            case 'up': return 'border-emerald-200 bg-emerald-100 text-emerald-800';
+            case 'down': return 'border-rose-200 bg-rose-100 text-rose-700';
+            case 'warning': return 'border-amber-200 bg-amber-100 text-amber-800';
+            default: return 'border-gray-200 bg-white text-gray-600';
+        }
+    }
 
     headers(): string[] {
         return this.section().headers ?? [];

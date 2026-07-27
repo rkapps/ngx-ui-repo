@@ -60,7 +60,7 @@ import { BarChartItem, BarChartSection } from '../message-renderer.types';
                                     }
                                 </div>
 
-                                @for (group of (normalizedSection().groups ?? []); track group; let gi = $index) {
+                                @for (group of (normalizedSection().groups ?? []); track $index; let gi = $index) {
                                     <div class="relative flex flex-col items-center gap-2 z-10"
                                          [style.width]="columnWidth(group)">
                                         <div class="flex flex-col w-full" [style.height.px]="CHART_HEIGHT_PX">
@@ -287,12 +287,12 @@ export class BarChartSectionComponent {
         return 'gap-6';
     });
 
-    columnWidth(groupLabel: string): string {
+    columnWidth(groupLabel: string | null | undefined): string {
         const n = this.numSeries();
         const BAR_PX = 24;  // w-6
         const GAP_PX = 4;   // gap-1
         const minForBars = n * BAR_PX + Math.max(0, n - 1) * GAP_PX + 8;
-        const minForLabel = Math.max(32, groupLabel.length * 7);
+        const minForLabel = Math.max(32, String(groupLabel ?? '').length * 7);
         return `${Math.max(minForBars, minForLabel)}px`;
     }
 
