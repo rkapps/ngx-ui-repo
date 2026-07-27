@@ -163,6 +163,17 @@
                   "with": "projects/rustic-ai-ng/src/environments/environment.instance2.ts"
                 }
               ]
+            },
+            "development-instance2": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "fileReplacements": [
+                {
+                  "replace": "projects/rustic-ai-ng/src/environments/environment.ts",
+                  "with": "projects/rustic-ai-ng/src/environments/environment.instance2.dev.ts"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"
@@ -175,6 +186,9 @@
             },
             "development": {
               "buildTarget": "rustic-ai-ng:build:development"
+            },
+            "development-instance2": {
+              "buildTarget": "rustic-ai-ng:build:development-instance2"
             }
           },
           "defaultConfiguration": "development"

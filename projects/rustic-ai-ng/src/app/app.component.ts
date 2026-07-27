@@ -1,7 +1,8 @@
 import { Component, inject } from '@angular/core';
+import { Title } from '@angular/platform-browser';
 import { RouterOutlet } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
-import { AuthService, TitleBarComponent } from 'ngx-common';
+import { AuthService, LOGIN_CONFIG, TitleBarComponent } from 'ngx-common';
 import type { TwangNavTabItem } from 'ngx-twang-ui';
 
 @Component({
@@ -23,13 +24,14 @@ import type { TwangNavTabItem } from 'ngx-twang-ui';
       </main>
 
       <footer class="shrink-0 border-t border-border bg-white px-4 py-2 text-center text-xs text-text-muted">
-        Rustic AI &mdash; For internal use only
+        {{ loginConfig.appName }} &mdash; For internal use only
       </footer>
     </div>
   `,
 })
 export class AppComponent {
   protected readonly auth = inject(AuthService);
+  protected readonly loginConfig = inject(LOGIN_CONFIG);
 
   protected readonly navItems: readonly TwangNavTabItem[] = [
     { label: 'Home', icon: 'house', link: '/home' },
@@ -37,4 +39,11 @@ export class AppComponent {
     { label: 'Agents', icon: 'bot', link: '/agents' },
     { label: 'Usage', icon: 'chart-bar', link: '/usage' },
   ];
+
+  constructor() {
+    const titleService = inject(Title);
+    if (this.loginConfig.appName) {
+      titleService.setTitle(this.loginConfig.appName);
+    }
+  }
 }

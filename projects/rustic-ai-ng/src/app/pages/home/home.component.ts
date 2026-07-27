@@ -1,4 +1,5 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
+import { LOGIN_CONFIG } from 'ngx-common';
 
 @Component({
   selector: 'app-home',
@@ -6,7 +7,7 @@ import { Component } from '@angular/core';
   host: { class: 'flex flex-1 min-h-0' },
   template: `
     <div class="flex flex-1 flex-col items-center justify-center px-6 text-center">
-    <h1 class="text-5xl font-bold text-gray-900 mb-4">Welcome to RusticAI</h1>
+    <h1 class="text-5xl font-bold text-gray-900 mb-4">Welcome to {{ loginConfig.appName }}</h1>
       <p class="text-xl text-gray-500 max-w-xl mb-10">
         This is a demonstration application built on <span class="font-medium text-primary-600">Rustic AI</span> —
         an open-source multi-agent framework built on <span class="font-medium text-primary-600">Rust</span>. Explore the Chats and Agents sections to interact
@@ -22,4 +23,6 @@ import { Component } from '@angular/core';
     </div>
   `
 })
-export default class HomeComponent {}
+export default class HomeComponent {
+  protected readonly loginConfig = inject(LOGIN_CONFIG);
+}

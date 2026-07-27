@@ -1,4 +1,5 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
+import { LOGIN_CONFIG } from 'ngx-common';
 
 @Component({
   selector: 'app-home',
@@ -6,9 +7,9 @@ import { Component } from '@angular/core';
   host: { class: 'flex flex-1 min-h-0' },
   template: `
     <div class="flex flex-1 flex-col items-center justify-center px-6 text-center">
-      <h1 class="text-5xl font-bold text-gray-900 mb-4">Welcome to Basset AI</h1>
+      <h1 class="text-5xl font-bold text-gray-900 mb-4">Welcome to {{ loginConfig.appName }}</h1>
       <p class="text-xl text-gray-500 max-w-xl mb-10">
-        Explore the Agents section to interact with <span class="font-medium text-primary-600">Basset AI</span>-powered conversations and agentic workflows.
+        Explore the Agents section to interact with <span class="font-medium text-primary-600">{{ loginConfig.appName }}</span>-powered conversations and agentic workflows.
       </p>
       <p class="text-base text-gray-400 max-w-lg">
         <span class="font-medium">Disclaimer:</span>
@@ -19,4 +20,6 @@ import { Component } from '@angular/core';
     </div>
   `
 })
-export default class HomeComponent {}
+export default class HomeComponent {
+  protected readonly loginConfig = inject(LOGIN_CONFIG);
+}
