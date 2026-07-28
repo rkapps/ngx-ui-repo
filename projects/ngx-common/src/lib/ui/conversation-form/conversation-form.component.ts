@@ -219,5 +219,15 @@ export class ConversationFormComponent {
         }
       });
     });
+
+    // MiniMax models don't support stateful conversations — default to stateless when selected.
+    effect(() => {
+      const model = this.selectedModel();
+      untracked(() => {
+        if (model.toLowerCase().includes('minimax')) {
+          this.strategy.set('stateless');
+        }
+      });
+    });
   }
 }
