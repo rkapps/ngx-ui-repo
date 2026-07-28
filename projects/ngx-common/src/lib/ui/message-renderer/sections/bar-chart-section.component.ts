@@ -278,9 +278,9 @@ export class BarChartSectionComponent {
     }
 
     private readonly groupBgColors = [
-        'bg-primary-500', 'bg-blue-400', 'bg-amber-400',
-        'bg-emerald-400', 'bg-rose-400', 'bg-violet-400',
-        'bg-cyan-500', 'bg-orange-400',
+        'bg-primary-500', 'bg-orange-500', 'bg-emerald-500',
+        'bg-rose-500', 'bg-violet-500', 'bg-amber-500',
+        'bg-cyan-500', 'bg-pink-500',
     ];
 
     // Number of bars per x-axis column = number of data series (stocks)

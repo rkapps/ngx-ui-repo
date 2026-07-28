@@ -233,14 +233,14 @@ export class LineChartSectionComponent {
     }
 
     private readonly lineColors = [
-        'text-primary-500', 'text-blue-400', 'text-amber-400',
-        'text-emerald-400', 'text-rose-400', 'text-violet-400',
-        'text-cyan-500', 'text-orange-400',
+        'text-primary-500', 'text-orange-500', 'text-emerald-500',
+        'text-rose-500', 'text-violet-500', 'text-amber-500',
+        'text-cyan-500', 'text-pink-500',
     ];
     private readonly dotColors = [
-        'bg-primary-500', 'bg-blue-400', 'bg-amber-400',
-        'bg-emerald-400', 'bg-rose-400', 'bg-violet-400',
-        'bg-cyan-500', 'bg-orange-400',
+        'bg-primary-500', 'bg-orange-500', 'bg-emerald-500',
+        'bg-rose-500', 'bg-violet-500', 'bg-amber-500',
+        'bg-cyan-500', 'bg-pink-500',
     ];
 
     lineColor(index: number): string {
