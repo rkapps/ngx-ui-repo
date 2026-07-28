@@ -23,7 +23,7 @@ import { PriceTargetItem, PriceTargetsSection } from '../message-renderer.types'
                                 <span class="text-gray-900 font-medium">{{ formatPrice(item.target) }}</span>
                             </div>
                             <div class="h-1.5 w-full rounded-full bg-gray-100 overflow-hidden flex">
-                                @if (item.upside >= 0) {
+                                @if (upside(item) >= 0) {
                                     <div class="h-full bg-primary-500" [style.width.%]="fillPct(item)"></div>
                                     <div class="h-full bg-emerald-300" [style.width.%]="100 - fillPct(item)"></div>
                                 } @else {
@@ -33,9 +33,9 @@ import { PriceTargetItem, PriceTargetsSection } from '../message-renderer.types'
                         </div>
                         <div class="shrink-0 flex items-baseline gap-2 text-xs w-24 justify-end">
                             <span class="font-semibold"
-                                  [class.text-emerald-600]="item.upside >= 0"
-                                  [class.text-red-600]="item.upside < 0">
-                                {{ item.upside >= 0 ? '+' : '' }}{{ item.upside.toFixed(1) }}%
+                                  [class.text-emerald-600]="upside(item) >= 0"
+                                  [class.text-red-600]="upside(item) < 0">
+                                {{ upside(item) >= 0 ? '+' : '' }}{{ upside(item).toFixed(1) }}%
                             </span>
                             @if (item.consensus) {
                                 <span class="text-gray-500">{{ item.consensus }}</span>
@@ -50,15 +50,24 @@ import { PriceTargetItem, PriceTargetsSection } from '../message-renderer.types'
 export class PriceTargetsSectionComponent {
     section = input.required<PriceTargetsSection>();
 
+    private num(value: unknown): number {
+        const n = typeof value === 'number' ? value : parseFloat(String(value));
+        return isNaN(n) ? 0 : n;
+    }
+
+    upside(item: PriceTargetItem): number {
+        return this.num(item.upside);
+    }
+
     private scaleMax(item: PriceTargetItem): number {
-        return Math.max(item.current, item.target) || 1;
+        return Math.max(this.num(item.current), this.num(item.target)) || 1;
     }
 
     fillPct(item: PriceTargetItem): number {
-        return Math.min(100, (item.current / this.scaleMax(item)) * 100);
+        return Math.min(100, (this.num(item.current) / this.scaleMax(item)) * 100);
     }
 
     formatPrice(value: number): string {
-        return `$${value.toFixed(2)}`;
+        return `$${this.num(value).toFixed(2)}`;
     }
 }

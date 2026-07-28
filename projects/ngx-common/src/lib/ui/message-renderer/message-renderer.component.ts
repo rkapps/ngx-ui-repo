@@ -150,8 +150,10 @@ export class MessageRendererComponent {
                 break;
             case 'price_targets':
                 for (const item of section.data ?? []) {
-                    const sign = item.upside >= 0 ? '+' : '';
-                    lines.push(`${item.symbol}: $${item.current.toFixed(2)} -> $${item.target.toFixed(2)} (${sign}${item.upside.toFixed(1)}%)${item.consensus ? ` — ${item.consensus}` : ''}`);
+                    const num = (v: unknown) => { const n = typeof v === 'number' ? v : parseFloat(String(v)); return isNaN(n) ? 0 : n; };
+                    const upside = num(item.upside);
+                    const sign = upside >= 0 ? '+' : '';
+                    lines.push(`${item.symbol}: $${num(item.current).toFixed(2)} -> $${num(item.target).toFixed(2)} (${sign}${upside.toFixed(1)}%)${item.consensus ? ` — ${item.consensus}` : ''}`);
                 }
                 break;
             case 'insight_cards':
