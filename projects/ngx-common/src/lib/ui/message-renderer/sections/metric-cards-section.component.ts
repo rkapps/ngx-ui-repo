@@ -24,7 +24,7 @@ import { MetricCard, MetricCardsSection } from '../message-renderer.types';
                             @if (card.benchmark || card.status) {
                                 <div class="flex items-center gap-1.5 mt-1.5">
                                     @if (card.benchmark) {
-                                        <span class="text-xs text-gray-400">vs {{ card.benchmark }}</span>
+                                        <span class="text-xs text-gray-500">vs {{ card.benchmark }}</span>
                                     }
                                     @if (card.status && card.status !== 'neutral') {
                                         <div class="flex items-center gap-0.5 pl-1.5 border-l border-gray-300">

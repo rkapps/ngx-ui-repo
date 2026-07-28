@@ -11,6 +11,8 @@ import { TableSectionComponent } from './sections/table-section.component';
 import { InsightCardsSectionComponent } from './sections/insight-cards-section.component';
 import { EconomicSignalsSectionComponent } from './sections/economic-signals-section.component';
 import { ConsumerBuzzSectionComponent } from './sections/consumer-buzz-section.component';
+import { PositioningSectionComponent } from './sections/positioning-section.component';
+import { PriceTargetsSectionComponent } from './sections/price-targets-section.component';
 
 @Component({
     selector: 'app-message-renderer',
@@ -27,6 +29,8 @@ import { ConsumerBuzzSectionComponent } from './sections/consumer-buzz-section.c
         InsightCardsSectionComponent,
         EconomicSignalsSectionComponent,
         ConsumerBuzzSectionComponent,
+        PositioningSectionComponent,
+        PriceTargetsSectionComponent,
     ],
     templateUrl: './message-renderer.component.html',
 })
@@ -45,6 +49,20 @@ export class MessageRendererComponent {
 
     protected rowGridClass(row: { sections: Section[]; paired: boolean }): string {
         if (!row.paired) return '';
+        if (row.sections.length === 2) {
+            // Give insight_cards more width than a single paired sibling — it holds denser, more valuable content.
+            const insightIdx = row.sections.findIndex(s => s.type === 'insight_cards');
+            if (insightIdx !== -1) {
+                const cols = insightIdx === 0 ? 'md:grid-cols-[2fr_1fr]' : 'md:grid-cols-[1fr_2fr]';
+                return `grid grid-cols-1 ${cols} gap-4 items-start`;
+            }
+            // price_targets is a narrow list — cede most of the row to its paired sibling.
+            const targetsIdx = row.sections.findIndex(s => s.type === 'price_targets');
+            if (targetsIdx !== -1) {
+                const cols = targetsIdx === 0 ? 'md:grid-cols-[1fr_2fr]' : 'md:grid-cols-[2fr_1fr]';
+                return `grid grid-cols-1 ${cols} gap-4 items-start`;
+            }
+        }
         const cols = row.sections.length >= 3 ? 'md:grid-cols-2 5xl:grid-cols-3' : 'md:grid-cols-2';
         return `grid grid-cols-1 ${cols} gap-4 items-start`;
     }
@@ -66,10 +84,20 @@ export class MessageRendererComponent {
                     else break;
                 }
             }
-            rows.push({ sections: group, paired: group.length > 1 });
+            rows.push({ sections: this.orderPairedGroup(group), paired: group.length > 1 });
             i += group.length;
         }
         return rows;
+    }
+
+    // insight_cards always lands on the left (wider) side; price_targets always lands on the right.
+    private orderPairedGroup(group: Section[]): Section[] {
+        if (group.length !== 2) return group;
+        const insightIdx = group.findIndex(s => s.type === 'insight_cards');
+        if (insightIdx === 1) return [group[1], group[0]];
+        const targetsIdx = group.findIndex(s => s.type === 'price_targets');
+        if (targetsIdx === 0) return [group[1], group[0]];
+        return group;
     }
 
     private formatSection(section: Section): string {
@@ -87,16 +115,8 @@ export class MessageRendererComponent {
                 }
                 break;
             case 'bar_chart':
-                for (const item of section.data ?? []) {
-                    if (item.values?.length) {
-                        const vals = (section.groups ?? []).map((g, i) => `${g}: ${item.values![i]}`).join(', ');
-                        lines.push(`${item.name} — ${vals}`);
-                    } else {
-                        lines.push(`${item.name}: ${item.value}`);
-                    }
-                }
-                break;
             case 'line_chart':
+            case 'chart':
                 for (const item of section.data ?? []) {
                     if (item.values?.length) {
                         const vals = (section.groups ?? []).map((g, i) => `${g}: ${item.values![i]}`).join(', ');
@@ -106,7 +126,8 @@ export class MessageRendererComponent {
                     }
                 }
                 break;
-            case 'table': {
+            case 'table':
+            case 'technicals': {
                 const headers = section.headers ?? [];
                 const toCsv = (val: string) => val.includes(',') ? `"${val.replace(/"/g, '""')}"` : val;
                 if (headers.length) lines.push(headers.map(toCsv).join(','));
@@ -119,6 +140,20 @@ export class MessageRendererComponent {
                 }
                 break;
             }
+            case 'positioning':
+                for (const item of section.data ?? []) {
+                    lines.push(item.symbol);
+                    for (const theme of item.themes ?? []) {
+                        lines.push(`  ${theme.label}: ${theme.value}`);
+                    }
+                }
+                break;
+            case 'price_targets':
+                for (const item of section.data ?? []) {
+                    const sign = item.upside >= 0 ? '+' : '';
+                    lines.push(`${item.symbol}: $${item.current.toFixed(2)} -> $${item.target.toFixed(2)} (${sign}${item.upside.toFixed(1)}%)${item.consensus ? ` — ${item.consensus}` : ''}`);
+                }
+                break;
             case 'insight_cards':
                 for (const card of section.data ?? []) {
                     lines.push(`${card.number}. ${card.title}`);

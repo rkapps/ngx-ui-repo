@@ -13,12 +13,22 @@
                                 <app-bar-chart-section [section]="$any(section)"></app-bar-chart-section>
                             } @else if (section.type === 'line_chart') {
                                 <app-line-chart-section [section]="$any(section)"></app-line-chart-section>
-                            } @else if (section.type === 'table') {
+                            } @else if (section.type === 'chart') {
+                                @if ($any(section).data_type === 'time_series') {
+                                    <app-line-chart-section [section]="$any(section)"></app-line-chart-section>
+                                } @else {
+                                    <app-bar-chart-section [section]="$any(section)"></app-bar-chart-section>
+                                }
+                            } @else if (section.type === 'table' || section.type === 'technicals') {
                                 <app-table-section [section]="$any(section)"></app-table-section>
                             } @else if (section.type === 'insight_cards') {
                                 <app-insight-cards-section [section]="$any(section)"></app-insight-cards-section>
                             } @else if (section.type === 'economic_signals') {
                                 <app-economic-signals-section [section]="$any(section)"></app-economic-signals-section>
+                            } @else if (section.type === 'positioning') {
+                                <app-positioning-section [section]="$any(section)"></app-positioning-section>
+                            } @else if (section.type === 'price_targets') {
+                                <app-price-targets-section [section]="$any(section)"></app-price-targets-section>
                             } @else if (section.type === 'consumer_buzz') {
                                 <app-consumer-buzz-section [section]="$any(section)"></app-consumer-buzz-section>
                             } @else {

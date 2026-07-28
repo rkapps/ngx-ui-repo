@@ -1,6 +1,8 @@
 import { Component, computed, input } from '@angular/core';
 import { BarChartItem, BarChartSection } from '../message-renderer.types';
 
+const FORMAT_UNITS: Record<string, string> = { currency: '$', percent: '%' };
+
 @Component({
     selector: 'app-bar-chart-section',
     standalone: true,
@@ -8,8 +10,11 @@ import { BarChartItem, BarChartSection } from '../message-renderer.types';
         <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
             @if (normalizedSection().title) {
                 <div class="px-2 md:px-6 pt-2">
-                    <div class="pb-2 border-b-2 border-primary-500">
+                    <div class="pb-2 border-b-2 border-primary-500 flex items-baseline gap-2">
                         <h3 class="text-lg font-bold text-gray-800">{{ normalizedSection().title }}</h3>
+                        @if (normalizedSection().unit) {
+                            <span class="text-xs font-medium text-gray-500 shrink-0">({{ normalizedSection().unit }})</span>
+                        }
                     </div>
                 </div>
             }
@@ -30,16 +35,16 @@ import { BarChartItem, BarChartSection } from '../message-renderer.types';
                         <div class="flex items-start gap-2" style="min-width: max-content;">
 
                             <!-- Y-axis -->
-                            <div class="relative shrink-0" style="width: 36px">
+                            <div class="relative shrink-0" style="width: 44px">
                                 <div class="relative" [style.height.px]="CHART_HEIGHT_PX">
                                     @for (tick of yAxisTicks(); track tick.value) {
                                         <div class="absolute right-0 flex items-center gap-1"
                                              [style.bottom]="tick.bottomPct + '%'"
                                              style="transform: translateY(50%)">
-                                            <span class="text-[9px] leading-none text-gray-400 whitespace-nowrap text-right">
+                                            <span class="text-[10px] leading-none font-medium text-gray-500 whitespace-nowrap text-right">
                                                 {{ formatValue(tick.value, normalizedSection().unit) }}
                                             </span>
-                                            <div class="w-1.5 border-b border-gray-300"></div>
+                                            <div class="w-1.5 border-b border-gray-400"></div>
                                         </div>
                                     }
                                 </div>
@@ -69,10 +74,11 @@ import { BarChartItem, BarChartSection } from '../message-renderer.types';
                                                  [style.height.px]="positiveAreaPx()">
                                                 @for (item of normalizedSection().data; track item.name; let i = $index) {
                                                     @let val = item.values?.[gi] ?? 0;
-                                                    <div class="flex flex-col items-center justify-end h-full">
+                                                    <div class="flex flex-col items-center justify-end h-full w-6 shrink-0">
                                                         @if (val > 0) {
-                                                            <span class="text-[10px] leading-none text-gray-600 font-semibold">
-                                                                {{ formatValue(val, normalizedSection().unit) }}
+                                                            <span class="mb-0.5 text-[10px] leading-none text-gray-600 font-semibold whitespace-nowrap"
+                                                                  style="writing-mode: vertical-rl; transform: rotate(180deg);">
+                                                                {{ formatValue(val) }}
                                                             </span>
                                                             <div class="w-6 rounded-t transition-all duration-700"
                                                                  [class]="groupBgColor(i)"
@@ -92,14 +98,15 @@ import { BarChartItem, BarChartSection } from '../message-renderer.types';
                                                      [style.height.px]="negativeAreaPx()">
                                                     @for (item of normalizedSection().data; track item.name; let i = $index) {
                                                         @let val = item.values?.[gi] ?? 0;
-                                                        <div class="flex flex-col items-center justify-start h-full">
+                                                        <div class="flex flex-col items-center justify-start h-full w-6 shrink-0">
                                                             @if (val < 0) {
                                                                 <div class="w-6 rounded-b transition-all duration-700"
                                                                      [class]="groupBgColor(i)"
                                                                      [style.height.px]="negBarPx(val)">
                                                                 </div>
-                                                                <span class="text-[10px] leading-none text-gray-600 font-semibold">
-                                                                    {{ formatValue(val, normalizedSection().unit) }}
+                                                                <span class="mt-0.5 text-[10px] leading-none text-gray-600 font-semibold whitespace-nowrap"
+                                                                      style="writing-mode: vertical-rl; transform: rotate(180deg);">
+                                                                    {{ formatValue(val) }}
                                                                 </span>
                                                             }
                                                         </div>
@@ -161,7 +168,7 @@ export class BarChartSectionComponent {
         const firstValues = s.data?.[0]?.values;
 
         // Derive unit from format field if not already set
-        const unit = s.unit ?? (s.format === 'currency' ? '$' : undefined);
+        const unit = s.unit ?? (s.format ? FORMAT_UNITS[s.format] : undefined);
         let result = unit !== s.unit ? { ...s, unit } : s;
 
         if (!firstValues?.length || typeof firstValues[0] === 'number') return result;
@@ -223,7 +230,7 @@ export class BarChartSectionComponent {
     hasGroupNegatives = computed(() => this.minGroupValue() < 0);
     hasSingleNegatives = computed(() => this.minSingleValue() < 0);
 
-    readonly CHART_HEIGHT_PX = 220;
+    readonly CHART_HEIGHT_PX = 280;
 
     positiveAreaPx = computed(() => {
         const range = this.groupRange();
@@ -249,7 +256,7 @@ export class BarChartSectionComponent {
         const range = this.groupRange();
         if (range === 0) return [{ value: 0, bottomPct: 50 }];
 
-        const step = this.niceStep(range / 4);
+        const step = this.niceStep(range / 12);
         const firstTick = Math.ceil(min / step) * step;
         const ticks: { value: number; bottomPct: number }[] = [];
 
@@ -289,9 +296,8 @@ export class BarChartSectionComponent {
 
     columnWidth(groupLabel: string | null | undefined): string {
         const n = this.numSeries();
-        const BAR_PX = 24;  // w-6
-        const GAP_PX = 4;   // gap-1
-        const minForBars = n * BAR_PX + Math.max(0, n - 1) * GAP_PX + 8;
+        const BAR_PX = 24;  // w-6, bars sit flush with no gap
+        const minForBars = n * BAR_PX + 8;
         const minForLabel = Math.max(32, String(groupLabel ?? '').length * 7);
         return `${Math.max(minForBars, minForLabel)}px`;
     }

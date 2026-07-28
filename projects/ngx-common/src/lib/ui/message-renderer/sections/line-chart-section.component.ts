@@ -1,6 +1,8 @@
 import { Component, computed, input } from '@angular/core';
 import { LineChartItem, LineChartSection } from '../message-renderer.types';
 
+const FORMAT_UNITS: Record<string, string> = { currency: '$', percent: '%' };
+
 @Component({
     selector: 'app-line-chart-section',
     standalone: true,
@@ -116,7 +118,7 @@ export class LineChartSectionComponent {
         const s = this.section();
         const firstValues = s.data?.[0]?.values;
 
-        const unit = s.unit ?? (s.format === 'currency' ? '$' : undefined);
+        const unit = s.unit ?? (s.format ? FORMAT_UNITS[s.format] : undefined);
         let result = unit !== s.unit ? { ...s, unit } : s;
 
         if (!firstValues?.length || typeof firstValues[0] === 'number') return result;
