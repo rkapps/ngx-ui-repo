@@ -300,10 +300,12 @@ export class AgentsPageComponent implements OnInit {
       next: (data) => {
         this.loadingConvs.set(false);
         this.refreshing.set(false);
+        const currentId = this.route.firstChild?.snapshot.params?.['id'];
         if (isRefresh) {
-          this.selectFirst();
+          if (currentId && !data.find(c => c.id === currentId)) {
+            this.selectFirst();
+          }
         } else {
-          const currentId = this.route.firstChild?.snapshot.params?.['id'];
           if (currentId) {
             sessionStorage.setItem(SELECTED_KEY, currentId);
           } else if (!skipRestore) {
