@@ -28,7 +28,7 @@ export const routes: Routes = [
         path: '',
         loadComponent: () => import('ngx-common').then(m => m.ChatsPageComponent),
         children: [
-          { path: ':id', data: { alwaysMarkdown: true }, loadComponent: () => import('ngx-common').then(m => m.ConversationDetailComponent) },
+          { path: ':id', data: { alwaysMarkdown: true, showEditButton: true }, loadComponent: () => import('ngx-common').then(m => m.ConversationDetailComponent) },
         ],
       },
     ],

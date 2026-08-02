@@ -43,6 +43,8 @@ export interface Conversation {
   strategy: string;
   stream?: boolean;
   system_prompt?: string;
+  history_mode?: HistoryMode;
+  max_turns?: number;
   uid: string;
 }
 

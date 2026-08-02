@@ -70,21 +70,11 @@ import { ConversationService, type Conversation, type ConversationStrategy, type
         } @else if (showEdit()) {
           <!-- Edit panel -->
           <div class="flex flex-1 flex-col overflow-y-auto px-2 py-2 md:px-8 md:py-4 gap-6">
-            <!-- Model info card (mirrors agent card in create) -->
-            <div class="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-100 px-5 py-4">
-              <lucide-icon name="bot" [size]="20" class="mt-0.5 shrink-0 text-primary-600" />
-              <div class="min-w-0">
-                <p class="text-sm font-semibold text-gray-800">{{ conv.title }}</p>
-                <p class="mt-0.5 text-sm leading-relaxed text-gray-500">{{ conv.llm }} / {{ conv.model }}</p>
-              </div>
-            </div>
-            <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
-              <div class="px-5 py-3 border-b border-gray-100 bg-gray-50">
-                <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-500">Conversation</h3>
-              </div>
-              <div class="px-5 py-4 flex flex-col gap-4">
+            <div class="border-b border-gray-400 pb-4">
+              <div class="flex flex-col gap-4">
                 <app-conversation-form
                   [showLlm]="false"
+                  [showSystemPrompt]="showSystemPrompt()"
                   [currentModel]="conv.model"
                   [(title)]="editTitle"
                   [(stream)]="editStream"
@@ -92,7 +82,16 @@ import { ConversationService, type Conversation, type ConversationStrategy, type
                   [(historyMode)]="editHistoryMode"
                   [(maxTurns)]="editMaxTurns"
                   [(systemPrompt)]="editSystemPrompt"
-                />
+                >
+                  <!-- Model info card (mirrors agent card in create) -->
+                  <div form-header class="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-100 px-5 py-4">
+                    <lucide-icon name="bot" [size]="20" class="mt-0.5 shrink-0 text-primary-600" />
+                    <div class="min-w-0">
+                      <p class="text-sm font-semibold text-gray-800">{{ conv.title }}</p>
+                      <p class="mt-0.5 text-sm leading-relaxed text-gray-500">{{ conv.llm }} / {{ conv.model }}</p>
+                    </div>
+                  </div>
+                </app-conversation-form>
               </div>
             </div>
 
@@ -155,6 +154,7 @@ import { ConversationService, type Conversation, type ConversationStrategy, type
 export class ConversationDetailComponent implements OnInit, OnDestroy {
   readonly showEditButton = input(false);
   readonly alwaysMarkdown = input(false);
+  readonly showSystemPrompt = input(true);
 
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -261,8 +261,8 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
     this.editSystemPrompt.set(conv.system_prompt ?? '');
     this.editStream.set(conv.stream ?? false);
     this.editStrategy.set((conv.strategy as ConversationStrategy) ?? 'stateful');
-    this.editHistoryMode.set('full');
-    this.editMaxTurns.set(null);
+    this.editHistoryMode.set(conv.history_mode ?? 'full');
+    this.editMaxTurns.set(conv.max_turns ?? null);
     this.saveError.set('');
     this.showEdit.set(true);
   }

@@ -67,23 +67,12 @@ import { MarkdownPipe } from '../chat/markdown.pipe';
         <div class="flex-1 min-h-0 overflow-y-auto">
           <div class="flex flex-col gap-6 px-2 py-2 md:px-8 md:py-4">
 
-            <!-- Agent details -->
-            <div class="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-100 px-5 py-4">
-              <lucide-icon name="bot" [size]="20" class="mt-0.5 shrink-0 text-primary-600" />
-              <div class="min-w-0">
-                <p class="text-sm font-semibold text-gray-800">{{ agent.name }}</p>
-                <div class="prose prose-sm max-w-none mt-0.5 text-gray-700" [innerHTML]="agent.description | markdown"></div>
-              </div>
-            </div>
-
             <!-- Conversation section -->
-            <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
-              <div class="px-5 py-3 border-b border-gray-100 bg-gray-50">
-                <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-500">Conversation</h3>
-              </div>
-              <div class="px-5 py-4 flex flex-col gap-4">
+            <div class="border-b border-gray-400 pb-4">
+              <div class="flex flex-col gap-4">
                 <app-conversation-form
                   [showAllFields]="showAllFields()"
+                  [showSystemPrompt]="showSystemPrompt()"
                   [providers]="providers()"
                   [loadingProviders]="loadingProviders()"
                   [(title)]="title"
@@ -94,7 +83,16 @@ import { MarkdownPipe } from '../chat/markdown.pipe';
                   [(systemPrompt)]="systemPrompt"
                   [(selectedLlmId)]="selectedLlmId"
                   [(selectedModel)]="selectedModel"
-                />
+                >
+                  <!-- Agent details -->
+                  <div form-header class="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-100 px-5 py-4">
+                    <lucide-icon name="bot" [size]="20" class="mt-0.5 shrink-0 text-primary-600" />
+                    <div class="min-w-0">
+                      <p class="text-sm font-semibold text-gray-800">{{ agent.name }}</p>
+                      <div class="prose prose-sm max-w-none mt-0.5 text-gray-700" [innerHTML]="agent.description | markdown"></div>
+                    </div>
+                  </div>
+                </app-conversation-form>
               </div>
             </div>
 
@@ -103,7 +101,7 @@ import { MarkdownPipe } from '../chat/markdown.pipe';
               @if (createError()) {
                 <p class="text-sm text-danger-600">{{ createError() }}</p>
               }
-              <div class="flex justify-end">
+              <div class="flex justify-end pr-4">
                 <twang-button
                   variant="primary"
                   label="Start Conversation"
@@ -128,6 +126,7 @@ import { MarkdownPipe } from '../chat/markdown.pipe';
 })
 export class NewConversationComponent {
   readonly showAllFields = input(true);
+  readonly showSystemPrompt = input(true);
 
   private readonly agentService = inject(AgentService);
   private readonly conversationService = inject(ConversationService);
@@ -143,8 +142,8 @@ export class NewConversationComponent {
   protected readonly title = signal('');
   protected readonly stream = signal(true);
   protected readonly strategy = signal<ConversationStrategy>('stateful');
-  protected readonly historyMode = signal<HistoryMode>('full');
-  protected readonly maxTurns = signal<number | null>(null);
+  protected readonly historyMode = signal<HistoryMode>('trimmed');
+  protected readonly maxTurns = signal<number | null>(5);
   protected readonly systemPrompt = signal('');
   protected readonly creating = signal(false);
   protected readonly createError = signal('');
@@ -221,10 +220,8 @@ export class NewConversationComponent {
       stream: this.stream(),
       strategy: this.strategy(),
       history_mode: this.historyMode(),
-      ...(this.showAllFields() ? {
-        ...(this.maxTurns() != null ? { max_turns: this.maxTurns()! } : {}),
-        ...(this.systemPrompt().trim() ? { system_prompt: this.systemPrompt().trim() } : {}),
-      } : {}),
+      ...(this.maxTurns() != null ? { max_turns: this.maxTurns()! } : {}),
+      ...(this.showSystemPrompt() && this.systemPrompt().trim() ? { system_prompt: this.systemPrompt().trim() } : {}),
     }).subscribe({
       next: conv => {
         this.creating.set(false);
