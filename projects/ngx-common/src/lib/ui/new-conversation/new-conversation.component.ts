@@ -193,6 +193,11 @@ export class NewConversationComponent {
     this.selectedAgent.set(agent);
     this.title.set(agent.name);
     this.systemPrompt.set(agent.system_prompt ?? '');
+
+    const strategy = agent.conversation?.default_strategy ?? 'stateful';
+    this.strategy.set(strategy);
+    this.historyMode.set(strategy === 'stateful' ? 'trimmed' : 'full');
+    this.maxTurns.set(strategy === 'stateful' ? 5 : null);
   }
 
   protected cancel(): void {

@@ -3,6 +3,7 @@ import { inject, Injectable } from '@angular/core';
 import { Observable, shareReplay } from 'rxjs';
 import { SKIP_AUTH } from '../auth/auth.interceptor';
 import { API_BASE_URL } from './api-url.token';
+import type { ConversationStrategy } from './conversation.service';
 
 export interface Agent {
   id: string;
@@ -12,6 +13,10 @@ export interface Agent {
   standalone: boolean;
   execution: string;
   system_prompt?: string;
+  conversation?: {
+    default_strategy?: ConversationStrategy;
+    allowed_strategies?: ConversationStrategy[];
+  };
 }
 
 export interface LlmProvider {
