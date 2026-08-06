@@ -3,6 +3,7 @@ import { inject, Injectable } from '@angular/core';
 import { Observable, shareReplay } from 'rxjs';
 import { SKIP_AUTH } from '../auth/auth.interceptor';
 import { API_BASE_URL } from './api-url.token';
+import type { LlmProvider } from '../models/llm-provider';
 
 export interface Agent {
   id: string;
@@ -12,13 +13,6 @@ export interface Agent {
   standalone: boolean;
   execution: string;
   system_prompt?: string;
-}
-
-export interface LlmProvider {
-  id: string;
-  llm: string;
-  models: string[];
-  default_model: string;
 }
 
 @Injectable({ providedIn: 'root' })

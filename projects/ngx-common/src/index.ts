@@ -13,10 +13,10 @@ export {
 export {
   AgentService,
   type Agent,
-  type LlmProvider,
 } from './lib/services/agent.service';
 export { ThemeService, type Theme } from './lib/services/theme.service';
 export { ChatTemplateService, type ChatTemplate } from './lib/services/chat-template.service';
+export type { LlmProvider } from './lib/models/llm-provider';
 
 // Auth
 export { AuthService, type AuthUser } from './lib/auth/auth.service';
@@ -28,12 +28,16 @@ export { LOGIN_CONFIG, type LoginConfig } from './lib/auth/login.config';
 export { PageLayoutComponent } from './lib/ui/page-layout/page-layout.component';
 export { UserMenuComponent } from './lib/ui/user-menu/user-menu.component';
 export { ChatComponent } from './lib/ui/chat/chat.component';
+export { ChatMessagesComponent } from './lib/ui/chat/chat-messages.component';
+export { ChatPromptComponent } from './lib/ui/chat/chat-prompt.component';
+export { ThreePanelLayoutComponent } from './lib/ui/three-panel-layout/three-panel-layout.component';
 export { MarkdownPipe } from './lib/ui/chat/markdown.pipe';
 export { InlineMarkdownPipe } from './lib/ui/chat/inline-markdown.pipe';
 export type { ChatMessage } from './lib/ui/chat/chat-message';
 export { MessageRendererComponent } from './lib/ui/message-renderer/message-renderer.component';
 export type { StructuredResponse, Section } from './lib/ui/message-renderer/message-renderer.types';
 export { CONSUMER_BUZZ_ICON_NAMES } from './lib/ui/message-renderer/sections/consumer-buzz-section.component';
+export { extractCompleteSections, extractSuggestedPrompts, looksLikeSectionsJson } from './lib/ui/message-renderer/section-parsing';
 export { UsageComponent } from './lib/ui/usage/usage.component';
 export { ConversationFormComponent } from './lib/ui/conversation-form/conversation-form.component';
 export { ConversationDetailComponent } from './lib/ui/conversation-detail/conversation-detail.component';

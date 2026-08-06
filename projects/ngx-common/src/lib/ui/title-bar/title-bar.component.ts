@@ -13,7 +13,7 @@ import { UserMenuComponent } from '../user-menu/user-menu.component';
   standalone: true,
   imports: [LucideAngularModule, TwangButtonComponent, TwangNavTabsComponent, UserMenuComponent, RouterLink, RouterLinkActive],
   template: `
-    <header class="relative z-10 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border bg-white px-2 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+    <header class="relative z-10 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border bg-white px-4 shadow-sm dark:border-gray-700 dark:bg-gray-900 md:px-6 lg:px-10 xl:px-16">
       <div class="flex shrink-0 items-center gap-2">
         <!-- Mobile hamburger button -->
         @if (auth.isLoggedIn()) {
@@ -49,7 +49,7 @@ import { UserMenuComponent } from '../user-menu/user-menu.component';
           size="md"
           align="center"
           ariaLabel="Main navigation"
-          class="hidden md:block max-w-sm"
+          class="hidden md:block min-w-0 flex-1"
         />
       }
 

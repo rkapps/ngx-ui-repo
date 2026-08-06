@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { LucideAngularModule } from 'lucide-angular';
 import { TwangDropdownComponent, TwangInputComponent } from 'ngx-twang-ui';
 import type { TwangDropdownOption } from 'ngx-twang-ui';
-import type { LlmProvider } from '../../services/agent.service';
+import type { LlmProvider } from '../../models/llm-provider';
 import type { ConversationStrategy, HistoryMode } from '../../services/conversation.service';
 
 @Component({

@@ -47,9 +47,13 @@ export class TwangTreeTableComponent<T extends object> implements OnChanges, OnI
   @Input() initialExpandedFirstNode = false;
   /** When provided, used as the collapsed-ID set on every init (overrides initialExpandedDepth). */
   @Input() initialCollapsedIds: ReadonlySet<string> | null = null;
+  /** Node id (matches `TwangTreeTableNode.id`) to highlight as the currently-selected row. */
+  @Input() selectedId: string | null = null;
 
   /** Emits the current collapsed-ID set after every expand, collapse, or toggle. */
   @Output() readonly collapsedChange = new EventEmitter<ReadonlySet<string>>();
+  /** Emits the clicked node (leaf or summary) whenever its label cell is clicked. */
+  @Output() readonly nodeSelected = new EventEmitter<TwangTreeTableNode<T>>();
 
   ngOnChanges(changes: SimpleChanges): void {
     if (
@@ -210,6 +214,10 @@ export class TwangTreeTableComponent<T extends object> implements OnChanges, OnI
   /** Directly restore a previously saved collapsed-ID set (e.g. from session storage). */
   setCollapsedIds(ids: ReadonlySet<string>): void {
     this.collapsedIds.set(new Set(ids));
+  }
+
+  protected selectNode(node: TwangTreeTableNode<T>): void {
+    this.nodeSelected.emit(node);
   }
 
   protected toggle(nodeId: string): void {

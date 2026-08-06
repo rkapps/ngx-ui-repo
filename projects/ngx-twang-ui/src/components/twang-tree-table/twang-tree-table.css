@@ -315,9 +315,42 @@
   font-weight: 500;
 }
 
+/* Tighter row padding than the flat table's default — expanded trees get tall fast otherwise. */
+.twang-table tbody td.portfolio-table-cell {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
 /* Last row bottom border */
 .twang-tree-last-row td {
   border-bottom: 1px solid var(--app-chrome-border, #e5e7eb);
+}
+
+/*
+ * Row hover. The sticky label column (`.twang-table-sticky-first`) paints its own opaque
+ * background, so it needs its own hover rule or it won't visibly tint with the rest of the row.
+ */
+.twang-tree-row-leaf:hover,
+.twang-tree-row-d0:hover,
+.twang-tree-row-d1:hover,
+.twang-tree-row-d2:hover {
+  background: rgb(243 244 246);
+}
+.twang-tree-row-leaf:hover td.twang-table-sticky-first,
+.twang-tree-row-d0:hover td.twang-table-sticky-first,
+.twang-tree-row-d1:hover td.twang-table-sticky-first,
+.twang-tree-row-d2:hover td.twang-table-sticky-first {
+  background: rgb(243 244 246);
+}
+
+/* Selected row: persistent highlight, stronger than hover, also overriding the sticky column.
+   The inset left bar makes the state unmistakable even where the tint alone reads as subtle. */
+.twang-tree-row-selected,
+.twang-tree-row-selected td.twang-table-sticky-first {
+  background: rgb(var(--color-primary-50, 239 246 255)) !important;
+}
+.twang-tree-row-selected td.twang-table-sticky-first {
+  box-shadow: inset 3px 0 0 rgb(var(--color-primary-600, 37 99 235));
 }
 
 /* ─── Expand / collapse button ─────────────────────────────────────────────── */
@@ -334,14 +367,23 @@
   background: transparent;
   box-sizing: border-box;
   font: inherit;
-  font-weight: inherit;
-  color: inherit;
   cursor: pointer;
   text-align: left;
+  /* Parent (summary/group) row labels: highlight with the app's primary color instead of default text. */
+  color: rgb(var(--color-primary-600, 37 99 235));
+  font-weight: 600;
 }
 
 .twang-tree-expand-btn:hover {
-  color: var(--app-primary-600);
+  color: rgb(var(--color-primary-700, 29 78 216));
+}
+
+/* 2nd-level (depth 1) parent rows: a lighter primary shade than the root (depth 0) level. */
+.twang-tree-row-d1 .twang-tree-expand-btn {
+  color: rgb(var(--color-primary-500, 59 130 246));
+}
+.twang-tree-row-d1 .twang-tree-expand-btn:hover {
+  color: rgb(var(--color-primary-600, 37 99 235));
 }
 
 .twang-tree-expand-btn:focus-visible {

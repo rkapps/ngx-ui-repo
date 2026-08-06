@@ -1,0 +1,48 @@
+@if (hasData()) {
+  <div class="flex flex-col gap-4">
+    <div class="flex" [style.height.px]="height()">
+      <div
+        class="flex shrink-0 flex-col justify-between pr-2 text-right text-xs font-medium text-gray-600"
+        [style.width.px]="yAxisWidth()"
+      >
+        @for (tick of ticks(); track tick) {
+          <span class="py-0.5">{{ formatValue()(tick) }}</span>
+        }
+      </div>
+
+      <div class="relative min-w-0 flex-1">
+        <div class="pointer-events-none absolute inset-0 flex flex-col justify-between">
+          @for (tick of ticks(); track tick) {
+            <div class="border-t border-border"></div>
+          }
+        </div>
+
+        <svg class="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+          @for (s of styledSeries(); track s.label) {
+            <polyline [attr.points]="pointsFor(s)" fill="none" [attr.stroke]="s.color" stroke-width="2" vector-effect="non-scaling-stroke" />
+          }
+        </svg>
+      </div>
+    </div>
+
+    <div class="relative h-4" [style.padding-left.px]="yAxisWidth()">
+      @for (tick of xTicks(); track tick.label) {
+        <span
+          class="absolute top-0 -translate-x-1/2 whitespace-nowrap text-xs font-medium text-gray-600"
+          [style.left.%]="tick.xPercent"
+        >{{ tick.label }}</span>
+      }
+    </div>
+
+    <div class="flex items-center justify-center gap-4">
+      @for (s of styledSeries(); track s.label) {
+        <div class="flex items-center gap-1.5 text-xs text-text-muted">
+          <span class="size-2 shrink-0 rounded-full" [style.background]="s.color"></span>
+          <span>{{ s.label }}</span>
+        </div>
+      }
+    </div>
+  </div>
+} @else {
+  <p class="text-sm text-text-muted">{{ emptyMessage() }}</p>
+}

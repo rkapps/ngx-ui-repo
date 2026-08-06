@@ -1,0 +1,84 @@
+@if (bars().length > 0) {
+  @if (orientation() === 'horizontal') {
+    <div class="grid w-full items-center gap-x-2 gap-y-2" style="grid-template-columns: auto 1fr;">
+      @for (bar of styledBars(); track bar.label) {
+        <span
+          class="min-w-0 shrink-0 truncate text-right text-xs text-text-muted"
+          [style.max-width.px]="yAxisWidth()"
+          [attr.title]="bar.label"
+        >{{ bar.label }}</span>
+        <div class="relative min-w-0">
+          <div class="pointer-events-none absolute inset-0 flex justify-between">
+            @for (tick of ticks(); track tick) {
+              <div class="border-l border-border"></div>
+            }
+          </div>
+          <div class="flex items-center" [style.height.px]="barThickness()">
+            <div class="h-full rounded-r" [style.width.%]="percentOf(bar.value)" [style.background]="bar.color"></div>
+          </div>
+        </div>
+      }
+
+      <span></span>
+      <div class="flex justify-between pt-1 text-xs text-text-muted">
+        @for (tick of ascendingTicks(); track tick) {
+          <span>{{ formatValue()(tick) }}</span>
+        }
+      </div>
+    </div>
+  } @else {
+    <div class="w-full">
+      <div class="flex" [style.height.px]="height()">
+        <div class="flex shrink-0 flex-col justify-between pr-2 text-right text-xs text-text-muted" [style.width.px]="yAxisWidth()">
+          @for (tick of ticks(); track tick) {
+            <span>{{ formatValue()(tick) }}</span>
+          }
+        </div>
+
+        <div class="relative min-w-0 flex-1">
+          <div class="pointer-events-none absolute inset-0 flex flex-col justify-between">
+            @for (tick of ticks(); track tick) {
+              <div class="border-t border-border"></div>
+            }
+          </div>
+
+          <div class="relative flex h-full items-end gap-3 px-2">
+            @for (bar of styledBars(); track bar.label) {
+              <div class="flex h-full flex-1 flex-col items-center justify-end" [attr.title]="bar.label">
+                <div class="rounded-t" [style.width.%]="barWidthPercent()" [style.height.%]="percentOf(bar.value)" [style.background]="bar.color"></div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+
+      @if (labelAngle() === 0) {
+        <div class="flex pt-2" [style.padding-left.px]="yAxisWidth()">
+          <div class="flex flex-1 gap-3 px-2">
+            @for (bar of bars(); track bar.label) {
+              <span class="min-w-0 flex-1 truncate text-center text-xs text-text-muted" [attr.title]="bar.label">{{ bar.label }}</span>
+            }
+          </div>
+        </div>
+      } @else {
+        <div class="flex min-h-16 pt-1" [style.padding-left.px]="yAxisWidth()">
+          <div class="flex flex-1 gap-3 px-2">
+            @for (bar of bars(); track bar.label) {
+              <div class="relative min-w-0 flex-1">
+                <div class="absolute right-1/2 top-0 flex justify-end overflow-visible">
+                  <span
+                    class="origin-top-right whitespace-nowrap text-xs text-text-muted"
+                    [style.transform]="'rotate(-' + labelAngle() + 'deg)'"
+                    [attr.title]="bar.label"
+                  >{{ bar.label }}</span>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  }
+} @else {
+  <p class="text-sm text-text-muted">{{ emptyMessage() }}</p>
+}

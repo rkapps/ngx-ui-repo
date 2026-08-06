@@ -6,7 +6,7 @@
     "declarationMap": true,
     "types": [],
     "paths": {
-      "ngx-twang-ui": ["../ngx-twang-ui/src/index.ts"]
+      "ngx-twang-ui": ["../../dist/ngx-twang-ui"]
     }
   },
   "include": ["src/**/*.ts"],

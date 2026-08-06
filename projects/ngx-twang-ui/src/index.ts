@@ -10,3 +10,7 @@ export * from './components/twang-tree-table/twang-tree-table';
 export * from './components/twang-tree-table/twang-tree-table.models';
 export * from './components/twang-tree-dropdown/twang-tree-dropdown';
 export * from './components/twang-tree-dropdown/twang-tree-dropdown.models';
+export * from './components/twang-stat/twang-stat';
+export * from './components/twang-donut-chart/twang-donut-chart';
+export * from './components/twang-bar-chart/twang-bar-chart';
+export * from './components/twang-line-chart/twang-line-chart';
