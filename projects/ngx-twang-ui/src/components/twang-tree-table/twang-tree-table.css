@@ -13,6 +13,58 @@
   flex-direction: column;
 }
 
+/*
+ * Shared cell primitives for TwangTable and TwangTreeTable — kept here (not in the consuming
+ * app) so row height/typography stay in sync automatically across both components. `py: 6px` on
+ * `.portfolio-table-cell` is the single source of truth for row height; do not re-tighten it
+ * per-component (this replaces a stale per-tree override that had drifted to 4px on its own).
+ * Marked as an interim value — expect a manual follow-up pass on body row density.
+ */
+.portfolio-table-th {
+  padding: 0.5rem 1rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 600;
+  color: #6b7280;
+  white-space: nowrap;
+  text-align: left;
+}
+.portfolio-table-th--right {
+  text-align: right;
+}
+.portfolio-table-cell {
+  padding: 6px 1rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: #1f2937;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.portfolio-table-cell--numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.portfolio-table-footer-cell {
+  padding: 0.5rem 1rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 600;
+  color: #4b5563;
+  white-space: nowrap;
+}
+.portfolio-table-footer-cell--numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.portfolio-table-symbol-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+}
+
 /* ─── Panel / scroll infrastructure (mirrors twang-table.css) ──────────────── */
 
 .twang-table-panel {
@@ -313,12 +365,6 @@
 /* All rows: consistent font-weight for financial figures */
 .twang-table tbody td {
   font-weight: 500;
-}
-
-/* Tighter row padding than the flat table's default — expanded trees get tall fast otherwise. */
-.twang-table tbody td.portfolio-table-cell {
-  padding-top: 0.25rem;
-  padding-bottom: 0.25rem;
 }
 
 /* Last row bottom border */

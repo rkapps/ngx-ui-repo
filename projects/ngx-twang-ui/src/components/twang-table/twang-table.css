@@ -2,6 +2,58 @@
   border-bottom: 1px solid var(--app-chrome-border, #e5e7eb);
 }
 
+/*
+ * Shared cell primitives for TwangTable and TwangTreeTable — kept here (not in the consuming
+ * app) so row height/typography stay in sync automatically across both components. `py: 6px` on
+ * `.portfolio-table-cell` is the single source of truth for row height; do not re-tighten it
+ * per-component (see the removed tree-table override this replaced). Marked as an interim value —
+ * expect a manual follow-up pass on body row density.
+ */
+.portfolio-table-th {
+  padding: 0.5rem 1rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 600;
+  color: #6b7280;
+  white-space: nowrap;
+  text-align: left;
+}
+.portfolio-table-th--right {
+  text-align: right;
+}
+.portfolio-table-cell {
+  padding: 6px 1rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: #1f2937;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.portfolio-table-cell--numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.portfolio-table-footer-cell {
+  padding: 0.5rem 1rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 600;
+  color: #4b5563;
+  white-space: nowrap;
+}
+.portfolio-table-footer-cell--numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.portfolio-table-symbol-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+}
+
 :host {
   display: flex;
   min-height: 0;
