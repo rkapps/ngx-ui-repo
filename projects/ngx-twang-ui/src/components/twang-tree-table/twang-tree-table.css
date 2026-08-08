@@ -423,21 +423,21 @@
   font: inherit;
   cursor: pointer;
   text-align: left;
-  /* Parent (summary/group) row labels: highlight with the app's primary color instead of default text. */
-  color: rgb(var(--color-primary-600, 37 99 235));
+  /* Parent (summary/group) row labels: neutral grey, distinguished from body text by weight alone. */
+  color: #374151;
   font-weight: 600;
 }
 
 .twang-tree-expand-btn:hover {
-  color: rgb(var(--color-primary-700, 29 78 216));
+  color: #111827;
 }
 
-/* 2nd-level (depth 1) parent rows: a lighter primary shade than the root (depth 0) level. */
+/* 2nd-level (depth 1) parent rows: a lighter grey shade than the root (depth 0) level. */
 .twang-tree-row-d1 .twang-tree-expand-btn {
-  color: rgb(var(--color-primary-500, 59 130 246));
+  color: #6b7280;
 }
 .twang-tree-row-d1 .twang-tree-expand-btn:hover {
-  color: rgb(var(--color-primary-600, 37 99 235));
+  color: #374151;
 }
 
 .twang-tree-expand-btn:focus-visible {
