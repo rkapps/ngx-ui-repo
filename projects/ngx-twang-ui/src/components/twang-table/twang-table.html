@@ -100,18 +100,26 @@
                           <div
                             class="flex w-full min-w-0 gap-2"
                             [class.flex-col]="split.layout === 'stack'"
-                            [class.items-start]="split.layout === 'stack' && col.align !== 'right'"
-                            [class.items-end]="split.layout === 'stack' && col.align === 'right'"
                             [class.gap-0]="split.layout === 'stack'"
                             [class.items-center]="split.layout !== 'stack'"
                             [class.justify-end]="col.align === 'right' && split.layout !== 'stack'"
                           >
                             <div
-                              class="min-w-0 shrink-0 text-left"
+                              class="min-w-0 shrink-0"
+                              [class.w-full]="split.layout === 'stack'"
                               [class.truncate]="split.layout === 'stack'"
+                              [class.text-right]="split.layout === 'stack' && col.align === 'right'"
+                              [class.text-left]="split.layout === 'stack' && col.align !== 'right'"
                               [class]="split.primaryClass ?? ''"
                             >{{ split.primary }}</div>
-                            <div class="min-w-0 shrink-0" [class.truncate]="split.layout === 'stack'" [class]="split.secondaryClass ?? ''">{{ split.secondary }}</div>
+                            <div
+                              class="min-w-0 shrink-0"
+                              [class.w-full]="split.layout === 'stack'"
+                              [class.truncate]="split.layout === 'stack'"
+                              [class.text-right]="split.layout === 'stack' && col.align === 'right'"
+                              [class.text-left]="split.layout === 'stack' && col.align !== 'right'"
+                              [class]="split.secondaryClass ?? ''"
+                            >{{ split.secondary }}</div>
                             @if (split.tertiaryClass) {
                               <div class="shrink-0" [class]="split.tertiaryClass">{{ split.tertiary ?? '' }}</div>
                             }
@@ -127,18 +135,26 @@
                         <div
                           class="flex w-full min-w-0 gap-2"
                           [class.flex-col]="split.layout === 'stack'"
-                          [class.items-start]="split.layout === 'stack' && col.align !== 'right'"
-                          [class.items-end]="split.layout === 'stack' && col.align === 'right'"
                           [class.gap-0]="split.layout === 'stack'"
                           [class.items-center]="split.layout !== 'stack'"
                           [class.justify-end]="col.align === 'right' && split.layout !== 'stack'"
                         >
                           <div
-                            class="min-w-0 shrink-0 text-left"
+                            class="min-w-0 shrink-0"
+                            [class.w-full]="split.layout === 'stack'"
                             [class.truncate]="split.layout === 'stack'"
+                            [class.text-right]="split.layout === 'stack' && col.align === 'right'"
+                            [class.text-left]="split.layout === 'stack' && col.align !== 'right'"
                             [class]="split.primaryClass ?? ''"
                           >{{ split.primary }}</div>
-                          <div class="min-w-0 shrink-0" [class.truncate]="split.layout === 'stack'" [class]="split.secondaryClass ?? ''">{{ split.secondary }}</div>
+                          <div
+                            class="min-w-0 shrink-0"
+                            [class.w-full]="split.layout === 'stack'"
+                            [class.truncate]="split.layout === 'stack'"
+                            [class.text-right]="split.layout === 'stack' && col.align === 'right'"
+                            [class.text-left]="split.layout === 'stack' && col.align !== 'right'"
+                            [class]="split.secondaryClass ?? ''"
+                          >{{ split.secondary }}</div>
                           @if (split.tertiaryClass) {
                             <div class="shrink-0" [class]="split.tertiaryClass">{{ split.tertiary ?? '' }}</div>
                           }

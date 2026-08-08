@@ -1,6 +1,16 @@
 import { Component, ElementRef, OnDestroy, ViewChild, computed, effect, input, output, signal } from '@angular/core';
 import { LucideAngularModule } from 'lucide-angular';
 
+const SUGGESTED_COLLAPSED_KEY = 'ngx-chat-prompt.suggestedCollapsed';
+
+// No saved preference yet — default collapsed on narrow (mobile) screens, where the chip row
+// otherwise eats a large share of the limited vertical space above the keyboard.
+function defaultSuggestedCollapsed(): boolean {
+  const saved = localStorage.getItem(SUGGESTED_COLLAPSED_KEY);
+  if (saved !== null) return saved === 'true';
+  return window.matchMedia('(max-width: 639.98px)').matches;
+}
+
 /** The prompt-bar half of `ngx-chat`, independently placeable from `ngx-chat-messages`. */
 @Component({
   selector: 'ngx-chat-prompt',
@@ -9,20 +19,33 @@ import { LucideAngularModule } from 'lucide-angular';
   host: { '[class]': 'hostClasses()' },
   template: `
     @if (suggestedPrompts().length) {
-      <div [class]="'mx-auto mb-2 flex flex-wrap gap-1.5 p-2 ' + widthClass()">
-        @for (p of suggestedPrompts(); track p) {
-          <button
-            class="rounded-full border border-primary-200 bg-primary-50 px-2.5 py-0.5 text-xs text-primary-700 transition-colors hover:bg-primary-100 hover:border-primary-300"
-            type="button"
-            (click)="fillPrompt(p)"
-          >{{ p }}</button>
+      <div [class]="'mx-auto mb-2 ' + widthClass()">
+        <button
+          type="button"
+          class="flex items-center gap-1 rounded px-1 py-1 text-xs font-medium text-text-muted transition-colors hover:text-text"
+          [attr.aria-expanded]="!suggestedCollapsed()"
+          (click)="toggleSuggestedCollapsed()"
+        >
+          <lucide-icon [name]="suggestedCollapsed() ? 'chevron-right' : 'chevron-down'" [size]="14" />
+          Suggested prompts
+        </button>
+        @if (!suggestedCollapsed()) {
+          <div class="flex flex-wrap gap-1.5 px-1 pt-1">
+            @for (p of suggestedPrompts(); track p) {
+              <button
+                class="rounded-full border border-primary-200 bg-primary-50 px-2.5 py-0.5 text-xs text-primary-700 transition-colors hover:bg-primary-100 hover:border-primary-300"
+                type="button"
+                (click)="fillPrompt(p)"
+              >{{ p }}</button>
+            }
+          </div>
         }
       </div>
     }
     <div [class]="'mx-auto flex items-end gap-2 rounded-2xl border border-border bg-white px-3 py-2 shadow-sm focus-within:border-primary-400 focus-within:ring-2 focus-within:ring-primary-400/20 transition-shadow ' + widthClass()">
       <textarea
         #promptEl
-        class="max-h-40 min-h-[72px] flex-1 resize-none bg-transparent text-sm text-text outline-none placeholder:text-text-muted"
+        class="max-h-40 min-h-10 xl:min-h-[72px] flex-1 resize-none bg-transparent text-sm text-text outline-none placeholder:text-text-muted"
         placeholder="Type a message…"
         rows="1"
         [value]="prompt()"
@@ -74,18 +97,21 @@ export class ChatPromptComponent implements OnDestroy {
   readonly send = output<string>();
 
   protected readonly hostClasses = computed(() =>
-    `sticky bottom-0 z-10 block w-full shrink-0 border-t border-border px-4 pt-4 pb-8 ${this.background()}`
+    `sticky bottom-0 z-10 block w-full shrink-0 border-t border-border p-2 xl:px-4 xl:pt-4 xl:pb-4 ${this.background()}`
   );
 
   protected readonly widthClass = computed(() => (this.widthMode() === 'half' ? 'lg:w-1/2' : 'w-full'));
 
   protected readonly prompt = signal('');
   protected readonly recording = signal(false);
+  protected readonly suggestedCollapsed = signal(defaultSuggestedCollapsed());
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private recognition: any = null;
 
   constructor() {
+    effect(() => localStorage.setItem(SUGGESTED_COLLAPSED_KEY, String(this.suggestedCollapsed())));
+
     effect(() => {
       if (this.clearTrigger() > 0) {
         this.prompt.set('');
@@ -135,6 +161,10 @@ export class ChatPromptComponent implements OnDestroy {
       e.preventDefault();
       this.onSend();
     }
+  }
+
+  protected toggleSuggestedCollapsed(): void {
+    this.suggestedCollapsed.update(v => !v);
   }
 
   protected fillPrompt(text: string): void {

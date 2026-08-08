@@ -1,7 +1,7 @@
-import { Component, DestroyRef, inject, input, signal } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { NavigationStart, Router, RouterLink, RouterLinkActive } from '@angular/router';
-import { filter } from 'rxjs';
+import { Component, DestroyRef, computed, inject, input, signal } from '@angular/core';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { NavigationEnd, NavigationStart, Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { filter, map } from 'rxjs';
 import { LucideAngularModule } from 'lucide-angular';
 import { TwangButtonComponent, TwangNavTabsComponent, type TwangNavTabItem } from 'ngx-twang-ui';
 import { AuthService } from '../../auth/auth.service';
@@ -13,7 +13,7 @@ import { UserMenuComponent } from '../user-menu/user-menu.component';
   standalone: true,
   imports: [LucideAngularModule, TwangButtonComponent, TwangNavTabsComponent, UserMenuComponent, RouterLink, RouterLinkActive],
   template: `
-    <header class="relative z-10 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border bg-white px-4 shadow-sm dark:border-gray-700 dark:bg-gray-900 md:px-6 lg:px-10 xl:px-16">
+    <header class="relative z-10 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border bg-white px-2 shadow-sm dark:border-gray-700 dark:bg-gray-900 md:px-2 lg:px-4 xl:px-16">
       <div class="flex shrink-0 items-center gap-2">
         <!-- Mobile hamburger button -->
         @if (auth.isLoggedIn()) {
@@ -38,7 +38,8 @@ import { UserMenuComponent } from '../user-menu/user-menu.component';
           <circle cx="80" cy="50" r="8" fill="rgba(255,255,255,0.75)"/>
           <circle cx="50" cy="50" r="14" fill="white"/>
         </svg>
-        <span class="text-base font-bold tracking-tight text-primary-600">{{ loginConfig.appName }}</span>
+        <span class="hidden text-base font-bold tracking-tight text-primary-600 md:inline">{{ loginConfig.appName }}</span>
+        <span class="text-base font-bold tracking-tight text-primary-600 md:hidden">{{ activeNavLabel() || loginConfig.appName }}</span>
       </div>
 
       <!-- Desktop nav tabs -->
@@ -54,7 +55,18 @@ import { UserMenuComponent } from '../user-menu/user-menu.component';
       }
 
       @if (auth.isLoggedIn()) {
-        <app-user-menu />
+        <div class="flex shrink-0 items-center gap-2">
+          <twang-button
+            routerLink="/accounts"
+            variant="default"
+            size="sm"
+            icon="briefcase"
+            label="Accounts"
+            title="Accounts"
+            class="[&_span]:hidden md:[&_span]:inline"
+          />
+          <app-user-menu />
+        </div>
       } @else {
         <twang-button variant="primary" size="sm" icon="log-in" label="Sign in" (buttonClick)="goToLogin()" />
       }
@@ -96,6 +108,25 @@ export class TitleBarComponent {
   protected readonly loginConfig = inject(LOGIN_CONFIG);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+
+  private readonly currentUrl = toSignal(
+    this.router.events.pipe(
+      filter((e): e is NavigationEnd => e instanceof NavigationEnd),
+      map(() => this.router.url),
+    ),
+    { initialValue: this.router.url },
+  );
+
+  // Mobile-only stand-in for the app name — the desktop segmented nav tabs already show which
+  // section is active, but on mobile those tabs are hidden behind the hamburger menu.
+  protected readonly activeNavLabel = computed(() => {
+    const url = this.currentUrl();
+    const match = this.navItems().find(item => {
+      if (typeof item.link !== 'string') return false;
+      return item.exact ? url === item.link : url === item.link || url.startsWith(item.link + '/');
+    });
+    return match?.label ?? '';
+  });
 
   constructor() {
     this.router.events.pipe(

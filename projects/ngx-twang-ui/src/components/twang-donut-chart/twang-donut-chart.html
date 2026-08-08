@@ -32,10 +32,10 @@
     @if (showLegend()) {
       <div class="flex flex-col items-center gap-1.5">
         @for (arc of arcs(); track arc.label) {
-          <div class="flex items-center justify-between gap-2 text-xs" [style.width]="legendLabelWidth()">
-            <span class="flex min-w-0 items-center gap-1.5">
-              <span class="size-2 shrink-0 rounded-full" [style.background]="arc.color"></span>
-              <span class="truncate text-text">{{ arc.label }}</span>
+          <div class="flex items-start justify-between gap-2 text-xs" [style.width]="legendLabelWidth()">
+            <span class="flex min-w-0 items-start gap-1.5">
+              <span class="mt-1 size-2 shrink-0 rounded-full" [style.background]="arc.color"></span>
+              <span class="min-w-0 break-words text-text">{{ arc.label }}</span>
             </span>
             <span class="shrink-0 font-semibold text-text">{{ arc.percentLabel }}</span>
           </div>

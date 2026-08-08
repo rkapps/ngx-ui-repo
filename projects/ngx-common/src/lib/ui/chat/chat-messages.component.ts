@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild, afterRenderEffect, input } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild, afterRenderEffect, computed, input } from '@angular/core';
 import { LucideAngularModule } from 'lucide-angular';
 import { ChatMessage } from './chat-message';
 import { MessageRendererComponent } from '../message-renderer/message-renderer.component';
@@ -8,7 +8,7 @@ import { MessageRendererComponent } from '../message-renderer/message-renderer.c
   selector: 'ngx-chat-messages',
   standalone: true,
   imports: [LucideAngularModule, MessageRendererComponent],
-  host: { class: 'flex h-full min-h-0 flex-col' },
+  host: { '[class]': 'hostClasses()' },
   template: `
     <!-- Streaming status — slides open with content, always in DOM to avoid layout shift -->
     <div
@@ -22,7 +22,7 @@ import { MessageRendererComponent } from '../message-renderer/message-renderer.c
     </div>
 
     <!-- Messages -->
-    <div #scrollArea class="min-h-0 flex-1 overflow-y-auto px-2 py-2 md:px-8 md:py-4">
+    <div #scrollArea [class]="scrollAreaClasses()">
       @if (loading()) {
         <div class="flex items-center justify-center py-12">
           <lucide-icon name="loader-circle" [size]="24" class="animate-spin text-text-muted" />
@@ -73,6 +73,25 @@ export class ChatMessagesComponent implements AfterViewInit, OnDestroy {
   readonly errorMessage = input<string | null>(null);
   /** Scroll to the latest message the first time messages appear (e.g. on mount with existing history). */
   readonly autoScrollOnLoad = input(true);
+  /**
+   * `false` (default) — bounded to the parent's height; this component scrolls its own
+   * message thread internally (`overflow-y-auto`). `true` — grows naturally with content
+   * instead, so the real page-level scrolling ancestor handles it. Must match the `ngx-chat`/
+   * `fillViewport` mode it's paired with — mixing an internally-scrolling thread with a
+   * page-scrolling sticky prompt is what causes the prompt to overlap/cover the tail of the
+   * thread, since the two would be scrolling two different boxes at once.
+   */
+  readonly fillViewport = input(false);
+
+  protected readonly hostClasses = computed(() =>
+    this.fillViewport() ? 'flex flex-col' : 'flex h-full min-h-0 flex-col'
+  );
+
+  protected readonly scrollAreaClasses = computed(() =>
+    this.fillViewport()
+      ? 'px-2 py-2 md:px-8 md:py-4'
+      : 'min-h-0 flex-1 overflow-y-auto px-2 py-2 md:px-8 md:py-4'
+  );
 
   private prevMsgCount = 0;
   private isAutoScrolling = false;

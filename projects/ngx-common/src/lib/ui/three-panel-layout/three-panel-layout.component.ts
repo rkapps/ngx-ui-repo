@@ -1,4 +1,4 @@
-import { Component, computed, effect, input, OnInit, signal } from '@angular/core';
+import { Component, computed, effect, input, model, OnInit, signal } from '@angular/core';
 import { LucideAngularModule } from 'lucide-angular';
 import { TwangButtonComponent } from 'ngx-twang-ui';
 
@@ -12,16 +12,35 @@ import { TwangButtonComponent } from 'ngx-twang-ui';
   standalone: true,
   imports: [LucideAngularModule, TwangButtonComponent],
   template: `
+    @if (showLeft() && !mobileShowLeft()) {
+      <button
+        type="button"
+        class="mb-3 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-white text-text-muted md:hidden"
+        [attr.aria-label]="leftTitle() || 'Filters'"
+        [attr.title]="leftTitle() || 'Filters'"
+        (click)="mobileShowLeft.set(true)"
+      >
+        <lucide-icon name="panel-left-open" [size]="16" />
+      </button>
+    }
     <div [class]="rootClasses()">
       @if (showLeft()) {
-        <aside [hidden]="leftHidden()" [class]="leftClasses()">
+        <aside [class]="leftClasses()">
           <div class="flex shrink-0 items-center gap-1 border-b border-border px-4 py-3" [class.justify-center]="leftCollapsed()">
+            <twang-button
+              variant="default"
+              size="sm"
+              icon="panel-left-close"
+              ariaLabel="Back to content"
+              class="md:hidden"
+              (buttonClick)="mobileShowLeft.set(false)"
+            />
             @if (!leftCollapsed() && leftTitle()) {
               <span class="ml-1 flex-1 truncate text-xs font-semibold uppercase tracking-wider text-primary-600">
                 {{ leftTitle() }}
               </span>
             }
-            <div class="flex items-center gap-0.5">
+            <div class="hidden items-center gap-0.5 md:flex">
               @if (!leftCollapsed()) {
                 <twang-button
                   variant="default"
@@ -59,7 +78,7 @@ import { TwangButtonComponent } from 'ngx-twang-ui';
       </div>
 
       @if (showRight()) {
-        <aside [hidden]="rightHidden()" [class]="rightClasses()">
+        <aside [class]="rightClasses()">
           <div class="flex shrink-0 items-center gap-1 border-b border-border px-4 py-3" [class.justify-center]="rightCollapsed()">
             <div class="flex items-center gap-0.5">
               <twang-button
@@ -122,19 +141,25 @@ export class ThreePanelLayoutComponent implements OnInit {
   );
 
   /** No background/border here by design — each consumer decides how its middle content should look. */
-  protected readonly middleClasses = computed(() => `flex min-w-0 flex-1 flex-col ${this.panelMinHeight()}`);
+  protected readonly middleClasses = computed(() =>
+    `${this.mobileShowLeft() ? 'hidden md:flex' : 'flex'} min-w-0 flex-1 flex-col ${this.panelMinHeight()}`
+  );
 
   protected readonly leftCollapsed = signal(false);
   protected readonly leftPinned = signal(false);
   protected readonly rightCollapsed = signal(false);
   protected readonly rightPinned = signal(false);
 
-  // Hidden on mobile unless pinned — [hidden] attr lets Tailwind's md:flex (author
-  // stylesheet) override the UA [hidden]{display:none} rule on desktop.
-  protected readonly leftHidden = computed(() => !this.leftPinned());
-  protected readonly rightHidden = computed(() => !this.rightPinned());
+  // Mobile-only: which panel is showing in place of the other, defaulting to the middle
+  // content. Distinct from `leftPinned` (a desktop-oriented "always visible" toggle) — this
+  // swaps middle out entirely instead of squeezing both into the same row. A `model` (not a
+  // plain signal) so a consumer can close it programmatically — e.g. jump back to the middle
+  // panel once a selection is made in the left panel's tree/list.
+  readonly mobileShowLeft = model(false);
 
-  protected readonly leftClasses = computed(() => panelClasses(this.leftPinned(), this.leftCollapsed(), this.leftWidth(), this.panelMinHeight()));
+  protected readonly leftClasses = computed(() =>
+    panelClasses(this.leftPinned() || this.mobileShowLeft(), this.leftCollapsed(), this.leftWidth(), this.panelMinHeight())
+  );
   protected readonly rightClasses = computed(() => panelClasses(this.rightPinned(), this.rightCollapsed(), this.rightWidth(), this.panelMinHeight()));
 
   constructor() {
@@ -160,8 +185,10 @@ export class ThreePanelLayoutComponent implements OnInit {
 }
 
 function panelClasses(pinned: boolean, collapsed: boolean, expandedWidth: string, minHeight: string): string {
-  // 'flex' when pinned (visible on mobile too); 'md:flex' otherwise (desktop only).
-  const display = pinned ? 'flex' : 'md:flex';
+  // 'flex' when pinned (visible on mobile too); 'hidden md:flex' otherwise (desktop only) —
+  // plain Tailwind classes, not the native [hidden] attribute, so there's no cross-origin
+  // cascade fight between an author utility class and the UA/Preflight [hidden] rule.
+  const display = pinned ? 'flex' : 'hidden md:flex';
   const desktopWidth = collapsed ? 'w-12' : expandedWidth;
   // Enumerate complete class strings so Tailwind JIT includes them.
   const responsiveWidth =

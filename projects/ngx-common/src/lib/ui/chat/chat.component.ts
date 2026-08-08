@@ -15,12 +15,13 @@ import { ChatPromptComponent } from './chat-prompt.component';
   template: `
     <div [class]="rootClasses()">
       <ngx-chat-messages
-        class="min-h-0 flex-1"
+        [class]="fillViewport() ? '' : 'min-h-0 flex-1'"
         [messages]="messages()"
         [loading]="loading()"
         [status]="status()"
         [errorMessage]="errorMessage()"
         [autoScrollOnLoad]="autoScrollOnLoad()"
+        [fillViewport]="fillViewport()"
       />
       <ngx-chat-prompt
         [clearTrigger]="clearTrigger()"
@@ -46,14 +47,19 @@ export class ChatComponent {
   /**
    * `false` (default) — bounded to the parent's height (`h-full`); the message thread
    * scrolls internally. Use in a fixed-height container (e.g. an app shell content pane).
-   * `true` — `min-h-screen` instead, so the sticky prompt bar has room to bind to the
-   * real page-level scrolling ancestor. Use when this sits in a naturally-flowing,
-   * page-scrolling layout (e.g. inside a scrollable wrapper with no bounded height).
+   * `true` — grows to its natural content height instead of `h-full`, so an ancestor's own
+   * `overflow-y-auto` wrapper scrolls it (and the sticky prompt binds to that ancestor).
+   * Use when this sits inside a scrollable wrapper with no bounded height of its own — but
+   * note that's rarely the *browser viewport* itself (most app shells fix a header/footer
+   * and scroll an inner pane instead), so despite the name this should NOT use a
+   * viewport-relative unit like `min-h-screen`: that forces the thread to be at least a full
+   * screen tall even when the actual scrollable ancestor is shorter than the viewport (e.g.
+   * a shell with its own header/footer), leaving a stretch of empty space below the prompt.
    */
   readonly fillViewport = input(false);
   readonly send = output<string>();
 
   protected readonly rootClasses = computed(() =>
-    this.fillViewport() ? 'flex min-h-screen flex-col' : 'flex h-full flex-col'
+    this.fillViewport() ? 'flex flex-col' : 'flex h-full flex-col'
   );
 }

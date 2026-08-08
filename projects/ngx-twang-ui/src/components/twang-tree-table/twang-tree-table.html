@@ -95,24 +95,34 @@
                         [style.maxWidth]="col.fillRemaining ? null : (col.maxWidth ?? null)"
                       >
                         @if (!flat.isLeaf) {
-                          <!-- Summary row: expand / collapse -->
-                          <button
-                            type="button"
-                            class="twang-tree-expand-btn"
-                            (click)="toggle(flat.node.id); selectNode(flat.node)"
-                          >
+                          <!-- Summary row: chevron only toggles expand/collapse; the label
+                               only selects — so exploring children never forces a selection. -->
+                          <span class="twang-tree-expand-btn">
                             <span
                               class="twang-tree-indent shrink-0"
                               [style.width.px]="flat.node.depth * 16"
                             ></span>
-                            <lucide-icon
-                              name="chevron-right"
-                              [size]="16"
-                              class="twang-tree-chevron shrink-0 text-text-muted"
-                              [class.twang-tree-chevron--open]="isExpanded(flat.node.id)"
-                            />
-                            <span class="min-w-0 break-words">{{ flat.node.label }}</span>
-                          </button>
+                            <button
+                              type="button"
+                              class="twang-tree-chevron-btn"
+                              [attr.aria-label]="isExpanded(flat.node.id) ? 'Collapse' : 'Expand'"
+                              (click)="toggle(flat.node.id)"
+                            >
+                              <lucide-icon
+                                name="chevron-right"
+                                [size]="16"
+                                class="twang-tree-chevron shrink-0 text-text-muted"
+                                [class.twang-tree-chevron--open]="isExpanded(flat.node.id)"
+                              />
+                            </button>
+                            <button
+                              type="button"
+                              class="twang-tree-label-btn"
+                              (click)="selectNode(flat.node)"
+                            >
+                              <span class="min-w-0 break-words">{{ flat.node.label }}</span>
+                            </button>
+                          </span>
                         } @else {
                           <!-- Leaf row: symbol + name (or plain value) -->
                           @if (isActionCell(col, flat.rowData)) {
@@ -130,17 +140,18 @@
                                 <div
                                   class="flex min-w-0 gap-2"
                                   [class.flex-col]="split.layout === 'stack'"
-                                  [class.items-start]="split.layout === 'stack'"
                                   [class.gap-0]="split.layout === 'stack'"
                                   [class.items-center]="split.layout !== 'stack'"
                                 >
                                   <div
                                     class="min-w-0 shrink-0 text-left"
+                                    [class.w-full]="split.layout === 'stack'"
                                     [class.truncate]="split.layout === 'stack'"
                                     [class]="split.primaryClass ?? ''"
                                   >{{ split.primary }}</div>
                                   <div
-                                    class="min-w-0 shrink-0"
+                                    class="min-w-0 shrink-0 text-left"
+                                    [class.w-full]="split.layout === 'stack'"
                                     [class.truncate]="split.layout === 'stack'"
                                     [class]="split.secondaryClass ?? ''"
                                   >{{ split.secondary }}</div>
@@ -189,20 +200,24 @@
                               <div
                                 class="flex w-full min-w-0 gap-2"
                                 [class.flex-col]="split.layout === 'stack'"
-                                [class.items-start]="split.layout === 'stack' && col.align !== 'right'"
-                                [class.items-end]="split.layout === 'stack' && col.align === 'right'"
                                 [class.gap-0]="split.layout === 'stack'"
                                 [class.items-center]="split.layout !== 'stack'"
                                 [class.justify-end]="col.align === 'right' && split.layout !== 'stack'"
                               >
                                 <div
-                                  class="min-w-0 shrink-0 text-left"
+                                  class="min-w-0 shrink-0"
+                                  [class.w-full]="split.layout === 'stack'"
                                   [class.truncate]="split.layout === 'stack'"
+                                  [class.text-right]="split.layout === 'stack' && col.align === 'right'"
+                                  [class.text-left]="split.layout === 'stack' && col.align !== 'right'"
                                   [class]="split.primaryClass ?? ''"
                                 >{{ split.primary }}</div>
                                 <div
                                   class="min-w-0 shrink-0"
+                                  [class.w-full]="split.layout === 'stack'"
                                   [class.truncate]="split.layout === 'stack'"
+                                  [class.text-right]="split.layout === 'stack' && col.align === 'right'"
+                                  [class.text-left]="split.layout === 'stack' && col.align !== 'right'"
                                   [class]="split.secondaryClass ?? ''"
                                 >{{ split.secondary }}</div>
                                 @if (split.tertiaryClass) {
@@ -219,20 +234,24 @@
                           <div
                             class="flex w-full min-w-0 gap-2"
                             [class.flex-col]="split.layout === 'stack'"
-                            [class.items-start]="split.layout === 'stack' && col.align !== 'right'"
-                            [class.items-end]="split.layout === 'stack' && col.align === 'right'"
                             [class.gap-0]="split.layout === 'stack'"
                             [class.items-center]="split.layout !== 'stack'"
                             [class.justify-end]="col.align === 'right' && split.layout !== 'stack'"
                           >
                             <div
-                              class="min-w-0 shrink-0 text-left"
+                              class="min-w-0 shrink-0"
+                              [class.w-full]="split.layout === 'stack'"
                               [class.truncate]="split.layout === 'stack'"
+                              [class.text-right]="split.layout === 'stack' && col.align === 'right'"
+                              [class.text-left]="split.layout === 'stack' && col.align !== 'right'"
                               [class]="split.primaryClass ?? ''"
                             >{{ split.primary }}</div>
                             <div
                               class="min-w-0 shrink-0"
+                              [class.w-full]="split.layout === 'stack'"
                               [class.truncate]="split.layout === 'stack'"
+                              [class.text-right]="split.layout === 'stack' && col.align === 'right'"
+                              [class.text-left]="split.layout === 'stack' && col.align !== 'right'"
                               [class]="split.secondaryClass ?? ''"
                             >{{ split.secondary }}</div>
                             @if (split.tertiaryClass) {

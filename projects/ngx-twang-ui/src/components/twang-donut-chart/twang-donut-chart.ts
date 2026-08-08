@@ -32,7 +32,7 @@ export class TwangDonutChartComponent {
   readonly strokeWidth = input(16);
   readonly showLegend = input(true);
   /** Legend row width (CSS value, e.g. `'10rem'`/`'200px'`) — override when labels get truncated. */
-  readonly legendLabelWidth = input('15rem');
+  readonly legendLabelWidth = input('12rem');
   readonly emptyMessage = input('No data.');
 
   protected readonly radius = computed(() => (this.size() - this.strokeWidth()) / 2);
