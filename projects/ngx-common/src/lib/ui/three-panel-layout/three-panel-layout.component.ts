@@ -15,7 +15,7 @@ import { TwangButtonComponent } from 'ngx-twang-ui';
     <div [class]="rootClasses()">
       @if (showLeft()) {
         <aside [hidden]="leftHidden()" [class]="leftClasses()">
-          <div class="flex min-h-10 shrink-0 items-center gap-1 border-b border-border px-2" [class.justify-center]="leftCollapsed()">
+          <div class="flex shrink-0 items-center gap-1 border-b border-border px-4 py-3" [class.justify-center]="leftCollapsed()">
             @if (!leftCollapsed() && leftTitle()) {
               <span class="ml-1 flex-1 truncate text-xs font-semibold uppercase tracking-wider text-primary-600">
                 {{ leftTitle() }}
@@ -51,7 +51,7 @@ import { TwangButtonComponent } from 'ngx-twang-ui';
       <!-- Middle -->
       <div [class]="middleClasses()">
         @if (middleTitle()) {
-          <div class="flex min-h-10 shrink-0 items-center border-b border-border px-3">
+          <div class="flex shrink-0 items-center border-b border-border px-4 py-3">
             <span class="text-xs font-semibold uppercase tracking-wider text-primary-600">{{ middleTitle() }}</span>
           </div>
         }
@@ -60,7 +60,7 @@ import { TwangButtonComponent } from 'ngx-twang-ui';
 
       @if (showRight()) {
         <aside [hidden]="rightHidden()" [class]="rightClasses()">
-          <div class="flex min-h-10 shrink-0 items-center gap-1 border-b border-border px-2" [class.justify-center]="rightCollapsed()">
+          <div class="flex shrink-0 items-center gap-1 border-b border-border px-4 py-3" [class.justify-center]="rightCollapsed()">
             <div class="flex items-center gap-0.5">
               <twang-button
                 variant="default"

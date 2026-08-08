@@ -25,9 +25,16 @@
   padding: 6px 1rem;
   font-size: 0.875rem;
   line-height: 1.25rem;
-  color: #1f2937;
   white-space: nowrap;
   vertical-align: middle;
+}
+/*
+ * Default text color at zero specificity (`:where`) — Angular's emulated encapsulation appends a
+ * content attribute to `.portfolio-table-cell`, which would otherwise outrank a plain Tailwind
+ * color utility passed via `cellClass`/`splitCell` and silently win regardless of stylesheet order.
+ */
+:where(.portfolio-table-cell) {
+  color: #1f2937;
 }
 .portfolio-table-cell--numeric {
   text-align: right;
@@ -38,8 +45,10 @@
   font-size: 0.75rem;
   line-height: 1rem;
   font-weight: 600;
-  color: #4b5563;
   white-space: nowrap;
+}
+:where(.portfolio-table-footer-cell) {
+  color: #4b5563;
 }
 .portfolio-table-footer-cell--numeric {
   text-align: right;

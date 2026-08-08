@@ -26,9 +26,13 @@ const DEFAULT_PALETTE = ['#2563eb', '#7c3aed', '#0d9488', '#16a34a', '#d97706', 
 })
 export class TwangDonutChartComponent {
   readonly segments = input<TwangDonutSegment[]>([]);
+  /** Optional header rendered above the chart (e.g. a card title) — keeps callers from repeating the same `<p>` markup. */
+  readonly title = input('');
   readonly size = input(110);
   readonly strokeWidth = input(16);
   readonly showLegend = input(true);
+  /** Legend row width (CSS value, e.g. `'10rem'`/`'200px'`) — override when labels get truncated. */
+  readonly legendLabelWidth = input('15rem');
   readonly emptyMessage = input('No data.');
 
   protected readonly radius = computed(() => (this.size() - this.strokeWidth()) / 2);

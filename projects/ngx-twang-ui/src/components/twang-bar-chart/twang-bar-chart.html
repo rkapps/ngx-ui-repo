@@ -1,22 +1,54 @@
-@if (bars().length > 0) {
+@if (title()) {
+  <p class="mb-3 pl-4 pt-3 text-center text-xs font-semibold uppercase tracking-wide text-text-muted">{{ title() }}</p>
+}
+@if (bars().length > 0 || stackedRows().length > 0) {
   @if (orientation() === 'horizontal') {
     <div class="grid w-full items-center gap-x-2 gap-y-2" style="grid-template-columns: auto 1fr;">
-      @for (bar of styledBars(); track bar.label) {
-        <span
-          class="min-w-0 shrink-0 truncate text-right text-xs text-text-muted"
-          [style.max-width.px]="yAxisWidth()"
-          [attr.title]="bar.label"
-        >{{ bar.label }}</span>
-        <div class="relative min-w-0">
-          <div class="pointer-events-none absolute inset-0 flex justify-between">
-            @for (tick of ticks(); track tick) {
-              <div class="border-l border-border"></div>
-            }
+      @if (isStacked()) {
+        @for (row of stackedRows(); track row.label; let rowIndex = $index) {
+          <span
+            class="min-w-0 shrink-0 truncate text-right text-xs text-text-muted"
+            [style.max-width.px]="yAxisWidth()"
+            [attr.title]="row.label"
+          >{{ row.label }}</span>
+          <div class="relative min-w-0">
+            <div class="pointer-events-none absolute inset-0 flex justify-between">
+              @for (tick of ticks(); track tick) {
+                <div class="border-l border-border"></div>
+              }
+            </div>
+            <div class="flex items-center" [style.height.px]="barThickness()">
+              @for (segment of stackedSegmentsByRow()[rowIndex]; track segment.label) {
+                @if (segment.value > 0) {
+                  <div
+                    class="h-full first:rounded-l last:rounded-r"
+                    [style.width.%]="percentOf(segment.value)"
+                    [style.background]="segment.color"
+                    [attr.title]="segment.label + ': ' + formatValue()(segment.value)"
+                  ></div>
+                }
+              }
+            </div>
           </div>
-          <div class="flex items-center" [style.height.px]="barThickness()">
-            <div class="h-full rounded-r" [style.width.%]="percentOf(bar.value)" [style.background]="bar.color"></div>
+        }
+      } @else {
+        @for (bar of styledBars(); track bar.label) {
+          <span
+            class="min-w-0 shrink-0 truncate text-right text-xs text-text-muted"
+            [style.max-width.px]="yAxisWidth()"
+            [attr.title]="bar.label"
+          >{{ bar.label }}</span>
+          <div class="relative min-w-0">
+            <div class="pointer-events-none absolute inset-0 flex justify-between">
+              @for (tick of ticks(); track tick) {
+                <div class="border-l border-border"></div>
+              }
+            </div>
+            <div class="flex items-center" [style.height.px]="barThickness()">
+              <div class="h-full rounded-r" [style.width.%]="percentOf(bar.value)" [style.background]="bar.color"></div>
+            </div>
           </div>
-        </div>
+        }
       }
 
       <span></span>
@@ -25,6 +57,18 @@
           <span>{{ formatValue()(tick) }}</span>
         }
       </div>
+
+      @if (isStacked()) {
+        <span></span>
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 pt-2">
+          @for (s of styledSeries(); track s.label) {
+            <div class="flex items-center gap-1.5 text-xs text-text-muted">
+              <span class="size-2 shrink-0 rounded-full" [style.background]="s.color"></span>
+              <span>{{ s.label }}</span>
+            </div>
+          }
+        </div>
+      }
     </div>
   } @else {
     <div class="w-full">

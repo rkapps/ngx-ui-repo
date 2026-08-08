@@ -11,4 +11,6 @@ export class TwangStatComponent {
   readonly value = input.required<string>();
   /** Overrides the default value text color (e.g. `text-emerald-600` for a positive figure). */
   readonly valueClass = input('text-text');
+  /** Renders label and value side by side on one line instead of the default stacked layout. */
+  readonly inline = input(false);
 }
