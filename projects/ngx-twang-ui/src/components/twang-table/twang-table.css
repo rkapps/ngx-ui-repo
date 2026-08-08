@@ -61,6 +61,14 @@
   width: 100%;
   min-width: 0;
   text-align: left;
+  /* Reset native <button> chrome (UA default padding/border) so an action cell lines up with a
+     plain (non-action) sibling row in the same column instead of drifting right. */
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
 }
 
 :host {

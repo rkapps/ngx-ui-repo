@@ -72,6 +72,14 @@
   width: 100%;
   min-width: 0;
   text-align: left;
+  /* Reset native <button> chrome (UA default padding/border) so an action cell lines up with a
+     plain (non-action) sibling row in the same column instead of drifting right. */
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
 }
 
 /* ─── Panel / scroll infrastructure (mirrors twang-table.css) ──────────────── */
@@ -465,6 +473,10 @@
   align-items: center;
   white-space: normal;
   font-weight: inherit;
+  /* .portfolio-table-symbol-btn's gap is meant for multi-piece action cells elsewhere (e.g. an
+     icon + label); here it lands between the depth-indent spacer and the label, pushing linkable
+     leaf rows a few pixels right of their non-linkable (plain <span>) siblings in the same column. */
+  gap: 0;
 }
 
 .twang-tree-leaf-plain {
