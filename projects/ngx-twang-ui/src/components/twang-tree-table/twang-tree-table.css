@@ -214,7 +214,11 @@
   min-width: 0;
   overflow-y: auto;
   overflow-x: visible;
-  overscroll-behavior: contain;
+  /* auto (not contain) — once this reaches its own scroll limit, let the gesture chain to the
+     page instead of trapping it here. Unlike the footer variant below, this is not a deliberately
+     boxed/capped scrollport — it only scrolls internally when its (otherwise natural-height)
+     content happens to exceed the space the surrounding layout gave it. */
+  overscroll-behavior: auto;
   scrollbar-width: thin;
 }
 
@@ -226,7 +230,9 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: visible;
-  overscroll-behavior: contain;
+  /* auto (not contain) — even a boxed/capped table should let the page keep scrolling once
+     this hits its own limit, rather than trapping the gesture here. */
+  overscroll-behavior: auto;
   scrollbar-width: thin;
   scrollbar-gutter: auto;
 }

@@ -5,7 +5,10 @@
   [style.max-height]="isPaginated() ? null : (scrollPanelMaxHeight || null)"
   [style.min-height]="effectiveScrollPanelMinHeight()"
 >
-  <div class="twang-table-hscroll" [style.touch-action]="isPaginated() ? 'pan-x pan-y' : null">
+  <!-- Explicit pan-x + pan-y (not the 'auto' default) so a vertical swipe that starts over this
+       horizontally-scrollable table reliably falls through to the page's own vertical scroll
+       instead of the browser hesitating over which axis owns the gesture. -->
+  <div class="twang-table-hscroll" style="touch-action: pan-x pan-y">
     <div class="twang-table-inner">
       <div class="twang-table-vscroll" [style.overflow-y]="isPaginated() ? 'clip' : null">
         <div
