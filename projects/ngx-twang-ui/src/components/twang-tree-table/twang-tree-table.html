@@ -85,6 +85,7 @@
                   [ngClass]="flat.isLeaf
                     ? 'twang-tree-row-leaf'
                     : summaryDepthClass(flat.node.depth)"
+                  (click)="selectNode(flat.node)"
                 >
                   @for (col of columns; track col.id) {
 
@@ -98,8 +99,10 @@
                         [style.maxWidth]="col.fillRemaining ? null : (col.maxWidth ?? null)"
                       >
                         @if (!flat.isLeaf) {
-                          <!-- Summary row: chevron only toggles expand/collapse; the label
-                               only selects — so exploring children never forces a selection. -->
+                          <!-- Summary row: chevron only toggles expand/collapse (and must not
+                               bubble to the row's own click, which selects); the label relies
+                               on that row-level click — so exploring children never forces a
+                               selection, but clicking anywhere else in the row does select it. -->
                           <span class="twang-tree-expand-btn">
                             <span
                               class="twang-tree-indent shrink-0"
@@ -109,7 +112,7 @@
                               type="button"
                               class="twang-tree-chevron-btn"
                               [attr.aria-label]="isExpanded(flat.node.id) ? 'Collapse' : 'Expand'"
-                              (click)="toggle(flat.node.id)"
+                              (click)="$event.stopPropagation(); toggle(flat.node.id)"
                             >
                               <lucide-icon
                                 name="chevron-right"
@@ -121,7 +124,6 @@
                             <button
                               type="button"
                               class="twang-tree-label-btn"
-                              (click)="selectNode(flat.node)"
                             >
                               <span class="min-w-0 break-words">{{ flat.node.label }}</span>
                             </button>
@@ -133,7 +135,7 @@
                               type="button"
                               class="portfolio-table-symbol-btn twang-tree-leaf-label-btn"
                               [ngClass]="getActionClass(col, flat.rowData)"
-                              (click)="col.onCellClick?.(flat.rowData, $event); selectNode(flat.node)"
+                              (click)="col.onCellClick?.(flat.rowData, $event)"
                             >
                               <span
                                 class="twang-tree-indent shrink-0"
