@@ -33,6 +33,9 @@ export class TwangTreeTableComponent<T extends object> implements OnChanges, OnI
   @Input({ required: true }) columns: TwangTreeTableColumn<T>[] = [];
   @Input() footer: TwangTableFooterCell[] | null = null;
   @Input() emptyMessage = 'No data.';
+  /** Shows a spinner overlay over the existing rows (stale-while-loading, not a full replace) —
+   * matters most right after a cold-started backend, where a fetch can otherwise look stalled. */
+  @Input() loading = false;
   @Input() tableMinWidthClass = 'min-w-[980px]';
   @Input() fillContainerWidth = false;
   @Input() scrollPanelMaxHeight = '';

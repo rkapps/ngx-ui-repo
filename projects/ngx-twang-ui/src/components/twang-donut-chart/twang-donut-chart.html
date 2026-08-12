@@ -1,6 +1,7 @@
 @if (title()) {
   <p class="mb-3 pl-4 pt-3 text-center text-xs font-semibold uppercase tracking-wide text-text-muted">{{ title() }}</p>
 }
+<div class="relative">
 @if (total() > 0) {
   <div class="flex flex-col items-center gap-3">
     <svg [attr.width]="size()" [attr.height]="size()" [attr.viewBox]="'0 0 ' + size() + ' ' + size()">
@@ -43,6 +44,16 @@
       </div>
     }
   </div>
+} @else if (loading()) {
+  <!-- Reserves the chart's normal footprint so the overlay below has a non-zero box to fill —
+       otherwise, with no arcs yet, this component would render nothing until data arrives. -->
+  <div [style.width.px]="size()" [style.height.px]="size()"></div>
 } @else {
   <p class="text-sm text-text-muted">{{ emptyMessage() }}</p>
 }
+@if (loading()) {
+  <div class="absolute inset-0 z-10 flex items-center justify-center bg-white/60" aria-hidden="true">
+    <lucide-icon name="loader-circle" [size]="20" class="animate-spin text-primary-600" />
+  </div>
+}
+</div>

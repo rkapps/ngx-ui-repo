@@ -92,6 +92,9 @@ export class TwangTableComponent<T extends object> implements OnChanges {
 
   @Input({ required: true }) columns: TwangTableColumn<T>[] = [];
   @Input() emptyMessage = 'No data.';
+  /** Shows a spinner overlay over the existing rows (stale-while-loading, not a full replace) —
+   * matters most right after a cold-started backend, where a fetch can otherwise look stalled. */
+  @Input() loading = false;
   private _footer: TwangTableFooterCell[] | null = null;
   @Input() set footer(value: TwangTableFooterCell[] | null) {
     this._footer = value ?? null;

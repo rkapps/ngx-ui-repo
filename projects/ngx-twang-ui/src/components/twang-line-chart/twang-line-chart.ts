@@ -1,4 +1,5 @@
 import { Component, computed, input } from '@angular/core';
+import { LucideAngularModule } from 'lucide-angular';
 
 export interface TwangLineChartPoint {
   /** X-axis label (e.g. a date string). Only `xTickCount` of these are shown, evenly spaced. */
@@ -43,6 +44,7 @@ function niceRange(min: number, max: number, targetSteps: number): { min: number
 @Component({
   selector: 'twang-line-chart',
   standalone: true,
+  imports: [LucideAngularModule],
   templateUrl: './twang-line-chart.html',
 })
 export class TwangLineChartComponent {
@@ -53,6 +55,8 @@ export class TwangLineChartComponent {
   readonly xTickCount = input(6);
   readonly formatValue = input<(v: number) => string>(v => `${Math.round(v)}`);
   readonly emptyMessage = input('No data.');
+  /** Shows a spinner overlay (over the existing line if any, or in place of the empty message). */
+  readonly loading = input(false);
 
   protected readonly hasData = computed(() => this.series().some(s => s.points.length > 0));
 

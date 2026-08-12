@@ -1,4 +1,5 @@
 import { Component, computed, input } from '@angular/core';
+import { LucideAngularModule } from 'lucide-angular';
 
 export interface TwangDonutSegment {
   label: string;
@@ -22,6 +23,7 @@ const DEFAULT_PALETTE = ['#2563eb', '#7c3aed', '#0d9488', '#16a34a', '#d97706', 
 @Component({
   selector: 'twang-donut-chart',
   standalone: true,
+  imports: [LucideAngularModule],
   templateUrl: './twang-donut-chart.html',
 })
 export class TwangDonutChartComponent {
@@ -34,6 +36,8 @@ export class TwangDonutChartComponent {
   /** Legend row width (CSS value, e.g. `'10rem'`/`'200px'`) — override when labels get truncated. */
   readonly legendLabelWidth = input('12rem');
   readonly emptyMessage = input('No data.');
+  /** Shows a spinner overlay (over existing arcs if any, or in place of the empty message). */
+  readonly loading = input(false);
 
   protected readonly radius = computed(() => (this.size() - this.strokeWidth()) / 2);
   private readonly circumference = computed(() => 2 * Math.PI * this.radius());

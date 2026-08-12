@@ -1,4 +1,5 @@
 import { Component, computed, input } from '@angular/core';
+import { LucideAngularModule } from 'lucide-angular';
 
 export interface TwangBarDatum {
   label: string;
@@ -59,6 +60,7 @@ function niceScale(maxValue: number, targetSteps: number): { max: number; step: 
 @Component({
   selector: 'twang-bar-chart',
   standalone: true,
+  imports: [LucideAngularModule],
   templateUrl: './twang-bar-chart.html',
 })
 export class TwangBarChartComponent {
@@ -83,6 +85,8 @@ export class TwangBarChartComponent {
   readonly gridLines = input(8);
   readonly formatValue = input<(v: number) => string>(v => `${Math.round(v)}`);
   readonly emptyMessage = input('No data.');
+  /** Shows a spinner overlay (over existing bars if any, or in place of the empty message). */
+  readonly loading = input(false);
 
   protected readonly styledBars = computed<TwangStyledBar[]>(() =>
     this.bars().map((b, i) => ({ ...b, color: b.color ?? DEFAULT_PALETTE[i % DEFAULT_PALETTE.length] })),

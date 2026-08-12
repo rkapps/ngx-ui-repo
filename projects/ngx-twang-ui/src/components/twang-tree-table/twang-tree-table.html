@@ -309,4 +309,9 @@
       </div>
     </div>
   </div>
+  @if (loading) {
+    <div class="twang-loading-overlay" aria-hidden="true">
+      <lucide-icon name="loader-circle" [size]="24" class="animate-spin text-primary-600" />
+    </div>
+  }
 </div>

@@ -6,14 +6,34 @@ import { LucideAngularModule } from 'lucide-angular';
 import { TwangButtonComponent, TwangNavTabsComponent, type TwangNavTabItem } from 'ngx-twang-ui';
 import { AuthService } from '../../auth/auth.service';
 import { LOGIN_CONFIG } from '../../auth/login.config';
+import { HttpLoadingService } from '../../http/http-loading.service';
 import { UserMenuComponent } from '../user-menu/user-menu.component';
 
 @Component({
   selector: 'app-title-bar',
   standalone: true,
   imports: [LucideAngularModule, TwangButtonComponent, TwangNavTabsComponent, UserMenuComponent, RouterLink, RouterLinkActive],
+  styles: [`
+    @keyframes title-bar-progress {
+      0% { transform: translateX(-100%); }
+      55% { transform: translateX(60%); }
+      100% { transform: translateX(220%); }
+    }
+    .title-bar-progress-bar {
+      animation: title-bar-progress 1.3s ease-in-out infinite;
+    }
+  `],
   template: `
     <header class="relative z-10 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border bg-white px-2 shadow-sm dark:border-gray-700 dark:bg-gray-900 md:px-2 lg:px-4 xl:px-16">
+      <!-- Global "something is happening" indicator — backs off to individual pages' own
+           loading spinners, but this fires the instant ANY request is in-flight, which matters
+           most for a cold-starting backend (e.g. Cloud Run at min_instances=0) where the very
+           first request can otherwise look like nothing happened for several seconds. -->
+      @if (httpLoading.active()) {
+        <div class="absolute inset-x-0 top-0 z-20 h-0.5 overflow-hidden bg-primary-100" aria-hidden="true">
+          <div class="title-bar-progress-bar h-full w-1/3 rounded-full bg-primary-600"></div>
+        </div>
+      }
       <div class="flex shrink-0 items-center gap-2">
         <!-- Mobile hamburger button -->
         @if (auth.isLoggedIn()) {
@@ -110,6 +130,7 @@ export class TitleBarComponent {
   protected readonly menuOpen = signal(false);
   protected readonly auth = inject(AuthService);
   protected readonly loginConfig = inject(LOGIN_CONFIG);
+  protected readonly httpLoading = inject(HttpLoadingService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
 

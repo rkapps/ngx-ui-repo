@@ -1,3 +1,4 @@
+<div class="relative">
 @if (hasData()) {
   <div class="flex flex-col gap-4">
     <div class="flex" [style.height.px]="height()">
@@ -43,6 +44,15 @@
       }
     </div>
   </div>
+} @else if (loading()) {
+  <!-- Reserves the chart's normal footprint so the overlay below has a non-zero box to fill. -->
+  <div [style.height.px]="height()"></div>
 } @else {
   <p class="text-sm text-text-muted">{{ emptyMessage() }}</p>
 }
+@if (loading()) {
+  <div class="absolute inset-0 z-10 flex items-center justify-center bg-white/60" aria-hidden="true">
+    <lucide-icon name="loader-circle" [size]="20" class="animate-spin text-primary-600" />
+  </div>
+}
+</div>

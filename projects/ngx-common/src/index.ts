@@ -18,6 +18,10 @@ export { ThemeService, type Theme } from './lib/services/theme.service';
 export { ChatTemplateService, type ChatTemplate } from './lib/services/chat-template.service';
 export type { LlmProvider } from './lib/models/llm-provider';
 
+// HTTP
+export { HttpLoadingService } from './lib/http/http-loading.service';
+export { httpLoadingInterceptor } from './lib/http/http-loading.interceptor';
+
 // Auth
 export { AuthService, type AuthUser } from './lib/auth/auth.service';
 export { authGuard, noAuthGuard } from './lib/auth/auth.guard';
