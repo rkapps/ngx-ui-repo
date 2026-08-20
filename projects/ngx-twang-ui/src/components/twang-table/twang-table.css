@@ -14,9 +14,14 @@
   font-size: 0.75rem;
   line-height: 1rem;
   font-weight: 600;
-  color: #6b7280;
   white-space: nowrap;
   text-align: left;
+}
+/* Default text color at zero specificity (`:where`) — see the identical `.portfolio-table-cell`
+   color fix below; otherwise this would outrank a plain Tailwind color utility passed via
+   `headerClass` and silently win regardless of stylesheet order. */
+:where(.portfolio-table-th) {
+  color: #6b7280;
 }
 .portfolio-table-th--right {
   text-align: right;
@@ -25,16 +30,17 @@
   padding: 6px 1rem;
   font-size: 0.875rem;
   line-height: 1.25rem;
-  white-space: nowrap;
   vertical-align: middle;
 }
 /*
- * Default text color at zero specificity (`:where`) — Angular's emulated encapsulation appends a
- * content attribute to `.portfolio-table-cell`, which would otherwise outrank a plain Tailwind
- * color utility passed via `cellClass`/`splitCell` and silently win regardless of stylesheet order.
+ * Default text color/wrap at zero specificity (`:where`) — Angular's emulated encapsulation
+ * appends a content attribute to `.portfolio-table-cell`, which would otherwise outrank a plain
+ * Tailwind color/whitespace utility passed via `cellClass`/`splitCell` and silently win regardless
+ * of stylesheet order.
  */
 :where(.portfolio-table-cell) {
   color: #1f2937;
+  white-space: nowrap;
 }
 .portfolio-table-cell--numeric {
   text-align: right;
@@ -78,6 +84,20 @@
  */
 :where(.portfolio-table-symbol-btn) {
   text-align: left;
+}
+
+/* Reset for a single clickable split-cell segment (see `actionOnSecondaryOnly`) — same UA-chrome
+   reset as `.portfolio-table-symbol-btn` but inline rather than a full-width flex row, so it sits
+   alongside non-clickable sibling segments (e.g. an amount) instead of expanding to fill them. */
+.portfolio-table-inline-btn {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
 }
 
 :host {

@@ -88,7 +88,38 @@
                     [style.minWidth]="col.minWidth ?? null"
                     [style.maxWidth]="col.fillRemaining ? null : (col.maxWidth ?? null)"
                   >
-                    @if (isActionCell(col, row)) {
+                    @if (isActionCell(col, row) && col.actionOnSecondaryOnly && splitCellValue(col, row); as split) {
+                      <div
+                        class="flex w-full min-w-0 gap-2"
+                        [class.flex-col]="split.layout === 'stack'"
+                        [class.gap-0]="split.layout === 'stack'"
+                        [class.items-center]="split.layout !== 'stack'"
+                        [class.justify-end]="col.align === 'right' && split.layout !== 'stack'"
+                      >
+                        <div
+                          class="min-w-0 shrink-0"
+                          [class.w-full]="split.layout === 'stack'"
+                          [class.truncate]="split.layout === 'stack'"
+                          [class.text-right]="split.layout === 'stack' && col.align === 'right'"
+                          [class.text-left]="split.layout === 'stack' && col.align !== 'right'"
+                          [class]="split.primaryClass ?? ''"
+                        >{{ split.primary }}</div>
+                        <button
+                          type="button"
+                          class="portfolio-table-inline-btn min-w-0 shrink-0"
+                          [class.w-full]="split.layout === 'stack'"
+                          [class.truncate]="split.layout === 'stack'"
+                          [class.text-right]="split.layout === 'stack' && col.align === 'right'"
+                          [class.text-left]="split.layout === 'stack' && col.align !== 'right'"
+                          [ngClass]="getActionClass(col, row)"
+                          [class]="split.secondaryClass ?? ''"
+                          (click)="col.onCellClick?.(row, $event)"
+                        >{{ split.secondary }}</button>
+                        @if (split.tertiaryClass) {
+                          <div class="shrink-0" [class]="split.tertiaryClass">{{ split.tertiary ?? '' }}</div>
+                        }
+                      </div>
+                    } @else if (isActionCell(col, row)) {
                       <button
                         type="button"
                         class="portfolio-table-symbol-btn"

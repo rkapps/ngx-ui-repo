@@ -45,6 +45,8 @@ export interface TwangTableColumn<T> {
   cellClass?: string | ((row: T) => string);
   sticky?: boolean;
   isAction?: boolean | ((row: T) => boolean);
+  /** With `splitCell`: only the `secondary` segment is clickable, instead of the whole cell. */
+  actionOnSecondaryOnly?: boolean;
   actionClass?: string | ((row: T) => string);
   value: (row: T) => string | number | null;
   sortValue?: (row: T) => string | number | null;

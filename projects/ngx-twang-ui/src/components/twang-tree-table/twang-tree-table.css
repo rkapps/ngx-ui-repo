@@ -25,9 +25,14 @@
   font-size: 0.75rem;
   line-height: 1rem;
   font-weight: 600;
-  color: #6b7280;
   white-space: nowrap;
   text-align: left;
+}
+/* Default text color at zero specificity (`:where`) — see the identical `.portfolio-table-cell`
+   color fix below; otherwise this would outrank a plain Tailwind color utility passed via
+   `headerClass` and silently win regardless of stylesheet order. */
+:where(.portfolio-table-th) {
+  color: #6b7280;
 }
 .portfolio-table-th--right {
   text-align: right;
