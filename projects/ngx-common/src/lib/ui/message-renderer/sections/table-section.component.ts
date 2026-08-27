@@ -1,5 +1,5 @@
 import { Component, input } from '@angular/core';
-import { TableSection, TechnicalsSection, TableCell } from '../message-renderer.types';
+import { TableSection, TechnicalsSection, TableCell, ColumnAlign } from '../message-renderer.types';
 
 @Component({
     selector: 'app-table-section',
@@ -21,8 +21,9 @@ import { TableSection, TechnicalsSection, TableCell } from '../message-renderer.
                             <tr class="border-b border-gray-200 bg-gray-50">
                                 @for (h of headers(); track $index; let i = $index) {
                                     <th class="px-2 md:px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500"
-                                        [class.text-left]="i === 0 || isColumnLayout()"
-                                        [class.text-right]="i !== 0 && !isColumnLayout()">
+                                        [class.text-left]="alignFor(i) === 'left'"
+                                        [class.text-right]="alignFor(i) === 'right'"
+                                        [class.text-center]="alignFor(i) === 'center'">
                                         {{ h }}
                                     </th>
                                 }
@@ -34,8 +35,9 @@ import { TableSection, TechnicalsSection, TableCell } from '../message-renderer.
                             <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
                                 @for (cell of row; track $index; let i = $index) {
                                     <td class="px-2 md:px-3 py-1.5 align-top"
-                                        [class.text-left]="i === 0 || isColumnLayout()"
-                                        [class.text-right]="i !== 0 && !isColumnLayout()"
+                                        [class.text-left]="alignFor(i) === 'left'"
+                                        [class.text-right]="alignFor(i) === 'right'"
+                                        [class.text-center]="alignFor(i) === 'center'"
                                         [class.font-medium]="cell.signal === 'up' || cell.signal === 'down'"
                                         [class.text-emerald-600]="cell.signal === 'up'"
                                         [class.text-red-600]="cell.signal === 'down'"
@@ -61,8 +63,9 @@ import { TableSection, TechnicalsSection, TableCell } from '../message-renderer.
                                 <tr class="border-t-2 border-gray-200 bg-gray-50">
                                     @for (cell of row; track $index; let i = $index) {
                                         <td class="px-2 md:px-3 py-1.5 text-sm font-semibold"
-                                            [class.text-left]="i === 0 || isColumnLayout()"
-                                            [class.text-right]="i !== 0 && !isColumnLayout()"
+                                            [class.text-left]="alignFor(i) === 'left'"
+                                            [class.text-right]="alignFor(i) === 'right'"
+                                            [class.text-center]="alignFor(i) === 'center'"
                                             [class.text-emerald-600]="cell.signal === 'up'"
                                             [class.text-red-600]="cell.signal === 'down'"
                                             [class.text-amber-600]="cell.signal === 'warning'"
@@ -86,6 +89,12 @@ export class TableSectionComponent {
     isColumnLayout(): boolean {
         const s = this.section();
         return s.type === 'technicals' || s.layout === 'column';
+    }
+
+    alignFor(i: number): ColumnAlign {
+        const align = this.section().column_align?.[i];
+        if (align) return align;
+        return (i === 0 || this.isColumnLayout()) ? 'left' : 'right';
     }
 
     headers(): string[] {
