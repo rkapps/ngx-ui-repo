@@ -1,4 +1,4 @@
-import { Component, computed, input } from '@angular/core';
+import { Component, ElementRef, afterRenderEffect, computed, input, signal, viewChildren } from '@angular/core';
 import { BarChartItem, BarChartSection } from '../message-renderer.types';
 
 const FORMAT_UNITS: Record<string, string> = { currency: '$', percent: '%' };
@@ -31,6 +31,34 @@ const FORMAT_UNITS: Record<string, string> = { currency: '$', percent: '%' };
                             }
                         </div>
                     }
+                    @if (isHorizontal()) {
+                        <div class="space-y-4">
+                            @for (group of (normalizedSection().groups ?? []); track $index; let gi = $index) {
+                                <div class="flex items-center gap-3">
+                                    <div #groupLabel class="shrink-0 text-xs font-medium text-gray-600 text-right whitespace-nowrap"
+                                         [style.width.px]="labelWidthPx() || null" [title]="group">{{ group }}</div>
+                                    <div class="flex-1 space-y-0.5">
+                                        @for (item of normalizedSection().data; track item.name; let i = $index) {
+                                            @let val = item.values?.[gi] ?? 0;
+                                            <div class="flex items-center gap-2">
+                                                <div class="relative h-3 flex-1 rounded-full bg-gray-100">
+                                                    @if (hasGroupNegatives()) {
+                                                        <div class="absolute inset-y-0 w-px bg-gray-400 z-10"
+                                                             [style.left]="zeroPctGroup() + '%'"></div>
+                                                    }
+                                                    <div class="absolute inset-y-0 left-0 h-3 rounded-full transition-all duration-500"
+                                                         [class]="groupBgColor(i)"
+                                                         [style.width]="groupBarWidthPct(val) + '%'">
+                                                    </div>
+                                                </div>
+                                                <span class="w-14 shrink-0 text-[10px] font-medium text-gray-600 text-right">{{ formatValue(val) }}</span>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    } @else {
                     <div class="overflow-x-auto -mx-2 md:-mx-6 px-2 md:px-6">
                         <div class="flex items-start gap-2" style="min-width: max-content;">
 
@@ -122,6 +150,7 @@ const FORMAT_UNITS: Record<string, string> = { currency: '$', percent: '%' };
 
                         </div>
                     </div>
+                    }
                 } @else {
                     <div class="space-y-3">
                         @for (item of normalizedSection().data; track $index) {
@@ -161,6 +190,20 @@ const FORMAT_UNITS: Record<string, string> = { currency: '$', percent: '%' };
 })
 export class BarChartSectionComponent {
     section = input.required<BarChartSection>();
+
+    // Horizontal chart's y-axis label column: measured from actual rendered label widths
+    // (not a char-count/ch estimate) so every row aligns to the widest label, whatever the font.
+    private readonly groupLabelEls = viewChildren<ElementRef<HTMLElement>>('groupLabel');
+    protected readonly labelWidthPx = signal(0);
+
+    constructor() {
+        afterRenderEffect(() => {
+            const els = this.groupLabelEls();
+            if (!els.length) return;
+            const max = Math.max(...els.map(e => e.nativeElement.scrollWidth));
+            if (max > 0 && max !== this.labelWidthPx()) this.labelWidthPx.set(max);
+        });
+    }
 
     // Normalize the LLM's {label,value}[] format into the renderer's number[] + groups format.
     protected normalizedSection = computed<BarChartSection>(() => {
@@ -209,6 +252,8 @@ export class BarChartSectionComponent {
         this.normalizedSection().data?.some(d => d.values?.length)
     );
 
+    isHorizontal = computed(() => this.normalizedSection().orientation === 'horizontal');
+
     private maxGroupValue = computed(() =>
         Math.max(...this.normalizedSection().data.flatMap(d => d.values ?? []), 0)
     );
@@ -249,6 +294,21 @@ export class BarChartSectionComponent {
         if (range === 0) return 0;
         return (-this.minSingleValue() / range) * 100;
     });
+
+    // Horizontal-bar x-axis: calibrated to the data's actual min/max (with tolerance padding)
+    // rather than always starting from zero, so closely clustered values stay distinguishable.
+    private horizontalRawValues = computed(() => this.normalizedSection().data.flatMap(d => d.values ?? []));
+    private horizontalValueMin = computed(() => this.horizontalRawValues().length ? Math.min(...this.horizontalRawValues()) : 0);
+    private horizontalValueMax = computed(() => this.horizontalRawValues().length ? Math.max(...this.horizontalRawValues()) : 0);
+    private horizontalTolerance = computed(() => {
+        const range = this.horizontalValueMax() - this.horizontalValueMin();
+        return range > 0 ? range * 0.1 : (Math.abs(this.horizontalValueMin()) * 0.1 || 1);
+    });
+    private groupDomainMin = computed(() => this.horizontalValueMin() - this.horizontalTolerance());
+    private groupDomainMax = computed(() => this.horizontalValueMax() + this.horizontalTolerance());
+    private groupDomainRange = computed(() => this.groupDomainMax() - this.groupDomainMin() || 1);
+
+    zeroPctGroup = computed(() => ((0 - this.groupDomainMin()) / this.groupDomainRange()) * 100);
 
     yAxisTicks = computed(() => {
         const min = this.minGroupValue();
@@ -329,6 +389,12 @@ export class BarChartSectionComponent {
         const range = this.singleRange();
         if (range === 0) return 0;
         return Math.abs((value / range) * 100);
+    }
+
+    // Bars anchor to the left edge of the calibrated domain and extend to the value —
+    // not a zero-diverging bar, since the domain itself may not start at zero.
+    groupBarWidthPct(value: number): number {
+        return Math.max(0, ((value - this.groupDomainMin()) / this.groupDomainRange()) * 100);
     }
 
     formatValue(value: number, unit?: string): string {
