@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, input, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { AuthService } from '../../auth/auth.service';
@@ -69,6 +69,19 @@ import { ThemeService, type Theme } from '../../services/theme.service';
             </div>
           </div>
 
+          @if (settingsLink()) {
+            <div class="border-t border-border p-1.5">
+              <button
+                class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text transition-colors hover:bg-surface-muted"
+                role="menuitem"
+                (click)="goToSettings()"
+              >
+                <lucide-icon name="settings" [size]="16" class="shrink-0 text-text-muted" />
+                Settings
+              </button>
+            </div>
+          }
+
           <div class="border-t border-border p-1.5">
             <button
               class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-danger-600 transition-colors hover:bg-danger-50"
@@ -91,6 +104,10 @@ export class UserMenuComponent {
 
   protected readonly open = signal(false);
 
+  /** Route to the app's settings page — the menu item only renders when this is set, since not
+   * every consumer of this shared component has a settings page. */
+  readonly settingsLink = input<string | null>(null);
+
   protected readonly themeOptions: { value: Theme; label: string; color: string }[] = [
     { value: 'emerald', label: 'Emerald', color: 'oklch(0.45 0.19 264)' },
     { value: 'ocean',   label: 'Ocean',   color: 'oklch(0.44 0.15 230)' },
@@ -104,6 +121,12 @@ export class UserMenuComponent {
 
   protected setTheme(t: Theme): void {
     this.theme.setTheme(t);
+  }
+
+  protected goToSettings(): void {
+    this.open.set(false);
+    const link = this.settingsLink();
+    if (link) this.router.navigate([link]);
   }
 
   protected signOut(): void {

@@ -24,7 +24,12 @@ import { UserMenuComponent } from '../user-menu/user-menu.component';
     }
   `],
   template: `
-    <header class="relative z-10 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border bg-white px-2 shadow-sm dark:border-gray-700 dark:bg-gray-900 md:px-2 lg:px-4 xl:px-16">
+    <!-- z-30, not z-10: nothing between this header and page content (e.g. the app's own <main>)
+         establishes its own stacking context, so this competes directly against page content's
+         own z-index values at the root level — and twang-table's sticky thead/first-column/footer
+         cells go up to z-20, which would otherwise paint over this header's dropdowns (user menu,
+         mobile nav). -->
+    <header class="relative z-30 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border bg-white px-2 shadow-sm dark:border-gray-700 dark:bg-gray-900 md:px-2 lg:px-4 xl:px-16">
       <!-- Global "something is happening" indicator — backs off to individual pages' own
            loading spinners, but this fires the instant ANY request is in-flight, which matters
            most for a cold-starting backend (e.g. Cloud Run at min_instances=0) where the very
@@ -89,7 +94,7 @@ import { UserMenuComponent } from '../user-menu/user-menu.component';
             title="Accounts"
             class="[&_span]:hidden md:[&_span]:inline"
           />
-          <app-user-menu />
+          <app-user-menu [settingsLink]="settingsLink()" />
         </div>
       } @else {
         <twang-button variant="primary" size="sm" icon="log-in" label="Sign in" (buttonClick)="goToLogin()" />
@@ -126,6 +131,8 @@ import { UserMenuComponent } from '../user-menu/user-menu.component';
 })
 export class TitleBarComponent {
   readonly navItems = input<readonly TwangNavTabItem[]>([]);
+  /** Forwarded to `<app-user-menu>` — its Settings menu item only renders when this is set. */
+  readonly settingsLink = input<string | null>(null);
 
   protected readonly menuOpen = signal(false);
   protected readonly auth = inject(AuthService);
