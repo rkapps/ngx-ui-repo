@@ -19,7 +19,7 @@ function defaultSuggestedCollapsed(): boolean {
   host: { '[class]': 'hostClasses()' },
   template: `
     @if (suggestedPrompts().length) {
-      <div [class]="'mx-auto mb-2 ' + widthClass()">
+      <div [class]="'mx-auto mb-4 ' + widthClass()">
         <button
           type="button"
           class="flex items-center gap-1 rounded px-1 py-1 text-xs font-medium text-text-muted transition-colors hover:text-text"
@@ -177,12 +177,11 @@ export class ChatPromptComponent implements OnDestroy {
     }
   }
 
+  // Doesn't clear the prompt itself — the caller owns that via `clearTrigger`, once
+  // it actually has a response back, so the typed text stays visible while streaming.
   protected onSend(): void {
     const text = this.prompt().trim();
     if (!text) return;
-    this.prompt.set('');
-    const ta = this.promptEl?.nativeElement;
-    if (ta) ta.style.height = 'auto';
     this.send.emit(text);
   }
 

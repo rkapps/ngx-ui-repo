@@ -7,7 +7,7 @@ const FORMAT_UNITS: Record<string, string> = { currency: '$', percent: '%' };
     selector: 'app-bar-chart-section',
     standalone: true,
     template: `
-        <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
+        <div class="isolate rounded-xl border border-gray-200 bg-white overflow-hidden">
             @if (normalizedSection().title) {
                 <div class="px-2 md:px-6 pt-2">
                     <div class="pb-2 border-b-2 border-primary-500 flex items-baseline gap-2">

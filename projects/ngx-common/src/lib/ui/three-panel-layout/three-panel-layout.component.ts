@@ -198,5 +198,8 @@ function panelClasses(pinned: boolean, collapsed: boolean, expandedWidth: string
     desktopWidth === 'w-80' ? 'w-full md:w-80' :
     desktopWidth === 'w-96' ? 'w-full md:w-72 xl:w-96' :
     'w-full';
-  return `${display} ${responsiveWidth} shrink-0 flex-col rounded-lg border border-border bg-white transition-all duration-200 sticky top-3 max-h-[calc(100vh-1.5rem)] ${minHeight}`;
+  // Sticky offset matches the app-wide page-scroll-shell top padding (pt-2/md:pt-2/lg:pt-4/xl:pt-6)
+  // so a stuck panel doesn't visibly settle to a different gap than its resting position; the
+  // max-height subtracts twice the offset to leave matching breathing room below too.
+  return `${display} ${responsiveWidth} shrink-0 flex-col rounded-lg border border-border bg-white transition-all duration-200 sticky top-2 md:top-2 lg:top-4 xl:top-6 max-h-[calc(100vh-1rem)] lg:max-h-[calc(100vh-2rem)] xl:max-h-[calc(100vh-3rem)] ${minHeight}`;
 }
