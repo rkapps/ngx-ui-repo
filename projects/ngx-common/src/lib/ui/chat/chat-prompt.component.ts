@@ -105,7 +105,7 @@ export class ChatPromptComponent implements OnDestroy {
   // 'full' width mode is used for a docked side panel (e.g. markets' right aside) — default it
   // open to ~6 lines instead of growing from a single line, since that panel has the vertical
   // room and starting cramped just means immediately resizing on the first real message.
-  protected readonly textareaMinHeightClass = computed(() => (this.widthMode() === 'full' ? 'min-h-36' : 'min-h-10 xl:min-h-[72px]'));
+  protected readonly textareaMinHeightClass = computed(() => (this.widthMode() === 'full' ? 'min-h-36' : 'min-h-16 xl:min-h-[72px]'));
 
   protected readonly prompt = signal('');
   protected readonly recording = signal(false);
