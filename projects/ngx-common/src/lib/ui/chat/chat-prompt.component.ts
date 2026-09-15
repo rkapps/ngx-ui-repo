@@ -42,10 +42,11 @@ function defaultSuggestedCollapsed(): boolean {
         }
       </div>
     }
-    <div [class]="'mx-auto flex items-end gap-2 rounded-2xl border border-border bg-white px-3 py-2 shadow-sm focus-within:border-primary-400 focus-within:ring-2 focus-within:ring-primary-400/20 transition-shadow ' + widthClass()">
+    <div [class]="'mx-auto flex flex-wrap items-end gap-2 rounded-2xl border border-border bg-white px-3 py-2 shadow-sm focus-within:border-primary-400 focus-within:ring-2 focus-within:ring-primary-400/20 transition-shadow ' + widthClass()">
       <textarea
         #promptEl
-        class="max-h-40 min-h-10 xl:min-h-[72px] flex-1 resize-none bg-transparent text-sm text-text outline-none placeholder:text-text-muted"
+        class="max-h-80 min-w-[10rem] flex-1 resize-none bg-transparent text-sm text-text outline-none placeholder:text-text-muted"
+        [class]="textareaMinHeightClass()"
         placeholder="Type a message…"
         rows="1"
         [value]="prompt()"
@@ -53,7 +54,7 @@ function defaultSuggestedCollapsed(): boolean {
         (keydown)="onKeydown($event)"
       ></textarea>
 
-      <div class="flex shrink-0 items-center gap-1 pb-0.5">
+      <div class="ml-auto flex shrink-0 items-center gap-1 pb-0.5">
         <button
           class="flex h-8 w-8 items-center justify-center rounded-full transition-colors"
           [class]="recording()
@@ -101,6 +102,10 @@ export class ChatPromptComponent implements OnDestroy {
   );
 
   protected readonly widthClass = computed(() => (this.widthMode() === 'half' ? 'lg:w-1/2' : 'w-full'));
+  // 'full' width mode is used for a docked side panel (e.g. markets' right aside) — default it
+  // open to ~6 lines instead of growing from a single line, since that panel has the vertical
+  // room and starting cramped just means immediately resizing on the first real message.
+  protected readonly textareaMinHeightClass = computed(() => (this.widthMode() === 'full' ? 'min-h-36' : 'min-h-10 xl:min-h-[72px]'));
 
   protected readonly prompt = signal('');
   protected readonly recording = signal(false);

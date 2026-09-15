@@ -29,7 +29,7 @@ import { UserMenuComponent } from '../user-menu/user-menu.component';
          own z-index values at the root level — and twang-table's sticky thead/first-column/footer
          cells go up to z-20, which would otherwise paint over this header's dropdowns (user menu,
          mobile nav). -->
-    <header class="relative z-30 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border bg-white px-2 shadow-sm dark:border-gray-700 dark:bg-gray-900 md:px-2 lg:px-4 xl:px-16">
+    <header class="relative z-30 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border bg-white px-2 shadow-sm dark:border-gray-700 dark:bg-gray-900 md:px-2 lg:px-4 3xl:px-16">
       <!-- Global "something is happening" indicator — backs off to individual pages' own
            loading spinners, but this fires the instant ANY request is in-flight, which matters
            most for a cold-starting backend (e.g. Cloud Run at min_instances=0) where the very

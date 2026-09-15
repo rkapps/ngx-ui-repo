@@ -4,7 +4,7 @@
             <div [class]="rowGridClass(row)">
                 @for (section of row.sections; track $index) {
                     @if (section.type !== 'suggested_prompts') {
-                        <div class="group/section relative" [class]="row.paired ? 'min-w-0' : ''">
+                        <div class="group/section relative" [class]="sectionColClass(row, section)">
                             @if (section.type === 'context') {
                                 <app-context-section [section]="$any(section)"></app-context-section>
                             } @else if (section.type === 'metric_cards') {

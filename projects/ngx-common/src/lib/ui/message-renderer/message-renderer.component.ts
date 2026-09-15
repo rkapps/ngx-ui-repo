@@ -53,7 +53,16 @@ export class MessageRendererComponent {
             // Give insight_cards more width than a single paired sibling — it holds denser, more valuable content.
             const insightIdx = row.sections.findIndex(s => s.type === 'insight_cards');
             if (insightIdx !== -1) {
-                const cols = insightIdx === 0 ? 'md:grid-cols-[2fr_1fr]' : 'md:grid-cols-[1fr_2fr]';
+                const cols = insightIdx === 0 ? '2xl:grid-cols-[2fr_1fr]' : '2xl:grid-cols-[1fr_2fr]';
+                return `grid grid-cols-1 ${cols} gap-4 items-start`;
+            }
+            // context is a text summary — give its paired result section (chart/table/etc.) 2/3
+            // of the row and leave context 1/3. Unlike the other paired cases, this one stays
+            // split from `md` — context reads fine narrow, and stacking it full-width above/below
+            // its result wastes more space than it gains.
+            const contextIdx = row.sections.findIndex(s => s.type === 'context');
+            if (contextIdx !== -1) {
+                const cols = contextIdx === 0 ? 'md:grid-cols-[1fr_2fr]' : 'md:grid-cols-[2fr_1fr]';
                 return `grid grid-cols-1 ${cols} gap-4 items-start`;
             }
         }
@@ -64,25 +73,60 @@ export class MessageRendererComponent {
             const cols = this.priceTargetsCols(targetsIdx, row.sections.length);
             if (cols) return `grid grid-cols-1 ${cols} gap-4 items-start`;
         }
-        const cols = row.sections.length >= 3 ? 'md:grid-cols-2 2xl:grid-cols-3' : 'md:grid-cols-2';
+        const cols = row.sections.length >= 3 ? '2xl:grid-cols-2 4xl:grid-cols-3' : '2xl:grid-cols-2';
         return `grid grid-cols-1 ${cols} gap-4 items-start`;
     }
 
     // Enumerate complete class strings (rather than building the arbitrary value at runtime) so
     // Tailwind's JIT scanner — which only recognizes literal occurrences in source — includes them.
+    // A row of 2 pairs at `2xl`, same as the other paired-type rules above (context excepted). A
+    // row of 3+ instead matches the generic multi-section threshold (2xl:grid-cols-2, only going
+    // to full width at 4xl) — otherwise price_targets' capped column would cram every sibling onto
+    // one row as soon as the viewport passes 2xl, however many of them there are.
     private priceTargetsCols(idx: number, len: number): string {
         const templates: Record<string, string> = {
-            '2:0': 'md:grid-cols-[minmax(0,25rem)_1fr]',
-            '2:1': 'md:grid-cols-[1fr_minmax(0,25rem)]',
-            '3:0': 'md:grid-cols-[minmax(0,25rem)_1fr_1fr]',
-            '3:1': 'md:grid-cols-[1fr_minmax(0,25rem)_1fr]',
-            '3:2': 'md:grid-cols-[1fr_1fr_minmax(0,25rem)]',
-            '4:0': 'md:grid-cols-[minmax(0,25rem)_1fr_1fr_1fr]',
-            '4:1': 'md:grid-cols-[1fr_minmax(0,25rem)_1fr_1fr]',
-            '4:2': 'md:grid-cols-[1fr_1fr_minmax(0,25rem)_1fr]',
-            '4:3': 'md:grid-cols-[1fr_1fr_1fr_minmax(0,25rem)]',
+            '2:0': '2xl:grid-cols-[minmax(0,25rem)_1fr]',
+            '2:1': '2xl:grid-cols-[1fr_minmax(0,25rem)]',
+            '3:0': '2xl:grid-cols-2 4xl:grid-cols-[minmax(0,25rem)_1fr_1fr]',
+            '3:1': '2xl:grid-cols-2 4xl:grid-cols-[1fr_minmax(0,25rem)_1fr]',
+            '3:2': '2xl:grid-cols-2 4xl:grid-cols-[1fr_1fr_minmax(0,25rem)]',
+            '4:0': '2xl:grid-cols-2 4xl:grid-cols-[minmax(0,25rem)_1fr_1fr_1fr]',
+            '4:1': '2xl:grid-cols-2 4xl:grid-cols-[1fr_minmax(0,25rem)_1fr_1fr]',
+            '4:2': '2xl:grid-cols-2 4xl:grid-cols-[1fr_1fr_minmax(0,25rem)_1fr]',
+            '4:3': '2xl:grid-cols-2 4xl:grid-cols-[1fr_1fr_1fr_minmax(0,25rem)]',
         };
         return templates[`${len}:${idx}`] ?? '';
+    }
+
+    // A table/chart/positioning comparing enough things is too dense to squeeze into a shared
+    // column — let it span the full row (and therefore take its own row, since siblings flow
+    // around a full-span item) until there's enough room, then fold back into the row's normal
+    // split. There's more room at 3xl than at 2xl, so the "too dense" bar is higher there: a
+    // moderately wide section only needs the full row below 3xl (tier 1), a very wide one needs
+    // it all the way to 4xl (tier 2). For charts and positioning "how wide" means `data.length`
+    // (how many series/symbols are plotted) — NOT a chart's `groups.length` (x-axis categories,
+    // e.g. time periods), which can be large on a perfectly ordinary chart comparing just one or
+    // two things. Table's `headers` includes a label column ahead of one per entity, so its
+    // thresholds sit one higher than the chart/positioning ones at each tier.
+    private wideTier(section: Section): 0 | 1 | 2 {
+        const s = section as Section & { headers?: string[]; data?: unknown[] };
+        if (s.type === 'table' || s.type === 'technicals') {
+            const n = s.headers?.length ?? 0;
+            return n >= 6 ? 2 : n >= 5 ? 1 : 0;
+        }
+        if (s.type === 'chart' || s.type === 'bar_chart' || s.type === 'line_chart' || s.type === 'positioning') {
+            const n = s.data?.length ?? 0;
+            return n >= 5 ? 2 : n >= 4 ? 1 : 0;
+        }
+        return 0;
+    }
+
+    protected sectionColClass(row: { sections: Section[]; paired: boolean }, section: Section): string {
+        if (!row.paired) return '';
+        const tier = this.wideTier(section);
+        if (tier === 2) return 'min-w-0 col-span-full 4xl:col-span-1';
+        if (tier === 1) return 'min-w-0 col-span-full 3xl:col-span-1';
+        return 'min-w-0';
     }
 
     get groupedRows(): Array<{ sections: Section[]; paired: boolean }> {

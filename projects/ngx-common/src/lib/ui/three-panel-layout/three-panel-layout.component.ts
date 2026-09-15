@@ -185,11 +185,19 @@ export class ThreePanelLayoutComponent implements OnInit {
 }
 
 function panelClasses(pinned: boolean, collapsed: boolean, expandedWidth: string, minHeight: string): string {
+  const desktopWidth = collapsed ? 'w-12' : expandedWidth;
+  const stickyAndBox = 'shrink-0 flex-col rounded-lg border border-border bg-white transition-all duration-200 sticky top-2 md:top-2 lg:top-4 xl:top-6 max-h-[calc(100vh-1rem)] lg:max-h-[calc(100vh-2rem)] xl:max-h-[calc(100vh-3rem)]';
+  // 'responsive' steps its own width up with the viewport (48 -> 64 -> 72 -> 80) instead of a
+  // single fixed size — since it isn't usable at all until `lg` (narrower than that has nowhere
+  // to put it), its visibility threshold is `lg`, not the `md` every other preset uses below.
+  if (desktopWidth === 'responsive') {
+    const display = pinned ? 'flex' : 'hidden lg:flex';
+    return `${display} w-full lg:w-56 2xl:w-64 3xl:w-72 4xl:w-80 ${stickyAndBox} ${minHeight}`;
+  }
   // 'flex' when pinned (visible on mobile too); 'hidden md:flex' otherwise (desktop only) —
   // plain Tailwind classes, not the native [hidden] attribute, so there's no cross-origin
   // cascade fight between an author utility class and the UA/Preflight [hidden] rule.
   const display = pinned ? 'flex' : 'hidden md:flex';
-  const desktopWidth = collapsed ? 'w-12' : expandedWidth;
   // Enumerate complete class strings so Tailwind JIT includes them.
   const responsiveWidth =
     desktopWidth === 'w-12' ? 'w-full md:w-12' :
@@ -201,5 +209,5 @@ function panelClasses(pinned: boolean, collapsed: boolean, expandedWidth: string
   // Sticky offset matches the app-wide page-scroll-shell top padding (pt-2/md:pt-2/lg:pt-4/xl:pt-6)
   // so a stuck panel doesn't visibly settle to a different gap than its resting position; the
   // max-height subtracts twice the offset to leave matching breathing room below too.
-  return `${display} ${responsiveWidth} shrink-0 flex-col rounded-lg border border-border bg-white transition-all duration-200 sticky top-2 md:top-2 lg:top-4 xl:top-6 max-h-[calc(100vh-1rem)] lg:max-h-[calc(100vh-2rem)] xl:max-h-[calc(100vh-3rem)] ${minHeight}`;
+  return `${display} ${responsiveWidth} ${stickyAndBox} ${minHeight}`;
 }
