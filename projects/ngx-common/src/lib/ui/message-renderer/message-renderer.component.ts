@@ -56,15 +56,33 @@ export class MessageRendererComponent {
                 const cols = insightIdx === 0 ? 'md:grid-cols-[2fr_1fr]' : 'md:grid-cols-[1fr_2fr]';
                 return `grid grid-cols-1 ${cols} gap-4 items-start`;
             }
-            // price_targets is a narrow list — cede most of the row to its paired sibling.
-            const targetsIdx = row.sections.findIndex(s => s.type === 'price_targets');
-            if (targetsIdx !== -1) {
-                const cols = targetsIdx === 0 ? 'md:grid-cols-[1fr_2fr]' : 'md:grid-cols-[2fr_1fr]';
-                return `grid grid-cols-1 ${cols} gap-4 items-start`;
-            }
+        }
+        // price_targets is a narrow list — cap its width instead of flexing with the row (whatever
+        // count that row has), and let the rest of the sections share the remaining space evenly.
+        const targetsIdx = row.sections.findIndex(s => s.type === 'price_targets');
+        if (targetsIdx !== -1) {
+            const cols = this.priceTargetsCols(targetsIdx, row.sections.length);
+            if (cols) return `grid grid-cols-1 ${cols} gap-4 items-start`;
         }
         const cols = row.sections.length >= 3 ? 'md:grid-cols-2 2xl:grid-cols-3' : 'md:grid-cols-2';
         return `grid grid-cols-1 ${cols} gap-4 items-start`;
+    }
+
+    // Enumerate complete class strings (rather than building the arbitrary value at runtime) so
+    // Tailwind's JIT scanner — which only recognizes literal occurrences in source — includes them.
+    private priceTargetsCols(idx: number, len: number): string {
+        const templates: Record<string, string> = {
+            '2:0': 'md:grid-cols-[minmax(0,25rem)_1fr]',
+            '2:1': 'md:grid-cols-[1fr_minmax(0,25rem)]',
+            '3:0': 'md:grid-cols-[minmax(0,25rem)_1fr_1fr]',
+            '3:1': 'md:grid-cols-[1fr_minmax(0,25rem)_1fr]',
+            '3:2': 'md:grid-cols-[1fr_1fr_minmax(0,25rem)]',
+            '4:0': 'md:grid-cols-[minmax(0,25rem)_1fr_1fr_1fr]',
+            '4:1': 'md:grid-cols-[1fr_minmax(0,25rem)_1fr_1fr]',
+            '4:2': 'md:grid-cols-[1fr_1fr_minmax(0,25rem)_1fr]',
+            '4:3': 'md:grid-cols-[1fr_1fr_1fr_minmax(0,25rem)]',
+        };
+        return templates[`${len}:${idx}`] ?? '';
     }
 
     get groupedRows(): Array<{ sections: Section[]; paired: boolean }> {
