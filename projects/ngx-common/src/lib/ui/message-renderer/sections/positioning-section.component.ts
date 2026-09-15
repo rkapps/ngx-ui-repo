@@ -16,12 +16,12 @@ import { PositioningSection } from '../message-renderer.types';
             <div class="px-2 py-2 md:px-6 md:py-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 @for (item of section().data; track item.symbol) {
                     <div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-3">
-                        <p class="text-xs font-semibold text-gray-700 mb-2">{{ item.symbol }}</p>
+                        <p class="text-sm font-semibold text-gray-700 mb-2">{{ item.symbol }}</p>
                         <div class="flex flex-col gap-1.5">
                             @for (theme of item.themes; track theme.label) {
                                 <div class="flex items-baseline justify-between gap-2">
-                                    <span class="text-xs text-gray-600 shrink-0">{{ theme.label }}</span>
-                                    <span class="text-xs font-medium text-right"
+                                    <span class="text-sm text-gray-600 shrink-0">{{ theme.label }}</span>
+                                    <span class="text-sm font-medium text-right"
                                           [class.text-emerald-600]="theme.signal === 'up'"
                                           [class.text-red-600]="theme.signal === 'down'"
                                           [class.text-amber-600]="theme.signal === 'warning'"

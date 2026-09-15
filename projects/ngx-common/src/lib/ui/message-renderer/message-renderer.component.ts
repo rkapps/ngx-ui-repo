@@ -63,7 +63,7 @@ export class MessageRendererComponent {
                 return `grid grid-cols-1 ${cols} gap-4 items-start`;
             }
         }
-        const cols = row.sections.length >= 3 ? 'md:grid-cols-2 5xl:grid-cols-3' : 'md:grid-cols-2';
+        const cols = row.sections.length >= 3 ? 'md:grid-cols-2 2xl:grid-cols-3' : 'md:grid-cols-2';
         return `grid grid-cols-1 ${cols} gap-4 items-start`;
     }
 
