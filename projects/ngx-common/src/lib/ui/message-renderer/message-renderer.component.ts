@@ -103,16 +103,19 @@ export class MessageRendererComponent {
     // around a full-span item) until there's enough room, then fold back into the row's normal
     // split. There's more room at 3xl than at 2xl, so the "too dense" bar is higher there: a
     // moderately wide section only needs the full row below 3xl (tier 1), a very wide one needs
-    // it all the way to 4xl (tier 2). For charts and positioning "how wide" means `data.length`
-    // (how many series/symbols are plotted) — NOT a chart's `groups.length` (x-axis categories,
-    // e.g. time periods), which can be large on a perfectly ordinary chart comparing just one or
-    // two things. Table's `headers` includes a label column ahead of one per entity, so its
-    // thresholds sit one higher than the chart/positioning ones at each tier.
-    private wideTier(section: Section): 0 | 1 | 2 {
+    // it all the way to 4xl (tier 2), and an extremely wide one (10+ table columns) needs it all
+    // the way to 5xl (tier 3) — halving a 3840px row still only gives a 10-column table ~190px per
+    // column, about the same per-column budget tier 2 gets at its own fold point. For charts and
+    // positioning "how wide" means `data.length` (how many series/symbols are plotted) — NOT a
+    // chart's `groups.length` (x-axis categories, e.g. time periods), which can be large on a
+    // perfectly ordinary chart comparing just one or two things. Table's `headers` includes a
+    // label column ahead of one per entity, so its thresholds sit one higher than the
+    // chart/positioning ones at each tier.
+    private wideTier(section: Section): 0 | 1 | 2 | 3 {
         const s = section as Section & { headers?: string[]; data?: unknown[] };
         if (s.type === 'table' || s.type === 'technicals') {
             const n = s.headers?.length ?? 0;
-            return n >= 6 ? 2 : n >= 5 ? 1 : 0;
+            return n >= 10 ? 3 : n >= 6 ? 2 : n >= 5 ? 1 : 0;
         }
         if (s.type === 'chart' || s.type === 'bar_chart' || s.type === 'line_chart' || s.type === 'positioning') {
             const n = s.data?.length ?? 0;
@@ -124,6 +127,7 @@ export class MessageRendererComponent {
     protected sectionColClass(row: { sections: Section[]; paired: boolean }, section: Section): string {
         if (!row.paired) return '';
         const tier = this.wideTier(section);
+        if (tier === 3) return 'min-w-0 col-span-full 5xl:col-span-1';
         if (tier === 2) return 'min-w-0 col-span-full 4xl:col-span-1';
         if (tier === 1) return 'min-w-0 col-span-full 3xl:col-span-1';
         return 'min-w-0';
