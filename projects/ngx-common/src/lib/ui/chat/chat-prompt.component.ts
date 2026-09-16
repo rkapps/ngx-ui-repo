@@ -2,13 +2,39 @@ import { Component, ElementRef, OnDestroy, ViewChild, computed, effect, input, o
 import { LucideAngularModule } from 'lucide-angular';
 
 const SUGGESTED_COLLAPSED_KEY = 'ngx-chat-prompt.suggestedCollapsed';
+const ACTIVE_TAB_KEY = 'ngx-chat-prompt.activeTab';
+const LAST_PROMPTS_KEY = 'ngx-chat-prompt.lastPrompts';
+const LAST_PROMPTS_LIMIT = 8;
+const MOBILE_QUERY = '(max-width: 639.98px)';
+
+type PromptTabId = 'default' | 'last' | 'suggested';
+
+const TAB_CONFIG: { id: PromptTabId; icon: string; label: string }[] = [
+  { id: 'default', icon: 'list', label: 'Default prompts' },
+  { id: 'last', icon: 'history', label: 'Last prompts' },
+  { id: 'suggested', icon: 'sparkles', label: 'Suggested prompts' },
+];
 
 // No saved preference yet — default collapsed on narrow (mobile) screens, where the chip row
 // otherwise eats a large share of the limited vertical space above the keyboard.
 function defaultSuggestedCollapsed(): boolean {
   const saved = localStorage.getItem(SUGGESTED_COLLAPSED_KEY);
   if (saved !== null) return saved === 'true';
-  return window.matchMedia('(max-width: 639.98px)').matches;
+  return window.matchMedia(MOBILE_QUERY).matches;
+}
+
+function readActiveTab(): PromptTabId {
+  const saved = localStorage.getItem(ACTIVE_TAB_KEY);
+  return saved === 'last' || saved === 'suggested' ? saved : 'default';
+}
+
+function readLastPrompts(): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LAST_PROMPTS_KEY) ?? '');
+    return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 /** The prompt-bar half of `ngx-chat`, independently placeable from `ngx-chat-messages`. */
@@ -18,22 +44,27 @@ function defaultSuggestedCollapsed(): boolean {
   imports: [LucideAngularModule],
   host: { '[class]': 'hostClasses()' },
   template: `
-    @if (suggestedPrompts().length) {
+    @if (tabs().length) {
       <div [class]="'mx-auto mb-4 ' + widthClass()">
-        <button
-          type="button"
-          class="flex items-center gap-1 rounded px-1 py-1 text-xs font-medium text-text-muted transition-colors hover:text-text"
-          [attr.aria-expanded]="!suggestedCollapsed()"
-          (click)="toggleSuggestedCollapsed()"
-        >
-          <lucide-icon [name]="suggestedCollapsed() ? 'chevron-right' : 'chevron-down'" [size]="14" />
-          Suggested prompts
-        </button>
+        <div class="flex items-center gap-1 px-1 pb-[2px]">
+          @for (tab of tabs(); track tab.id) {
+            <button
+              type="button"
+              class="flex items-center justify-center rounded p-1 transition-colors"
+              [class]="activeTab() === tab.id && !suggestedCollapsed() ? 'bg-primary-50 text-primary-600' : 'text-text-muted hover:bg-surface-muted hover:text-text'"
+              [attr.title]="tab.label"
+              [attr.aria-pressed]="activeTab() === tab.id && !suggestedCollapsed()"
+              (click)="selectTab(tab.id)"
+            >
+              <lucide-icon [name]="tab.icon" [size]="14" />
+            </button>
+          }
+        </div>
         @if (!suggestedCollapsed()) {
           <div class="flex flex-wrap gap-1.5 px-1 pt-1">
-            @for (p of suggestedPrompts(); track p) {
+            @for (p of activePrompts(); track p) {
               <button
-                class="rounded-full border border-primary-200 bg-primary-50 px-2.5 py-0.5 text-xs text-primary-700 transition-colors hover:bg-primary-100 hover:border-primary-300"
+                class="rounded-full px-2.5 py-0.5 text-xs text-primary-700 transition-colors hover:bg-primary-100"
                 type="button"
                 (click)="fillPrompt(p)"
               >{{ p }}</button>
@@ -95,7 +126,13 @@ export class ChatPromptComponent implements OnDestroy {
   @ViewChild('promptEl') private promptEl!: ElementRef<HTMLTextAreaElement>;
 
   readonly clearTrigger = input<number>(0);
+  readonly defaultPrompts = input<string[]>([]);
   readonly suggestedPrompts = input<string[]>([]);
+  /** Whether the conversation already has messages (restored or sent this session) — used to
+   * auto-collapse the prompt chips on mobile once a conversation is underway, freeing up
+   * vertical space above the keyboard. The tab icons themselves stay visible either way, so
+   * the prompts are still one tap away. */
+  readonly hasHistory = input(false);
   readonly restorePrompt = input('');
   /** Tailwind background class for the prompt bar's own container (e.g. `bg-gray-50`). */
   readonly background = input('bg-white');
@@ -124,12 +161,47 @@ export class ChatPromptComponent implements OnDestroy {
   protected readonly prompt = signal('');
   protected readonly recording = signal(false);
   protected readonly suggestedCollapsed = signal(defaultSuggestedCollapsed());
+  protected readonly activeTab = signal<PromptTabId>(readActiveTab());
+  protected readonly lastPrompts = signal<string[]>(readLastPrompts());
+  protected readonly isMobile = signal(typeof window !== 'undefined' && window.matchMedia(MOBILE_QUERY).matches);
+  // Set the moment the user submits (before any backend response) — combined with `hasHistory`
+  // (which covers a conversation restored from a previous session) to auto-collapse on mobile.
+  protected readonly submitted = signal(false);
+
+  protected readonly tabs = computed(() => {
+    const promptsByTab: Record<PromptTabId, string[]> = {
+      default: this.defaultPrompts(),
+      last: this.lastPrompts(),
+      suggested: this.suggestedPrompts(),
+    };
+    return TAB_CONFIG.map(tab => ({ ...tab, prompts: promptsByTab[tab.id] })).filter(tab => tab.prompts.length > 0);
+  });
+
+  protected readonly activePrompts = computed(() => {
+    const tabs = this.tabs();
+    return tabs.find(t => t.id === this.activeTab())?.prompts ?? tabs[0]?.prompts ?? [];
+  });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private recognition: any = null;
+  private readonly mobileMql = typeof window !== 'undefined' ? window.matchMedia(MOBILE_QUERY) : null;
+  private readonly onMobileChange = (e: MediaQueryListEvent) => this.isMobile.set(e.matches);
 
   constructor() {
+    this.mobileMql?.addEventListener('change', this.onMobileChange);
+
     effect(() => localStorage.setItem(SUGGESTED_COLLAPSED_KEY, String(this.suggestedCollapsed())));
+    effect(() => localStorage.setItem(ACTIVE_TAB_KEY, this.activeTab()));
+    effect(() => localStorage.setItem(LAST_PROMPTS_KEY, JSON.stringify(this.lastPrompts())));
+
+    // Auto-collapse (not hide — the tab icons stay tappable) once a conversation is underway on
+    // mobile, to free up vertical space above the keyboard. Only fires on the false->true edge, so
+    // it won't fight a user who re-expands afterward.
+    effect(() => {
+      if (this.isMobile() && (this.hasHistory() || this.submitted())) {
+        this.suggestedCollapsed.set(true);
+      }
+    });
 
     effect(() => {
       if (this.clearTrigger() > 0) {
@@ -182,8 +254,15 @@ export class ChatPromptComponent implements OnDestroy {
     }
   }
 
-  protected toggleSuggestedCollapsed(): void {
-    this.suggestedCollapsed.update(v => !v);
+  // Clicking the already-active tab toggles the prompts open/closed; clicking a different
+  // tab switches to it and opens it — there's no separate expand/collapse control.
+  protected selectTab(id: PromptTabId): void {
+    if (this.activeTab() === id) {
+      this.suggestedCollapsed.update(v => !v);
+    } else {
+      this.activeTab.set(id);
+      this.suggestedCollapsed.set(false);
+    }
   }
 
   protected fillPrompt(text: string): void {
@@ -201,6 +280,8 @@ export class ChatPromptComponent implements OnDestroy {
   protected onSend(): void {
     const text = this.prompt().trim();
     if (!text) return;
+    this.submitted.set(true);
+    this.lastPrompts.update(list => [text, ...list.filter(p => p !== text)].slice(0, LAST_PROMPTS_LIMIT));
     this.send.emit(text);
   }
 
@@ -249,5 +330,6 @@ export class ChatPromptComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     if (this.recording()) this.recognition?.stop();
+    this.mobileMql?.removeEventListener('change', this.onMobileChange);
   }
 }

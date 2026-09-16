@@ -25,7 +25,9 @@ import { ChatPromptComponent } from './chat-prompt.component';
       />
       <ngx-chat-prompt
         [clearTrigger]="clearTrigger()"
+        [defaultPrompts]="defaultPrompts()"
         [suggestedPrompts]="suggestedPrompts()"
+        [hasHistory]="hasHistory()"
         [restorePrompt]="restorePrompt()"
         [background]="promptBackground()"
         [generating]="generating()"
@@ -42,7 +44,9 @@ export class ChatComponent {
   readonly errorMessage = input<string | null>(null);
   readonly autoScrollOnLoad = input(true);
   readonly clearTrigger = input<number>(0);
+  readonly defaultPrompts = input<string[]>([]);
   readonly suggestedPrompts = input<string[]>([]);
+  readonly hasHistory = input(false);
   readonly restorePrompt = input('');
   /** Tailwind background class for the prompt bar's own container (e.g. `bg-gray-50`). */
   readonly promptBackground = input('bg-white');
