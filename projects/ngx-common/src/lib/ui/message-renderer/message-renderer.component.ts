@@ -137,7 +137,9 @@ export class MessageRendererComponent {
         const p = this.parsed;
         if (!p) return [];
         const rows: Array<{ sections: Section[]; paired: boolean }> = [];
-        const secs = p.sections;
+        // suggested_prompts never renders here (it's shown as prompt chips elsewhere) — exclude it
+        // so it can't force a real section into an unwanted paired 2-column layout with an empty sibling.
+        const secs = p.sections.filter(s => s.type !== 'suggested_prompts');
         let i = 0;
         while (i < secs.length) {
             const s = secs[i] as Section & { group?: string };
