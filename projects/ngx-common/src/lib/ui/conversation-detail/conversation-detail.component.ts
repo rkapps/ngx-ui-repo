@@ -116,7 +116,9 @@ import { extractCompleteSections, extractSuggestedPrompts, looksLikeSectionsJson
             [clearTrigger]="clearPromptTrigger()"
             [suggestedPrompts]="suggestedPrompts()"
             [restorePrompt]="restorePrompt()"
+            [generating]="generating()"
             (send)="onSend($event)"
+            (stop)="stopGenerating()"
           />
         }
       </div>
@@ -185,6 +187,9 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
   protected readonly restorePrompt = signal('');
   private lastSentText = '';
   private readonly streamingTurn = signal<ChatMessage | null>(null);
+  private streamSub?: Subscription;
+
+  protected readonly generating = computed(() => this.streamingTurn() !== null);
 
   protected readonly chatMessages = computed<ChatMessage[]>(() => {
     const base = this.turns().map(t => ({
@@ -247,6 +252,7 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.paramSub?.unsubscribe();
+    this.streamSub?.unsubscribe();
   }
 
   protected goBack(): void {
@@ -312,7 +318,7 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
     this.streamingStatus.set('Assistant is responding');
     this.streamingTurn.set({ id: tempId, userContent: text, assistantContent: '', streaming: true });
 
-    this.conversationService.sendMessage(conv.id, text, conv.stream ?? true).subscribe({
+    this.streamSub = this.conversationService.sendMessage(conv.id, text, conv.stream ?? true).subscribe({
       next: (chunk) => {
         if (chunk.status && chunk.status !== lastStatus) {
           lastStatus = chunk.status;
@@ -326,6 +332,7 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
         this.streamingTurn.set({ id: tempId, userContent: text, assistantContent: displayContent, streaming: true });
       },
       complete: () => {
+        this.streamSub = undefined;
         this.streamingStatus.set('');
         this.suggestedPrompts.set(extractSuggestedPrompts(accumulated));
         const newTurn: Turn = {
@@ -342,6 +349,7 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
         this.clearPromptTrigger.update(v => v + 1);
       },
       error: (err) => {
+        this.streamSub = undefined;
         this.streamingStatus.set('');
         this.streamingTurn.set(null);
         this.restorePrompt.set(this.lastSentText);
@@ -350,5 +358,32 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
         this.streamError.set(msg);
       },
     });
+  }
+
+  protected stopGenerating(): void {
+    this.streamSub?.unsubscribe();
+    this.streamSub = undefined;
+
+    const streaming = this.streamingTurn();
+    this.streamingStatus.set('');
+    this.streamingTurn.set(null);
+    if (!streaming) return;
+
+    const conv = this.conversation();
+    if (conv && streaming.assistantContent) {
+      const newTurn: Turn = {
+        id: streaming.id,
+        conversation_id: conv.id,
+        sequence: this.turns().length + 1,
+        user_prompt: streaming.userContent,
+        response_content: streaming.assistantContent,
+        created_at: new Date().toISOString(),
+        total_tokens_cost: 0,
+      };
+      this.turns.update(t => [...t, newTurn]);
+      this.clearPromptTrigger.update(v => v + 1);
+    } else {
+      this.restorePrompt.set(this.lastSentText);
+    }
   }
 }

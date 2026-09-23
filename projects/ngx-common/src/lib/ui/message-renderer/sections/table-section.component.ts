@@ -1,5 +1,7 @@
 import { Component, input } from '@angular/core';
-import { TableSection, TechnicalsSection, TableCell, ColumnAlign } from '../message-renderer.types';
+import { TableSection, TechnicalsSection, TableCell, TableRow, TableRowInput, TableRowType, ColumnAlign } from '../message-renderer.types';
+
+interface NormalizedRow { cells: TableCell[]; rowType?: TableRowType; }
 
 @Component({
     selector: 'app-table-section',
@@ -32,13 +34,15 @@ import { TableSection, TechnicalsSection, TableCell, ColumnAlign } from '../mess
                     }
                     <tbody>
                         @for (row of normalizedRows(); track $index) {
-                            <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
-                                @for (cell of row; track $index; let i = $index) {
+                            <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
+                                [class.bg-gray-50]="row.rowType === 'subtotal'">
+                                @for (cell of row.cells; track $index; let i = $index) {
                                     <td class="px-2 md:px-3 py-1.5 align-top"
                                         [class.text-left]="alignFor(i) === 'left'"
                                         [class.text-right]="alignFor(i) === 'right'"
                                         [class.text-center]="alignFor(i) === 'center'"
-                                        [class.font-medium]="cell.signal === 'up' || cell.signal === 'down'"
+                                        [class.font-semibold]="row.rowType === 'subtotal'"
+                                        [class.font-medium]="row.rowType !== 'subtotal' && (cell.signal === 'up' || cell.signal === 'down')"
                                         [class.text-emerald-600]="cell.signal === 'up'"
                                         [class.text-red-600]="cell.signal === 'down'"
                                         [class.text-amber-600]="cell.signal === 'warning'"
@@ -61,7 +65,7 @@ import { TableSection, TechnicalsSection, TableCell, ColumnAlign } from '../mess
                         <tfoot>
                             @for (row of normalizedTotals(); track $index) {
                                 <tr class="border-t-2 border-gray-200 bg-gray-50">
-                                    @for (cell of row; track $index; let i = $index) {
+                                    @for (cell of row.cells; track $index; let i = $index) {
                                         <td class="px-2 md:px-3 py-1.5 text-sm font-semibold"
                                             [class.text-left]="alignFor(i) === 'left'"
                                             [class.text-right]="alignFor(i) === 'right'"
@@ -101,41 +105,45 @@ export class TableSectionComponent {
         return this.section().headers ?? [];
     }
 
-    normalizedRows(): TableCell[][] {
+    normalizedRows(): NormalizedRow[] {
         return this.normalizeRowSet(this.section().rows);
     }
 
-    normalizedTotals(): TableCell[][] {
+    normalizedTotals(): NormalizedRow[] {
         const s = this.section();
         return this.normalizeRowSet(s.type === 'table' ? s.totals : undefined);
     }
 
-    private normalizeRowSet(source: TableSection['rows'] | TableSection['totals']): TableCell[][] {
+    private normalizeRowSet(source: TableRowInput[] | undefined): NormalizedRow[] {
+        const normalizeCell = (cell: TableCell | string | unknown): TableCell =>
+            (cell && typeof cell === 'object' && 'value' in cell)
+                ? cell as TableCell
+                : { value: String(cell ?? '') };
+
         return (source ?? []).map(row => {
             if (Array.isArray(row)) {
-                return row.map(cell =>
-                    (cell && typeof cell === 'object' && 'value' in cell)
-                        ? cell as TableCell
-                        : { value: String(cell ?? '') }
-                );
+                return { cells: row.map(normalizeCell) };
             }
             if (row && typeof row === 'object') {
+                // Row wrapper: { row_type, cells: [...] }
+                if ('cells' in row && Array.isArray((row as TableRow).cells)) {
+                    const r = row as TableRow;
+                    return { rowType: r.row_type, cells: r.cells.map(normalizeCell) };
+                }
                 // Single-cell row: { value, note, signal, indicator } — label + data in one object
                 if ('value' in row) {
                     const r = row as Record<string, unknown>;
-                    return [
-                        { value: String(r['value'] ?? '') },
-                        { value: String(r['note'] ?? ''), signal: r['signal'] as TableCell['signal'], indicator: r['indicator'] as TableCell['indicator'] },
-                    ];
+                    return {
+                        cells: [
+                            { value: String(r['value'] ?? '') },
+                            { value: String(r['note'] ?? ''), signal: r['signal'] as TableCell['signal'], indicator: r['indicator'] as TableCell['indicator'] },
+                        ],
+                    };
                 }
                 // Keyed-by-header row: { "Metric": "Price", "CRUS": { value, ... } }
-                return Object.values(row).map(cell =>
-                    (cell && typeof cell === 'object' && 'value' in cell)
-                        ? cell as TableCell
-                        : { value: String(cell ?? '') }
-                );
+                return { cells: Object.values(row).map(normalizeCell) };
             }
-            return [];
+            return { cells: [] };
         });
     }
 
@@ -145,7 +153,7 @@ export class TableSectionComponent {
         const h = this.headers();
         if (h.length) lines.push(h.map(toCsv).join(','));
         for (const row of this.normalizedRows()) {
-            lines.push(row.map(c => toCsv(c.value)).join(','));
+            lines.push(row.cells.map(c => toCsv(c.value)).join(','));
         }
         return lines.join('\n');
     }

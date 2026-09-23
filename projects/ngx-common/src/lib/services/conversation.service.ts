@@ -132,6 +132,8 @@ export class ConversationService {
       });
     }
 
+    const controller = new AbortController();
+
     return new Observable(subscriber => {
       const doFetch = async (token: string) => {
         let buffer = '';
@@ -144,6 +146,7 @@ export class ConversationService {
               'Accept': 'text/event-stream',
             },
             body: JSON.stringify({ prompt: userPrompt }),
+            signal: controller.signal,
           });
 
           if (!response.ok) {
@@ -203,18 +206,29 @@ export class ConversationService {
 
           subscriber.complete();
         } catch (err) {
+          if (controller.signal.aborted) {
+            subscriber.complete();
+            return;
+          }
           subscriber.error(err);
         }
       };
 
       const user = this.auth.currentUser;
       if (user) {
+        // A background token refresh (e.g. no network reaching Google) rejects here even
+        // though the user never signed out — fall back to sending unauthenticated rather
+        // than failing the whole stream, so the backend's own 401 (if any) surfaces instead
+        // of a client-side dead end.
         user.getIdToken()
           .then(token => doFetch(token))
+          .catch(() => doFetch(''))
           .catch(err => subscriber.error(err));
       } else {
         doFetch('').catch(err => subscriber.error(err));
       }
+
+      return () => controller.abort();
     });
   }
 }

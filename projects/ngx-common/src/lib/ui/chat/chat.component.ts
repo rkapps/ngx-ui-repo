@@ -28,7 +28,9 @@ import { ChatPromptComponent } from './chat-prompt.component';
         [suggestedPrompts]="suggestedPrompts()"
         [restorePrompt]="restorePrompt()"
         [background]="promptBackground()"
+        [generating]="generating()"
         (send)="send.emit($event)"
+        (stop)="stop.emit()"
       />
     </div>
   `,
@@ -57,7 +59,10 @@ export class ChatComponent {
    * a shell with its own header/footer), leaving a stretch of empty space below the prompt.
    */
   readonly fillViewport = input(false);
+  /** Shows a stop button in the prompt bar in place of send while a response is streaming in. */
+  readonly generating = input(false);
   readonly send = output<string>();
+  readonly stop = output<void>();
 
   protected readonly rootClasses = computed(() =>
     this.fillViewport() ? 'flex flex-col' : 'flex h-full flex-col'

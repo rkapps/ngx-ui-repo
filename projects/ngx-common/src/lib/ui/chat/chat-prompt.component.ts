@@ -67,15 +67,26 @@ function defaultSuggestedCollapsed(): boolean {
           <lucide-icon [name]="recording() ? 'mic-off' : 'mic'" [size]="16" />
         </button>
 
-        <button
-          class="flex h-8 w-8 items-center justify-center rounded-full bg-primary-600 text-white transition-colors hover:bg-primary-700 disabled:opacity-40"
-          [disabled]="!prompt().trim()"
-          title="Send"
-          type="button"
-          (click)="onSend()"
-        >
-          <lucide-icon name="arrow-up" [size]="16" />
-        </button>
+        @if (generating()) {
+          <button
+            class="flex h-8 w-8 items-center justify-center rounded-full bg-danger-600 text-white transition-colors hover:bg-danger-700"
+            title="Stop"
+            type="button"
+            (click)="onStop()"
+          >
+            <lucide-icon name="square" [size]="14" />
+          </button>
+        } @else {
+          <button
+            class="flex h-8 w-8 items-center justify-center rounded-full bg-primary-600 text-white transition-colors hover:bg-primary-700 disabled:opacity-40"
+            [disabled]="!prompt().trim()"
+            title="Send"
+            type="button"
+            (click)="onSend()"
+          >
+            <lucide-icon name="arrow-up" [size]="16" />
+          </button>
+        }
       </div>
     </div>
   `,
@@ -95,7 +106,10 @@ export class ChatPromptComponent implements OnDestroy {
    * narrow dedicated panel (e.g. a side/right panel).
    */
   readonly widthMode = input<'half' | 'full'>('half');
+  /** Shows a stop button in place of send while an assistant response is still streaming in. */
+  readonly generating = input(false);
   readonly send = output<string>();
+  readonly stop = output<void>();
 
   protected readonly hostClasses = computed(() =>
     `sticky bottom-0 z-10 block w-full shrink-0 border-t border-border p-2 xl:px-4 xl:pt-4 xl:pb-4 ${this.background()}`
@@ -188,6 +202,10 @@ export class ChatPromptComponent implements OnDestroy {
     const text = this.prompt().trim();
     if (!text) return;
     this.send.emit(text);
+  }
+
+  protected onStop(): void {
+    this.stop.emit();
   }
 
   protected toggleMic(): void {
