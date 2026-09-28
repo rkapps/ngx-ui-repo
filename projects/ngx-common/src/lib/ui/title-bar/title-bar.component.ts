@@ -85,15 +85,9 @@ import { UserMenuComponent } from '../user-menu/user-menu.component';
 
       @if (auth.isLoggedIn()) {
         <div class="flex shrink-0 items-center gap-2">
-          <twang-button
-            routerLink="/accounts"
-            variant="default"
-            size="sm"
-            icon="briefcase"
-            label="Accounts"
-            title="Accounts"
-            class="[&_span]:hidden md:[&_span]:inline"
-          />
+          <!-- Consumers can project app-specific action buttons here, e.g.
+               <twang-button actions routerLink="/accounts" .../> -->
+          <ng-content select="[actions]" />
           <app-user-menu [settingsLink]="settingsLink()" />
         </div>
       } @else {
