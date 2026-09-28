@@ -30,6 +30,11 @@ export class AuthService {
   readonly currentUser = signal<AuthUser | null>(null);
 
   private _initialized = false;
+  // Last successfully-issued ID token. A background refresh can reject (e.g. a transient
+  // network blip while the tab was idle) and Firebase then clears its own `currentUser`,
+  // leaving nothing to call `getIdToken()` on until the page reloads. Falling back to this
+  // keeps requests authenticated with the still-valid token instead of 401ing until reload.
+  private cachedToken: string | null = null;
 
   constructor() {
     // Safety valve: if Firebase hangs connecting to Google (e.g., no network in dev),
@@ -55,6 +60,27 @@ export class AuthService {
       this.ready.set(true);
       this._ready.next();
     });
+
+    // Fires on every successful token issuance/rotation — captures a fresh token to fall
+    // back on independently of the (deliberately more conservative) sign-in/out signals above.
+    this.firebaseAuth.onIdTokenChanged((user) => {
+      if (user) user.getIdToken().then(token => { this.cachedToken = token; }).catch(() => {});
+    });
+  }
+
+  /** Current ID token, falling back to the last known-good one if a live refresh fails. */
+  async getIdToken(): Promise<string | null> {
+    const user = this.firebaseAuth.currentUser;
+    if (user) {
+      try {
+        const token = await user.getIdToken();
+        this.cachedToken = token;
+        return token;
+      } catch {
+        // fall through to the cached token below
+      }
+    }
+    return this.cachedToken;
   }
 
   async login(email: string, password: string): Promise<void> {
@@ -81,6 +107,7 @@ export class AuthService {
     this.isLoggedIn.set(false);
     this.currentUser.set(null);
     this._initialized = false;
+    this.cachedToken = null;
     await signOut(this.firebaseAuth);
   }
 

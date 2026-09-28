@@ -1,8 +1,8 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, signal } from '@angular/core';
-import { Auth } from '@angular/fire/auth';
 import { Observable, Subject, tap } from 'rxjs';
 import { API_BASE_URL } from './api-url.token';
+import { AuthService } from '../auth/auth.service';
 
 export type ConversationStrategy = 'stateful' | 'stateless';
 export type HistoryMode = 'full' | 'trimmed' | 'last_n' | 'none';
@@ -74,7 +74,7 @@ export interface CompletionChunkResponse {
 @Injectable({ providedIn: 'root' })
 export class ConversationService {
   private readonly http = inject(HttpClient);
-  private readonly auth = inject(Auth);
+  private readonly auth = inject(AuthService);
   private readonly base = inject(API_BASE_URL);
 
   private readonly _conversations = signal<Conversation[]>([]);
@@ -214,19 +214,12 @@ export class ConversationService {
         }
       };
 
-      const user = this.auth.currentUser;
-      if (user) {
-        // A background token refresh (e.g. no network reaching Google) rejects here even
-        // though the user never signed out — fall back to sending unauthenticated rather
-        // than failing the whole stream, so the backend's own 401 (if any) surfaces instead
-        // of a client-side dead end.
-        user.getIdToken()
-          .then(token => doFetch(token))
-          .catch(() => doFetch(''))
-          .catch(err => subscriber.error(err));
-      } else {
-        doFetch('').catch(err => subscriber.error(err));
-      }
+      // AuthService.getIdToken() falls back to the last known-good token when a live
+      // refresh fails (e.g. no network reaching Google after the tab sat idle), so this
+      // stays authenticated through a transient blip instead of failing outright.
+      this.auth.getIdToken()
+        .then(token => doFetch(token ?? ''))
+        .catch(err => subscriber.error(err));
 
       return () => controller.abort();
     });
