@@ -33,6 +33,7 @@ import { ChatPromptComponent } from './chat-prompt.component';
         [generating]="generating()"
         (send)="send.emit($event)"
         (stop)="stop.emit()"
+        (activeTabLabel)="activeTabLabel.emit($event)"
       />
     </div>
   `,
@@ -67,6 +68,8 @@ export class ChatComponent {
   readonly generating = input(false);
   readonly send = output<string>();
   readonly stop = output<void>();
+  /** Emits the active prompt tab's label (e.g. "Default prompts") whenever it changes. */
+  readonly activeTabLabel = output<string>();
 
   protected readonly rootClasses = computed(() =>
     this.fillViewport() ? 'flex flex-col' : 'flex h-full flex-col'

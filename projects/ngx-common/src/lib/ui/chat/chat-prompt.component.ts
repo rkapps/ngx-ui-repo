@@ -64,7 +64,7 @@ function readLastPrompts(): string[] {
           <div class="flex flex-wrap gap-1.5 px-1 pt-1">
             @for (p of activePrompts(); track p) {
               <button
-                class="rounded-full px-2.5 py-0.5 text-xs text-primary-700 transition-colors hover:bg-primary-100"
+                class="rounded-full px-2.5 py-0.5 text-left text-xs text-primary-700 transition-colors hover:bg-primary-100"
                 type="button"
                 (click)="fillPrompt(p)"
               >{{ p }}</button>
@@ -147,6 +147,9 @@ export class ChatPromptComponent implements OnDestroy {
   readonly generating = input(false);
   readonly send = output<string>();
   readonly stop = output<void>();
+  /** Emits the active tab's label (e.g. "Default prompts") whenever the selected tab changes —
+   * lets a consumer mirror it in a panel header instead of a static title. */
+  readonly activeTabLabel = output<string>();
 
   protected readonly hostClasses = computed(() =>
     `sticky bottom-0 z-10 block w-full shrink-0 border-t border-border p-2 xl:px-4 xl:pt-4 xl:pb-4 ${this.background()}`
@@ -182,6 +185,11 @@ export class ChatPromptComponent implements OnDestroy {
     return tabs.find(t => t.id === this.activeTab())?.prompts ?? tabs[0]?.prompts ?? [];
   });
 
+  private readonly activeTabLabelText = computed(() => {
+    const tabs = this.tabs();
+    return tabs.find(t => t.id === this.activeTab())?.label ?? tabs[0]?.label ?? '';
+  });
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private recognition: any = null;
   private readonly mobileMql = typeof window !== 'undefined' ? window.matchMedia(MOBILE_QUERY) : null;
@@ -193,6 +201,7 @@ export class ChatPromptComponent implements OnDestroy {
     effect(() => localStorage.setItem(SUGGESTED_COLLAPSED_KEY, String(this.suggestedCollapsed())));
     effect(() => localStorage.setItem(ACTIVE_TAB_KEY, this.activeTab()));
     effect(() => localStorage.setItem(LAST_PROMPTS_KEY, JSON.stringify(this.lastPrompts())));
+    effect(() => this.activeTabLabel.emit(this.activeTabLabelText()));
 
     // Auto-collapse (not hide — the tab icons stay tappable) once a conversation is underway on
     // mobile, to free up vertical space above the keyboard. Only fires on the false->true edge, so
