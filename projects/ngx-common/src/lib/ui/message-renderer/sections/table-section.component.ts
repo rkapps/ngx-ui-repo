@@ -20,7 +20,7 @@ interface NormalizedRow { cells: TableCell[]; rowType?: TableRowType; }
                 <table class="w-full text-sm">
                     @if (headers().length) {
                         <thead>
-                            <tr class="border-b border-gray-200 bg-gray-50">
+                            <tr class="border-b border-gray-200 bg-gray-100">
                                 @for (h of headers(); track $index; let i = $index) {
                                     <th class="px-2 md:px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500"
                                         [class.text-left]="alignFor(i) === 'left'"
