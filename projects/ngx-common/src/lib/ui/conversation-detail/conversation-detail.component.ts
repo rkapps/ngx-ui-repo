@@ -191,6 +191,16 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
 
   protected readonly generating = computed(() => this.streamingTurn() !== null);
 
+  private statusClearTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private clearStatusAfterDelay(): void {
+    if (this.statusClearTimer) clearTimeout(this.statusClearTimer);
+    this.statusClearTimer = setTimeout(() => {
+      this.streamingStatus.set('');
+      this.statusClearTimer = null;
+    }, 5000);
+  }
+
   protected readonly chatMessages = computed<ChatMessage[]>(() => {
     const base = this.turns().map(t => ({
       id: t.id,
@@ -253,6 +263,7 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.paramSub?.unsubscribe();
     this.streamSub?.unsubscribe();
+    if (this.statusClearTimer) clearTimeout(this.statusClearTimer);
   }
 
   protected goBack(): void {
@@ -311,6 +322,7 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
     let statusAccumulated = '';
     let lastStatus = '';
 
+    if (this.statusClearTimer) { clearTimeout(this.statusClearTimer); this.statusClearTimer = null; }
     this.lastSentText = text;
     this.restorePrompt.set('');
     this.streamError.set(null);
@@ -333,7 +345,7 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
       },
       complete: () => {
         this.streamSub = undefined;
-        this.streamingStatus.set('');
+        this.clearStatusAfterDelay();
         this.suggestedPrompts.set(extractSuggestedPrompts(accumulated));
         const newTurn: Turn = {
           id: tempId,
