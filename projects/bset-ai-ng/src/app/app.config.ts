@@ -54,6 +54,16 @@ import {
   X,
   CircleCheck,
   Mail,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Pin,
+  PinOff,
+  Shield,
+  Users,
+  Lock,
+  KeyRound,
+  Boxes,
+  Plus,
 } from 'lucide-angular';
 import { LucideAngularModule } from 'lucide-angular';
 import { environment } from '../environments/environment';
@@ -109,6 +119,16 @@ const icons = {
   X,
   CircleCheck,
   Mail,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Pin,
+  PinOff,
+  Shield,
+  Users,
+  Lock,
+  KeyRound,
+  Boxes,
+  Plus,
 };
 
 export const appConfig: ApplicationConfig = {

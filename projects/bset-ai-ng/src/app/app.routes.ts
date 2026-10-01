@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard, noAuthGuard } from 'ngx-common';
+import { authGuard, lastPageRedirect, noAuthGuard, roleGuard } from 'ngx-common';
 
 export const routes: Routes = [
   { path: 'login', canActivate: [noAuthGuard], loadComponent: () => import('ngx-common').then(m => m.LoginComponent) },
@@ -19,6 +19,12 @@ export const routes: Routes = [
       },
     ],
   },
-  { path: '', redirectTo: 'agents', pathMatch: 'full' },
+  {
+    path: 'admin',
+    canActivate: [roleGuard('Admin', 'SuperAdmin')],
+    loadComponent: () => import('ngx-common').then(m => m.AdminPageComponent),
+    loadChildren: () => import('ngx-common').then(m => m.ADMIN_ROUTES),
+  },
+  { path: '', redirectTo: lastPageRedirect, pathMatch: 'full' },
   { path: '**', redirectTo: '/login' },
 ];

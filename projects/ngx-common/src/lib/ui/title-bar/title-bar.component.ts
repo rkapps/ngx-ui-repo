@@ -1,10 +1,11 @@
-import { Component, DestroyRef, computed, inject, input, signal } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, NavigationStart, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { filter, map } from 'rxjs';
 import { LucideAngularModule } from 'lucide-angular';
 import { TwangButtonComponent, TwangNavTabsComponent, type TwangNavTabItem } from 'ngx-twang-ui';
 import { AuthService } from '../../auth/auth.service';
+import { saveLastPage } from '../../auth/landing-page';
 import { LOGIN_CONFIG } from '../../auth/login.config';
 import { HttpLoadingService } from '../../http/http-loading.service';
 import { UserMenuComponent } from '../user-menu/user-menu.component';
@@ -143,18 +144,26 @@ export class TitleBarComponent {
     { initialValue: this.router.url },
   );
 
-  // Mobile-only stand-in for the app name — the desktop segmented nav tabs already show which
-  // section is active, but on mobile those tabs are hidden behind the hamburger menu.
-  protected readonly activeNavLabel = computed(() => {
+  private readonly activeNavItem = computed(() => {
     const url = this.currentUrl();
-    const match = this.navItems().find(item => {
+    return this.navItems().find(item => {
       if (typeof item.link !== 'string') return false;
       return item.exact ? url === item.link : url === item.link || url.startsWith(item.link + '/');
     });
-    return match?.label ?? '';
   });
 
+  // Mobile-only stand-in for the app name — the desktop segmented nav tabs already show which
+  // section is active, but on mobile those tabs are hidden behind the hamburger menu.
+  protected readonly activeNavLabel = computed(() => this.activeNavItem()?.label ?? '');
+
   constructor() {
+    // Remember the selected tab so the app reopens it (see `landingPage`). An effect rather than a
+    // NavigationEnd hook so tabs added after load (e.g. Admin, once the user's role arrives) count.
+    effect(() => {
+      const link = this.activeNavItem()?.link;
+      if (typeof link === 'string') saveLastPage(link, this.loginConfig);
+    });
+
     this.router.events.pipe(
       filter(e => e instanceof NavigationStart),
       takeUntilDestroyed(this.destroyRef),

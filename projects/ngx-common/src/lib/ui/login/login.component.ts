@@ -5,6 +5,7 @@ import { FirebaseError } from '@angular/fire/app';
 import { LucideAngularModule } from 'lucide-angular';
 import { TwangButtonComponent, TwangInputComponent } from 'ngx-twang-ui';
 import { AuthService } from '../../auth/auth.service';
+import { landingPage } from '../../auth/landing-page';
 import { LOGIN_CONFIG } from '../../auth/login.config';
 
 const FIREBASE_ERRORS: Record<string, string> = {
@@ -151,7 +152,7 @@ export class LoginComponent {
     this.loading.set(true);
     try {
       await this.auth.login(this.email(), this.password());
-      this.router.navigate([this.config.redirectTo ?? '/']);
+      this.router.navigateByUrl(landingPage(this.config, this.router));
     } catch (err) {
       this.error.set(this._errorMessage(err));
     } finally {
@@ -172,7 +173,7 @@ export class LoginComponent {
     this.loading.set(true);
     try {
       await this.auth.register(this.email(), this.password());
-      this.router.navigate([this.config.redirectTo ?? '/']);
+      this.router.navigateByUrl(landingPage(this.config, this.router));
     } catch (err) {
       this.error.set(this._errorMessage(err));
     } finally {
@@ -206,7 +207,7 @@ export class LoginComponent {
     this.googleLoading.set(true);
     try {
       await this.auth.loginWithGoogle();
-      this.router.navigate([this.config.redirectTo ?? '/']);
+      this.router.navigateByUrl(landingPage(this.config, this.router));
     } catch (err) {
       this.error.set(this._errorMessage(err));
     } finally {

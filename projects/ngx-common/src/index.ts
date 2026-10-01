@@ -14,6 +14,8 @@ export {
   AgentService,
   type Agent,
 } from './lib/services/agent.service';
+export { UserService, type User, type UserResponse, type RoleType } from './lib/services/user.service';
+export { GroupService, type Group, type GroupWithCount, type GroupRequest } from './lib/services/group.service';
 export { ThemeService, type Theme } from './lib/services/theme.service';
 export { ChatTemplateService, type ChatTemplate } from './lib/services/chat-template.service';
 export type { LlmProvider } from './lib/models/llm-provider';
@@ -24,9 +26,10 @@ export { httpLoadingInterceptor } from './lib/http/http-loading.interceptor';
 
 // Auth
 export { AuthService, type AuthUser } from './lib/auth/auth.service';
-export { authGuard, noAuthGuard } from './lib/auth/auth.guard';
+export { authGuard, noAuthGuard, roleGuard } from './lib/auth/auth.guard';
 export { authInterceptor, SKIP_AUTH } from './lib/auth/auth.interceptor';
 export { LOGIN_CONFIG, type LoginConfig } from './lib/auth/login.config';
+export { landingPage, lastPageRedirect } from './lib/auth/landing-page';
 
 // UI
 export { PageLayoutComponent } from './lib/ui/page-layout/page-layout.component';
@@ -51,3 +54,5 @@ export { ChatsPageComponent } from './lib/ui/chats-page/chats-page.component';
 export { NewChatComponent } from './lib/ui/new-chat/new-chat.component';
 export { TitleBarComponent } from './lib/ui/title-bar/title-bar.component';
 export { LoginComponent } from './lib/ui/login/login.component';
+export { AdminPageComponent } from './lib/ui/admin-page/admin-page.component';
+export { ADMIN_ROUTES } from './lib/ui/admin-page/admin.routes';

@@ -6,6 +6,7 @@ import { TwangButtonComponent } from 'ngx-twang-ui';
  * Left / middle / right page layout. Middle is always present; left and right are each
  * optional (via `showLeft` / `showRight`), independently collapsible, and pinnable —
  * a pinned panel stays visible even on mobile, where unpinned side panels hide by default.
+ * Project `[right-action]` content to put actions (e.g. icon buttons) in the right panel's header.
  */
 @Component({
   selector: 'app-three-panel-layout',
@@ -102,6 +103,9 @@ import { TwangButtonComponent } from 'ngx-twang-ui';
               <span class="mr-1 flex-1 truncate text-right text-xs font-semibold uppercase tracking-wider text-primary-600">
                 {{ rightTitle() }}
               </span>
+            }
+            @if (!rightCollapsed()) {
+              <ng-content select="[right-action]" />
             }
           </div>
           @if (!rightCollapsed()) {
