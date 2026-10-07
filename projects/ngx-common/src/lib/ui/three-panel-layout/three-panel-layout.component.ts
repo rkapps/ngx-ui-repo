@@ -190,7 +190,7 @@ export class ThreePanelLayoutComponent implements OnInit {
 
 function panelClasses(pinned: boolean, collapsed: boolean, expandedWidth: string, minHeight: string): string {
   const desktopWidth = collapsed ? 'w-12' : expandedWidth;
-  const stickyAndBox = 'shrink-0 flex-col rounded-lg border border-border bg-white transition-all duration-200 sticky top-2 md:top-2 lg:top-4 xl:top-6 max-h-[calc(100vh-1rem)] lg:max-h-[calc(100vh-2rem)] xl:max-h-[calc(100vh-3rem)]';
+  const stickyAndBox = 'shrink-0 flex-col rounded-lg border border-border bg-white transition-all duration-200 sticky top-0 max-h-[calc(100vh-1rem)] lg:max-h-[calc(100vh-2rem)] xl:max-h-[calc(100vh-3rem)]';
   // 'responsive' steps its own width up with the viewport (48 -> 64 -> 72 -> 80) instead of a
   // single fixed size — since it isn't usable at all until `lg` (narrower than that has nowhere
   // to put it), its visibility threshold is `lg`, not the `md` every other preset uses below.
@@ -212,8 +212,9 @@ function panelClasses(pinned: boolean, collapsed: boolean, expandedWidth: string
     // Wide: steps up so a deep tree has room without starving the middle on mid-size screens.
     desktopWidth === 'w-[32rem]' ? 'w-full md:w-80 xl:w-[26rem] 2xl:w-[32rem]' :
     'w-full';
-  // Sticky offset matches the app-wide page-scroll-shell top padding (pt-2/md:pt-2/lg:pt-4/xl:pt-6)
-  // so a stuck panel doesn't visibly settle to a different gap than its resting position; the
-  // max-height subtracts twice the offset to leave matching breathing room below too.
+  // top-0, not top-<padding>: Chrome measures a sticky inset from inside the scroll container's
+  // padding, so repeating the page body's top padding here double-counted it — side panels sat
+  // lower than the (non-sticky) middle whenever the page could scroll. With top-0 they align at
+  // rest and stick at the padding edge. The max-height leaves room for that padding top and bottom.
   return `${display} ${responsiveWidth} ${stickyAndBox} ${minHeight}`;
 }
