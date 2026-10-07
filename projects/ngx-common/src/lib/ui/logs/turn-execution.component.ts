@@ -6,8 +6,8 @@ import { LucideAngularModule } from 'lucide-angular';
 import { TwangTreeTableComponent, type TwangTreeTableColumn } from 'ngx-twang-ui';
 import { catchError, map, of, startWith, switchMap } from 'rxjs';
 import { buildTurnTree, type ExecNode, execNodePath, type ExecRow, findExecNode, rowOf, type TokenUsage } from '../../models/turn-execution';
-import { AdminLogsService, type TurnLogDetail } from '../../services/admin-logs.service';
-import { type AdminCrumb, AdminBreadcrumbs } from '../admin-page/admin-breadcrumbs';
+import { TURN_LOGS, type TurnLogDetail } from '../../services/turn-logs.service';
+import { type PageCrumb, PageBreadcrumbs } from '../breadcrumbs/page-breadcrumbs';
 import { ADMIN_RIGHT_WIDTH, ADMIN_TABLE_HEIGHT } from '../admin-page/admin-layout';
 import { ThreePanelLayoutComponent } from '../three-panel-layout/three-panel-layout.component';
 import { JsonViewComponent } from './json-view.component';
@@ -55,11 +55,11 @@ const USAGE_FIELDS: { key: keyof TokenUsage; label: string }[] = [
 const seconds = (ms: number | null | undefined) => (ms == null ? '—' : (ms / 1000).toFixed(2));
 
 /**
- * Admin > Logs > Execution: one turn's full execution trace across three panels — the left is the
+ * Logs > Execution (admin or user scope, via the route's `TURN_LOGS`): one turn's full execution trace across three panels — the left is the
  * tree (agents, pipeline stages / orchestrator decisions, iterations, tool calls) in a scrolling
  * `twang-tree-table`; the middle shows the selected step's payloads (prompt/content, tool
  * input/output JSON, reasoning, child steps); the right shows its properties and token usage.
- * The selection lives in `?node=`, and the admin sub header shows the path to it as breadcrumbs.
+ * The selection lives in `?node=`, and the breadcrumb bar above the page shows the path to it.
  *
  * The turn is fetched by `:turnId` (so reloads and shared links work); when arriving from Logs,
  * the already-loaded row fills the breadcrumbs while the trace loads.
@@ -88,7 +88,7 @@ const seconds = (ms: number | null | undefined) => (ms == null ? '—' : (ms / 1
         leftWidth="w-[32rem]"
         [rightTitle]="selected() ? kindLabel(selected()!) : 'Details'"
         [rightWidth]="rightWidth"
-        storageKey="admin.logs.execution.layout"
+        [storageKey]="logsService.scope + '.logs.execution.layout'"
         panelMinHeight="min-h-[70vh]"
       >
         <!-- Left: the tree; fixed height so it scrolls under its sticky header. -->
@@ -291,8 +291,8 @@ const seconds = (ms: number | null | undefined) => (ms == null ? '—' : (ms / 1
   `,
 })
 export class TurnExecutionComponent {
-  private readonly logsService = inject(AdminLogsService);
-  private readonly breadcrumbs = inject(AdminBreadcrumbs);
+  protected readonly logsService = inject(TURN_LOGS);
+  private readonly breadcrumbs = inject(PageBreadcrumbs);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 
@@ -398,7 +398,7 @@ export class TurnExecutionComponent {
         return;
       }
       const base = [this.router.url.split(/[?#]/)[0]];
-      const crumbs: AdminCrumb[] = [{ label: `${turn.title || 'Untitled conversation'} · #${turn.sequence}`, path: base }];
+      const crumbs: PageCrumb[] = [{ label: `${turn.title || 'Untitled conversation'} · #${turn.sequence}`, path: base }];
       for (const node of this.path().slice(1)) {
         crumbs.push({ label: node.label, path: base, queryParams: { node: node.id } });
       }

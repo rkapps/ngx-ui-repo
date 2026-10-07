@@ -39,7 +39,7 @@ export class AppComponent {
     { label: 'Home', icon: 'house', link: '/home' },
     { label: 'Chats', icon: 'message-square', link: '/chats' },
     { label: 'Agents', icon: 'bot', link: '/agents' },
-    { label: 'Usage', icon: 'chart-bar', link: '/usage' },
+    { label: 'Logs', icon: 'scroll-text', link: '/logs' },
   ];
 
   protected readonly navItems = computed<readonly TwangNavTabItem[]>(() =>

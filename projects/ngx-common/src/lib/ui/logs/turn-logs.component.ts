@@ -5,7 +5,7 @@ import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { LucideAngularModule } from 'lucide-angular';
 import { TwangButtonComponent, TwangDatepickerComponent, TwangTableComponent, type TwangTableColumn } from 'ngx-twang-ui';
 import { catchError, map, of, startWith, switchMap } from 'rxjs';
-import { AdminLogsService, type TurnLog, type TurnLogRequest } from '../../services/admin-logs.service';
+import { TURN_LOGS, type TurnLog, type TurnLogRequest } from '../../services/turn-logs.service';
 import { ADMIN_RIGHT_WIDTH, ADMIN_TABLE_HEIGHT } from '../admin-page/admin-layout';
 import { ThreePanelLayoutComponent } from '../three-panel-layout/three-panel-layout.component';
 
@@ -43,20 +43,21 @@ interface LoadState {
 }
 
 /**
- * Admin > Logs: every conversation turn in a date range, with its model and cost. Left panel
+ * Logs (Admin > Logs, or the user's own Logs page — scope comes from the route's `TURN_LOGS`):
+ * conversation turns in a date range, with their model and cost. Left panel
  * filters by From/To date (inclusive local days; last 7 days by default), the middle table lists
  * turns newest first (the newest is selected on load), and the right panel shows the selected
  * turn's details and cost breakdown.
  */
 @Component({
-  selector: 'app-admin-logs',
+  selector: 'app-turn-logs',
   standalone: true,
   imports: [DatePipe, LucideAngularModule, ThreePanelLayoutComponent, TwangButtonComponent, TwangDatepickerComponent, TwangTableComponent],
   template: `
     <app-three-panel-layout
       leftTitle="Filters"
       [rightTitle]="selected()?.title || 'Details'"
-      storageKey="admin.logs.layout"
+      [storageKey]="scope + '.logs.layout'"
       [rightWidth]="rightWidth"
       panelMinHeight="min-h-[70vh]"
     >
@@ -103,7 +104,7 @@ interface LoadState {
               [scrollPanelMinHeight]="tableHeight"
               initialSortKey="created_at"
               initialSortDir="desc"
-              tableMinWidthClass="min-w-[1280px]"
+              [tableMinWidthClass]="tableMinWidthClass"
               emptyMessage="No turns in this range."
             />
           }
@@ -115,8 +116,10 @@ interface LoadState {
           <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
             <dt class="text-xs text-text-muted">Time</dt>
             <dd>{{ t.created_at | date: 'medium' }}</dd>
-            <dt class="text-xs text-text-muted">User</dt>
-            <dd class="break-all">{{ t.email || '—' }}</dd>
+            @if (scope === 'admin') {
+              <dt class="text-xs text-text-muted">User</dt>
+              <dd class="break-all">{{ t.email || '—' }}</dd>
+            }
             <dt class="text-xs text-text-muted">Conversation</dt>
             <dd class="break-all font-mono text-xs">{{ t.conversation_id }}</dd>
             <dt class="text-xs text-text-muted">#Turns</dt>
@@ -163,8 +166,10 @@ interface LoadState {
     </app-three-panel-layout>
   `,
 })
-export class AdminLogsComponent {
-  private readonly logsService = inject(AdminLogsService);
+export class TurnLogsComponent {
+  private readonly logsService = inject(TURN_LOGS);
+  /** `admin` (every user, with a User column) or `user` (own turns only). */
+  protected readonly scope = this.logsService.scope;
   private readonly locale = inject(LOCALE_ID);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -209,7 +214,7 @@ export class AdminLogsComponent {
   // Guard on a real key: rows without a `turn_id` would otherwise all match an unset selection.
   protected readonly rowClass = (row: TurnLog) => (!!rowKey(row) && rowKey(row) === this.selectedKey() ? 'bg-primary-50' : '');
 
-  protected readonly columns: TwangTableColumn<TurnLog>[] = [
+  private readonly allColumns: TwangTableColumn<TurnLog>[] = [
     {
       id: 'created_at',
       header: 'Time',
@@ -223,6 +228,7 @@ export class AdminLogsComponent {
     { id: 'title', header: 'Conversation', align: 'left', sortable: true, fillRemaining: true, minWidth: '200px', cellTruncate: true, value: t => t.title },
     { id: 'sequence', header: '#Turns', align: 'right', sortable: true, width: '110px', value: t => t.sequence },
     { id: 'agent', header: 'Agent', align: 'left', sortable: true, width: '160px', cellTruncate: true, value: t => t.agent_id || 'Chat' },
+    { id: 'llm', header: 'LLM', align: 'left', sortable: true, width: '120px', cellTruncate: true, value: t => t.llm },
     { id: 'model', header: 'Model', align: 'left', sortable: true, width: '180px', cellTruncate: true, value: t => t.model },
     { id: 'total', header: 'Total cost', align: 'right', sortable: true, width: '140px', value: t => t.total_tokens_cost, format: v => money(Number(v)) },
     {
@@ -235,6 +241,10 @@ export class AdminLogsComponent {
       format: v => seconds(v == null ? null : Number(v)),
     },
   ];
+
+  // The user scope only ever sees its own turns, so drop the User column (and its width).
+  protected readonly columns = this.scope === 'admin' ? this.allColumns : this.allColumns.filter(c => c.id !== 'email');
+  protected readonly tableMinWidthClass = this.scope === 'admin' ? 'min-w-[1400px]' : 'min-w-[1180px]';
 
   constructor() {
     if (this.fromDay() === null && this.toDay() === null) this.resetRange();

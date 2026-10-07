@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { inject, Injectable, signal } from '@angular/core';
+import { inject, Injectable, InjectionToken, signal } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 import type { TurnResponse } from '../models/turn-execution';
 import { API_BASE_URL } from './api-url.token';
@@ -41,14 +41,18 @@ export interface TurnLogRequest {
   to_date: string | null;
 }
 
+export type TurnLogsScope = 'admin' | 'user';
+
 /**
- * Admin turn logs (cost/usage per turn across every user) and per-turn execution traces. Also
- * holds the Logs page's view state — filters, selection, last loaded rows — so it survives
- * navigating to a turn's execution page and back (where the cached row paints the header while
- * the full detail loads).
+ * Turn logs (cost/usage per turn) and per-turn execution traces, for one scope: `admin` sees
+ * every user's turns (`/admin/turns/...`), `user` only the caller's own (`/turns/...`). Both
+ * endpoints share request/response shapes. Also holds the Logs page's view state — filters,
+ * selection, last loaded rows — so it survives navigating to a turn's execution page and back
+ * (where the cached row paints the breadcrumbs while the full detail loads).
+ *
+ * Pages get the scoped instance through `TURN_LOGS`, provided on the route.
  */
-@Injectable({ providedIn: 'root' })
-export class AdminLogsService {
+export abstract class TurnLogsService {
   private readonly http = inject(HttpClient);
   private readonly base = inject(API_BASE_URL);
 
@@ -60,12 +64,18 @@ export class AdminLogsService {
   /** Rows from the most recent successful load. */
   readonly lastLogs = signal<TurnLog[]>([]);
 
+  constructor(readonly scope: TurnLogsScope) {}
+
+  private get prefix(): string {
+    return this.scope === 'admin' ? `${this.base}/admin/turns` : `${this.base}/turns`;
+  }
+
   getTurnLogs(request: TurnLogRequest): Observable<TurnLog[]> {
-    return this.http.post<TurnLog[]>(`${this.base}/admin/turns/logs`, request).pipe(tap(logs => this.lastLogs.set(logs)));
+    return this.http.post<TurnLog[]>(`${this.prefix}/logs`, request).pipe(tap(logs => this.lastLogs.set(logs)));
   }
 
   getTurnDetail(turnId: string): Observable<TurnLogDetail> {
-    return this.http.post<TurnLogDetail>(`${this.base}/admin/turns/execution/${encodeURIComponent(turnId)}`, null);
+    return this.http.get<TurnLogDetail>(`${this.prefix}/execution/${encodeURIComponent(turnId)}`);
   }
 
   /** A turn from the last loaded logs, or null if it isn't there (e.g. after a page reload). */
@@ -73,3 +83,22 @@ export class AdminLogsService {
     return this.lastLogs().find(t => t.turn_id === turnId) ?? null;
   }
 }
+
+/** Every user's turns — `/admin/turns/...` (admin-only on the backend). */
+@Injectable({ providedIn: 'root' })
+export class AdminLogsService extends TurnLogsService {
+  constructor() {
+    super('admin');
+  }
+}
+
+/** The signed-in user's own turns — `/turns/...`. */
+@Injectable({ providedIn: 'root' })
+export class UserLogsService extends TurnLogsService {
+  constructor() {
+    super('user');
+  }
+}
+
+/** The `TurnLogsService` a Logs route works with; provide it on the route (`useExisting`). */
+export const TURN_LOGS = new InjectionToken<TurnLogsService>('TURN_LOGS');

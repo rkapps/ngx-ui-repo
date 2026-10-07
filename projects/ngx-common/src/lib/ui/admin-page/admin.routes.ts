@@ -1,4 +1,6 @@
 import type { Routes } from '@angular/router';
+import { AdminLogsService, TURN_LOGS } from '../../services/turn-logs.service';
+import { LOGS_ROUTES } from '../logs/logs.routes';
 import { accessSectionRedirect } from '../admin-access/access-sections';
 import { configSectionRedirect } from '../admin-config/config-sections';
 import { adminSectionRedirect } from './admin-page.component';
@@ -28,13 +30,8 @@ export const ADMIN_ROUTES: Routes = [
   },
   {
     path: 'logs',
-    children: [
-      { path: '', loadComponent: () => import('../admin-logs/admin-logs.component').then(m => m.AdminLogsComponent) },
-      {
-        path: 'execution/:turnId',
-        loadComponent: () => import('../admin-logs/turn-execution.component').then(m => m.TurnExecutionComponent),
-      },
-    ],
+    providers: [{ provide: TURN_LOGS, useExisting: AdminLogsService }],
+    children: LOGS_ROUTES,
   },
   { path: '', redirectTo: adminSectionRedirect, pathMatch: 'full' },
 ];

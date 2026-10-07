@@ -23,7 +23,16 @@ export {
   type LlmConfig,
   type ExecutionType,
 } from './lib/services/admin-config.service';
-export { AdminLogsService, type TurnLog, type TurnLogRequest } from './lib/services/admin-logs.service';
+export {
+  TurnLogsService,
+  AdminLogsService,
+  UserLogsService,
+  TURN_LOGS,
+  type TurnLogsScope,
+  type TurnLog,
+  type TurnLogDetail,
+  type TurnLogRequest,
+} from './lib/services/turn-logs.service';
 export { GroupService, type Group, type GroupWithCount, type GroupRequest } from './lib/services/group.service';
 export { ThemeService, type Theme } from './lib/services/theme.service';
 export { ChatTemplateService, type ChatTemplate } from './lib/services/chat-template.service';
@@ -68,4 +77,6 @@ export { TitleBarComponent } from './lib/ui/title-bar/title-bar.component';
 export { LoginComponent } from './lib/ui/login/login.component';
 export { AdminPageComponent } from './lib/ui/admin-page/admin-page.component';
 export { ADMIN_ROUTES } from './lib/ui/admin-page/admin.routes';
-export { AdminBreadcrumbs, type AdminCrumb } from './lib/ui/admin-page/admin-breadcrumbs';
+export { PageBreadcrumbs, type PageCrumb } from './lib/ui/breadcrumbs/page-breadcrumbs';
+export { BreadcrumbBarComponent } from './lib/ui/breadcrumbs/breadcrumb-bar.component';
+export { LOGS_ROUTES, USER_LOGS_ROUTE } from './lib/ui/logs/logs.routes';

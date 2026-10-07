@@ -38,7 +38,7 @@ export class AppComponent {
   private readonly baseNavItems: readonly TwangNavTabItem[] = [
     { label: 'Home', icon: 'house', link: '/home' },
     { label: 'Agents', icon: 'bot', link: '/agents' },
-    { label: 'Usage', icon: 'chart-bar', link: '/usage' },
+    { label: 'Logs', icon: 'scroll-text', link: '/logs' },
   ];
 
   protected readonly navItems = computed<readonly TwangNavTabItem[]>(() =>
