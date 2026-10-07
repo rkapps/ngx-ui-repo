@@ -34,6 +34,7 @@ export * from './lib/models/turn-execution';
 // HTTP
 export { HttpLoadingService } from './lib/http/http-loading.service';
 export { httpLoadingInterceptor } from './lib/http/http-loading.interceptor';
+export { bsonDateInterceptor, normalizeBsonDates } from './lib/http/bson-date.interceptor';
 
 // Auth
 export { AuthService, type AuthUser } from './lib/auth/auth.service';

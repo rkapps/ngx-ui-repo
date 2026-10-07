@@ -1,7 +1,7 @@
 import { ApplicationConfig, importProvidersFrom } from '@angular/core';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
-import { API_BASE_URL, authInterceptor, LOGIN_CONFIG } from 'ngx-common';
+import { API_BASE_URL, authInterceptor, bsonDateInterceptor, LOGIN_CONFIG } from 'ngx-common';
 import { initializeApp, provideFirebaseApp } from '@angular/fire/app';
 import { getAuth, provideAuth } from '@angular/fire/auth';
 import {
@@ -162,7 +162,7 @@ const icons = {
 export const appConfig: ApplicationConfig = {
   providers: [
     provideRouter(routes, withComponentInputBinding()),
-    provideHttpClient(withInterceptors([authInterceptor])),
+    provideHttpClient(withInterceptors([authInterceptor, bsonDateInterceptor])),
     provideFirebaseApp(() => initializeApp(environment.firebase)),
     provideAuth(() => getAuth()),
     importProvidersFrom(LucideAngularModule.pick(icons)),

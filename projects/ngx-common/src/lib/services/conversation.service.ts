@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, signal } from '@angular/core';
 import { Observable, Subject, tap } from 'rxjs';
+import { normalizeBsonDates } from '../http/bson-date.interceptor';
 import { API_BASE_URL } from './api-url.token';
 import { AuthService } from '../auth/auth.service';
 
@@ -188,7 +189,8 @@ export class ConversationService {
                     return;
                   }
                   try {
-                    const chunk = JSON.parse(eventData) as CompletionChunkResponse;
+                    // fetch bypasses HttpClient interceptors, so fix BSON dates here too (see bsonDateInterceptor).
+                    const chunk = normalizeBsonDates(JSON.parse(eventData)) as CompletionChunkResponse;
                     subscriber.next(chunk);
                     if (chunk.is_final) {
                       subscriber.complete();
