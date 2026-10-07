@@ -63,6 +63,12 @@ import {
   Lock,
   KeyRound,
   Boxes,
+  Workflow,
+  Wrench,
+  Layers,
+  GitBranch,
+  ScrollText,
+  Server,
   Plus,
 } from 'lucide-angular';
 import { LucideAngularModule } from 'lucide-angular';
@@ -128,6 +134,12 @@ const icons = {
   Lock,
   KeyRound,
   Boxes,
+  Workflow,
+  Wrench,
+  Layers,
+  GitBranch,
+  ScrollText,
+  Server,
   Plus,
 };
 

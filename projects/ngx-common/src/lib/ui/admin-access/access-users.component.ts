@@ -12,8 +12,9 @@ import {
 import { finalize } from 'rxjs';
 import { type RoleType, type UserResponse, UserService } from '../../services/user.service';
 import { ThreePanelLayoutComponent } from '../three-panel-layout/three-panel-layout.component';
+import { ADMIN_RIGHT_WIDTH } from '../admin-page/admin-layout';
 import { AccessNavComponent } from './access-nav.component';
-import { ACCESS_LAYOUT_KEY, ACCESS_RIGHT_WIDTH } from './access-sections';
+import { ACCESS_LAYOUT_KEY } from './access-sections';
 
 const ROLES: readonly RoleType[] = ['User', 'Admin', 'SuperAdmin'];
 
@@ -157,7 +158,7 @@ const ROLES: readonly RoleType[] = ['User', 'Admin', 'SuperAdmin'];
 })
 export class AccessUsersComponent {
   protected readonly layoutKey = ACCESS_LAYOUT_KEY;
-  protected readonly rightWidth = ACCESS_RIGHT_WIDTH;
+  protected readonly rightWidth = ADMIN_RIGHT_WIDTH;
   private readonly userService = inject(UserService);
   private readonly locale = inject(LOCALE_ID);
   private readonly destroyRef = inject(DestroyRef);

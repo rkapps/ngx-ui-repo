@@ -209,6 +209,8 @@ function panelClasses(pinned: boolean, collapsed: boolean, expandedWidth: string
     desktopWidth === 'w-72' ? 'w-full md:w-72' :
     desktopWidth === 'w-80' ? 'w-full md:w-80' :
     desktopWidth === 'w-96' ? 'w-full md:w-72 xl:w-96' :
+    // Wide: steps up so a deep tree has room without starving the middle on mid-size screens.
+    desktopWidth === 'w-[32rem]' ? 'w-full md:w-80 xl:w-[26rem] 2xl:w-[32rem]' :
     'w-full';
   // Sticky offset matches the app-wide page-scroll-shell top padding (pt-2/md:pt-2/lg:pt-4/xl:pt-6)
   // so a stuck panel doesn't visibly settle to a different gap than its resting position; the

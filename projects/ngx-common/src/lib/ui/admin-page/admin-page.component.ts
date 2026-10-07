@@ -1,10 +1,13 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
+import { AdminBreadcrumbs } from './admin-breadcrumbs';
 import { type AdminSection, rememberedSectionRedirect, trackActiveSection } from './section-memory';
 
 const ADMIN_SECTIONS: readonly AdminSection[] = [
   { label: 'Access', icon: 'lock', path: 'access' },
+  { label: 'Config', icon: 'settings', path: 'config' },
+  { label: 'Logs', icon: 'scroll-text', path: 'logs' },
 ];
 
 const SECTION_KEY = 'admin.section';
@@ -14,16 +17,19 @@ export const adminSectionRedirect = rememberedSectionRedirect(SECTION_KEY, ADMIN
 
 /**
  * Top-level admin shell: a header of section buttons (each its own child route) above a detail
- * area whose sub header names the active section and whose body scrolls the routed content.
+ * area whose sub header is a breadcrumb trail — the active section, then any crumbs the open page
+ * sets via `AdminBreadcrumbs` — and whose body scrolls the routed content.
  * Horizontal padding mirrors the title bar so content lines up with it at every breakpoint.
  * Route it behind `roleGuard('Admin', 'SuperAdmin')`.
  */
 @Component({
   selector: 'app-admin-page',
   standalone: true,
+  // Fill the app's flex-column <main> so the gray detail section reaches the bottom.
+  host: { class: 'flex min-h-0 flex-1 flex-col' },
   imports: [LucideAngularModule, RouterLink, RouterLinkActive, RouterOutlet],
   template: `
-    <div class="flex h-full min-h-0 flex-col">
+    <div class="flex min-h-0 flex-1 flex-col">
       <!-- Header -->
       <header class="flex shrink-0 overflow-x-auto border-b border-border bg-white px-2 md:px-2 lg:px-4 3xl:px-16 py-2">
         <!-- ml-auto (not justify-end) right-aligns while keeping overflowed buttons scrollable -->
@@ -44,12 +50,32 @@ export const adminSectionRedirect = rememberedSectionRedirect(SECTION_KEY, ADMIN
 
       <!-- Detail -->
       <section class="flex min-h-0 flex-1 flex-col">
-        <div class="flex shrink-0 items-center border-b border-border px-2 md:px-2 lg:px-4 3xl:px-16 py-3">
-          <span class="text-xs font-semibold uppercase tracking-wider text-primary-600">
-            {{ activeSection()?.label }}
-          </span>
-        </div>
-        <div class="min-h-0 flex-1 overflow-y-auto px-2 md:px-2 lg:px-4 3xl:px-16 pt-2 pb-2 lg:pt-4 xl:pt-6">
+        <nav
+          aria-label="Breadcrumb"
+          class="flex min-w-0 shrink-0 items-center gap-1.5 overflow-x-auto border-b border-border bg-white px-2 md:px-2 lg:px-4 3xl:px-16 py-3 text-xs"
+        >
+          @if (crumbs().length && activeSection(); as section) {
+            <a [routerLink]="section.path" class="shrink-0 font-semibold uppercase tracking-wider text-primary-600 hover:underline">
+              {{ section.label }}
+            </a>
+          } @else {
+            <span class="shrink-0 font-semibold uppercase tracking-wider text-primary-600">{{ activeSection()?.label }}</span>
+          }
+          @for (crumb of crumbs(); track $index; let last = $last) {
+            <lucide-icon name="chevron-right" [size]="12" class="shrink-0 text-text-muted" aria-hidden="true" />
+            @if (crumb.path && !last) {
+              <a
+                [routerLink]="crumb.path"
+                [queryParams]="crumb.queryParams"
+                class="max-w-56 shrink-0 truncate text-text-muted hover:text-primary-600 hover:underline"
+              >{{ crumb.label }}</a>
+            } @else {
+              <span class="max-w-72 shrink-0 truncate font-medium text-text" [attr.aria-current]="last ? 'page' : null">{{ crumb.label }}</span>
+            }
+          }
+        </nav>
+        <!-- Gray page background; the three panels on each admin page stay white on top of it. -->
+        <div class="min-h-0 flex-1 overflow-y-auto bg-gray-50 px-2 md:px-2 lg:px-4 3xl:px-16 pt-2 pb-2 lg:pt-4 xl:pt-6">
           <router-outlet />
         </div>
       </section>
@@ -59,4 +85,5 @@ export const adminSectionRedirect = rememberedSectionRedirect(SECTION_KEY, ADMIN
 export class AdminPageComponent {
   protected readonly sections = ADMIN_SECTIONS;
   protected readonly activeSection = trackActiveSection(SECTION_KEY, ADMIN_SECTIONS);
+  protected readonly crumbs = inject(AdminBreadcrumbs).crumbs;
 }

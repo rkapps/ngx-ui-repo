@@ -15,10 +15,21 @@ export {
   type Agent,
 } from './lib/services/agent.service';
 export { UserService, type User, type UserResponse, type RoleType } from './lib/services/user.service';
+export {
+  AdminConfigService,
+  type AgentConfig,
+  type ProviderConfig,
+  type ModelConfig,
+  type LlmConfig,
+  type ExecutionType,
+} from './lib/services/admin-config.service';
+export { AdminLogsService, type TurnLog, type TurnLogRequest } from './lib/services/admin-logs.service';
 export { GroupService, type Group, type GroupWithCount, type GroupRequest } from './lib/services/group.service';
 export { ThemeService, type Theme } from './lib/services/theme.service';
 export { ChatTemplateService, type ChatTemplate } from './lib/services/chat-template.service';
 export type { LlmProvider } from './lib/models/llm-provider';
+export { type Origin, ORIGIN_LABELS, originLabel } from './lib/models/origin';
+export * from './lib/models/turn-execution';
 
 // HTTP
 export { HttpLoadingService } from './lib/http/http-loading.service';
@@ -56,3 +67,4 @@ export { TitleBarComponent } from './lib/ui/title-bar/title-bar.component';
 export { LoginComponent } from './lib/ui/login/login.component';
 export { AdminPageComponent } from './lib/ui/admin-page/admin-page.component';
 export { ADMIN_ROUTES } from './lib/ui/admin-page/admin.routes';
+export { AdminBreadcrumbs, type AdminCrumb } from './lib/ui/admin-page/admin-breadcrumbs';

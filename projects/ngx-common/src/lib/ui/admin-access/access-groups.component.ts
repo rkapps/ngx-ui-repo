@@ -8,8 +8,9 @@ import { finalize, type Observable } from 'rxjs';
 import { type GroupWithCount, GroupService } from '../../services/group.service';
 import { type UserResponse, UserService } from '../../services/user.service';
 import { ThreePanelLayoutComponent } from '../three-panel-layout/three-panel-layout.component';
+import { ADMIN_RIGHT_WIDTH } from '../admin-page/admin-layout';
 import { AccessNavComponent } from './access-nav.component';
-import { ACCESS_LAYOUT_KEY, ACCESS_RIGHT_WIDTH } from './access-sections';
+import { ACCESS_LAYOUT_KEY } from './access-sections';
 
 type Mode = 'none' | 'create' | 'edit';
 
@@ -223,7 +224,7 @@ export class AccessGroupsComponent {
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly layoutKey = ACCESS_LAYOUT_KEY;
-  protected readonly rightWidth = ACCESS_RIGHT_WIDTH;
+  protected readonly rightWidth = ADMIN_RIGHT_WIDTH;
 
   // Table
   protected readonly groups = signal<GroupWithCount[]>([]);

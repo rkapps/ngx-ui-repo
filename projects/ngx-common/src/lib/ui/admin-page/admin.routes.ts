@@ -1,5 +1,6 @@
 import type { Routes } from '@angular/router';
 import { accessSectionRedirect } from '../admin-access/access-sections';
+import { configSectionRedirect } from '../admin-config/config-sections';
 import { adminSectionRedirect } from './admin-page.component';
 
 /**
@@ -15,6 +16,24 @@ export const ADMIN_ROUTES: Routes = [
       { path: 'resource-types', loadComponent: () => import('../admin-access/access-stub.component').then(m => m.AccessStubComponent) },
       { path: 'grants', loadComponent: () => import('../admin-access/access-stub.component').then(m => m.AccessStubComponent) },
       { path: '', redirectTo: accessSectionRedirect, pathMatch: 'full' },
+    ],
+  },
+  {
+    path: 'config',
+    children: [
+      { path: 'agents', loadComponent: () => import('../admin-config/config-agents.component').then(m => m.ConfigAgentsComponent) },
+      { path: 'providers', loadComponent: () => import('../admin-config/config-providers.component').then(m => m.ConfigProvidersComponent) },
+      { path: '', redirectTo: configSectionRedirect, pathMatch: 'full' },
+    ],
+  },
+  {
+    path: 'logs',
+    children: [
+      { path: '', loadComponent: () => import('../admin-logs/admin-logs.component').then(m => m.AdminLogsComponent) },
+      {
+        path: 'execution/:turnId',
+        loadComponent: () => import('../admin-logs/turn-execution.component').then(m => m.TurnExecutionComponent),
+      },
     ],
   },
   { path: '', redirectTo: adminSectionRedirect, pathMatch: 'full' },
