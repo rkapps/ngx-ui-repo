@@ -92,7 +92,7 @@
                     @if (col.isLabelColumn) {
                       <!-- ── Label column ─────────────────────────────────── -->
                       <td
-                        class="portfolio-table-cell twang-tree-label-cell border-b border-border {{ col.widthClass ?? '' }} {{ col.sticky ? 'twang-table-sticky-first' : '' }}"
+                        class="portfolio-table-cell twang-tree-label-cell border-b border-border {{ col.widthClass ?? '' }} {{ getCellClass(col, flat.rowData) }} {{ col.sticky ? 'twang-table-sticky-first' : '' }}"
                         [class.twang-col-fill-remaining]="!!col.fillRemaining"
                         [style.width]="col.fillRemaining ? null : (col.width ?? null)"
                         [style.minWidth]="col.minWidth ?? null"
@@ -125,7 +125,8 @@
                               type="button"
                               class="twang-tree-label-btn"
                             >
-                              <span class="min-w-0 break-words">{{ flat.node.label }}</span>
+                              <!-- cellClass here too: the button sets its own grey, so a color on the cell can't reach summary labels. -->
+                              <span class="min-w-0 break-words {{ getCellClass(col, flat.rowData) }}">{{ flat.node.label }}</span>
                             </button>
                           </span>
                         } @else {

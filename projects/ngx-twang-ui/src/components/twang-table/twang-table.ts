@@ -169,16 +169,19 @@ export class TwangTableComponent<T extends object> implements OnChanges {
     this.page.update((p) => Math.min(this.totalPages() - 1, p + 1));
   }
 
+  // Initial sort inputs apply until the user picks a sort by clicking a header. Tracked
+  // explicitly (rather than "sortKey is still null") so `initialSortDir` isn't ignored when it is
+  // bound after `initialSortKey` — the natural template order.
+  private userSorted = false;
+
   @Input() set initialSortKey(value: string | null) {
     this._initialSortKey = value ?? null;
-    if (!value) return;
-    if (this.sortKey() !== null) return;
+    if (!value || this.userSorted) return;
     this.sortKey.set(value);
   }
   @Input() set initialSortDir(value: TwangTableSortDir | null) {
     this._initialSortDir = value ?? null;
-    if (!value) return;
-    if (this.sortKey() !== null) return;
+    if (!value || this.userSorted) return;
     this.sortDir.set(value);
   }
 
@@ -236,6 +239,7 @@ export class TwangTableComponent<T extends object> implements OnChanges {
 
   protected toggleSort(col: TwangTableColumn<T>): void {
     if (!col.sortable) return;
+    this.userSorted = true;
     if (this.sortKey() === col.id) {
       this.sortDir.set(this.sortDir() === 'asc' ? 'desc' : 'asc');
       return;
