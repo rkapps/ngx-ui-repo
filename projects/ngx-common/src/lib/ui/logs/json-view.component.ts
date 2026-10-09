@@ -1,22 +1,36 @@
-import { Component, computed, input, signal } from '@angular/core';
+import { Component, computed, input, model, signal } from '@angular/core';
+import { LucideAngularModule } from 'lucide-angular';
 import { TwangButtonComponent } from 'ngx-twang-ui';
 import { parseJsonContent } from '../../models/turn-execution';
 
 /**
  * Titled, scrollable block for a JSON value or a text payload. Text that is itself JSON (bare or
  * in a ```json fence, as agent `content` usually is) is pretty-printed; anything else is shown as
- * wrapped text. Has a copy button for the raw value.
+ * wrapped text. Has a copy button for the raw value, and can be collapsed to its header.
  */
 @Component({
   selector: 'app-json-view',
   standalone: true,
-  imports: [TwangButtonComponent],
+  imports: [LucideAngularModule, TwangButtonComponent],
   // With `fill`, the block grows to the space left in a flex-column parent and scrolls inside.
-  host: { '[class]': "fill() ? 'flex min-h-0 flex-1 flex-col' : 'block'" },
+  // Collapsed blocks shrink to their header, leaving the space to their siblings.
+  host: { '[class]': "fill() && !collapsed() ? 'flex min-h-0 flex-1 flex-col' : 'block'" },
   template: `
-    <section class="flex flex-col gap-2" [class.min-h-0]="fill()" [class.flex-1]="fill()">
+    <section class="flex flex-col gap-2" [class.min-h-0]="fill() && !collapsed()" [class.flex-1]="fill() && !collapsed()">
       <div class="flex items-center gap-2">
-        <span class="text-xs font-semibold uppercase tracking-wider text-primary-600">{{ title() }}</span>
+        @if (collapsible()) {
+          <button
+            type="button"
+            class="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-primary-600 hover:text-primary-700"
+            [attr.aria-expanded]="!collapsed()"
+            (click)="collapsed.set(!collapsed())"
+          >
+            <lucide-icon name="chevron-right" [size]="14" class="transition-transform" [class.rotate-90]="!collapsed()" />
+            {{ title() }}
+          </button>
+        } @else {
+          <span class="text-xs font-semibold uppercase tracking-wider text-primary-600">{{ title() }}</span>
+        }
         @if (isJson()) {
           <span class="rounded bg-surface-muted px-1.5 py-0.5 text-[10px] uppercase text-text-muted">json</span>
         }
@@ -32,7 +46,9 @@ import { parseJsonContent } from '../../models/turn-execution';
           />
         }
       </div>
-      @if (empty()) {
+      @if (collapsed()) {
+        <!-- collapsed: header only -->
+      } @else if (empty()) {
         <p class="text-sm text-text-muted">{{ emptyText() }}</p>
       } @else {
         <pre
@@ -55,6 +71,10 @@ export class JsonViewComponent {
   readonly maxHeightClass = input('max-h-[28rem]');
   /** Grow to fill the parent's remaining height (parent must be a flex column). */
   readonly fill = input(false);
+  /** Show a chevron on the title that collapses the block to its header. */
+  readonly collapsible = input(false);
+  /** Two-way bindable, so a parent can keep the state across selections or react to it. */
+  readonly collapsed = model(false);
 
   protected readonly copied = signal(false);
 

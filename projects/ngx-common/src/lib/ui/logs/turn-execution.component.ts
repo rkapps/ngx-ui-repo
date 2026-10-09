@@ -1,5 +1,5 @@
 import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
-import { Component, computed, DestroyRef, effect, inject } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, signal } from '@angular/core';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
@@ -125,9 +125,17 @@ const seconds = (ms: number | null | undefined) => (ms == null ? '—' : (ms / 1
                     @if (t.error) {
                       <div class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{{ t.error }}</div>
                     }
-                    <!-- Kept short so the Output below gets most of the card. -->
-                    <app-json-view title="Input" [value]="t.input" emptyText="No input." maxHeightClass="max-h-48" />
-                    <app-json-view title="Output" [value]="t.output" emptyText="No output." [fill]="true" />
+                    <!-- Input stays short unless Output is collapsed; collapsing either gives the other the room. -->
+                    <app-json-view
+                      title="Input"
+                      [value]="t.input"
+                      emptyText="No input."
+                      maxHeightClass="max-h-48"
+                      [collapsible]="true"
+                      [fill]="secondCollapsed()"
+                      [(collapsed)]="firstCollapsed"
+                    />
+                    <app-json-view title="Output" [value]="t.output" emptyText="No output." [collapsible]="true" [fill]="true" [(collapsed)]="secondCollapsed" />
                   }
                 }
                 @case ('decision') {
@@ -162,9 +170,22 @@ const seconds = (ms: number | null | undefined) => (ms == null ? '—' : (ms / 1
                 }
                 @default {
                   @if (asAgent(row); as a) {
-                    <!-- Kept short (synthesizer prompts carry the previous stage's output) so Content gets most of the card. -->
-                    <app-json-view title="Prompt" [text]="a.turn.prompt" maxHeightClass="max-h-48" />
-                    <app-json-view title="Content" [text]="a.turn.content || a.agent?.content" [fill]="true" />
+                    <!-- Prompt stays short unless Content is collapsed; collapsing either gives the other the room. -->
+                    <app-json-view
+                      title="Prompt"
+                      [text]="a.turn.prompt"
+                      maxHeightClass="max-h-48"
+                      [collapsible]="true"
+                      [fill]="secondCollapsed()"
+                      [(collapsed)]="firstCollapsed"
+                    />
+                    <app-json-view
+                      title="Content"
+                      [text]="a.turn.content || a.agent?.content"
+                      [collapsible]="true"
+                      [fill]="true"
+                      [(collapsed)]="secondCollapsed"
+                    />
                   }
                 }
               }
@@ -300,6 +321,13 @@ export class TurnExecutionComponent {
   protected readonly rightWidth = ADMIN_RIGHT_WIDTH;
   protected readonly usageFields = USAGE_FIELDS;
   protected readonly seconds = seconds;
+
+  /**
+   * Collapsed state of the paired payload blocks — Prompt/Content for agents, Input/Output for tool
+   * calls. Kept here (not per block) so it sticks while stepping through the tree.
+   */
+  protected readonly firstCollapsed = signal(false);
+  protected readonly secondCollapsed = signal(false);
 
   private readonly turnId = toSignal(this.route.paramMap.pipe(map(p => p.get('turnId') ?? '')), { requireSync: true });
   private readonly nodeParam = toSignal(this.route.queryParamMap.pipe(map(q => q.get('node'))), { initialValue: null });
