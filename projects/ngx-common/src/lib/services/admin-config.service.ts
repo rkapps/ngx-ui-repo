@@ -6,6 +6,15 @@ import type { Origin } from '../models/origin';
 import type { ConversationStrategy, HistoryMode } from './conversation.service';
 
 export type ExecutionType = 'single_agent' | 'pipeline' | 'pipeline_agent';
+
+export const EXECUTION_TYPE_LABELS: Record<ExecutionType, string> = {
+  single_agent: 'Single agent',
+  pipeline: 'Pipeline',
+  pipeline_agent: 'Pipeline agent',
+};
+
+/** `pipeline.type` values the backend understands: `"deterministic"`, anything else runs as dynamic. */
+export type PipelineType = 'deterministic' | 'dynamic';
 export type Preset = 'fast' | 'balanced' | 'data' | 'precise' | 'thorough' | 'local';
 
 export interface LlmConfig {
@@ -81,6 +90,33 @@ export interface ProviderConfig {
   default_model: string;
 }
 
+/** Serde's default enum names (no rename on the backend). */
+export type VersionStatus = 'Draft' | 'Promoted';
+
+/** One version of an agent's config. Starts as a Draft (editable); promoting freezes it and makes it live. */
+export interface AgentConfigVersion {
+  /** `{agent_id}-{version}` — internal; the API addresses versions by agent id + number. */
+  id: string;
+  agent_id: string;
+  version: number;
+  status: VersionStatus;
+  config: AgentConfig;
+  created_at: string;
+  created_by: string;
+  created_by_email: string;
+  note: string | null;
+}
+
+/** A registry tool an agent can be given — the schema sent to the LLM (`/admin/tools`). */
+export interface ToolDefinition {
+  /** Always `"function"` for current providers. */
+  type: string;
+  name: string;
+  description: string;
+  /** JSON Schema for the tool's parameters. */
+  parameters: unknown;
+}
+
 /** Read-only admin view of server configuration; admin-only on the backend. */
 @Injectable({ providedIn: 'root' })
 export class AdminConfigService {
@@ -89,6 +125,37 @@ export class AdminConfigService {
 
   getAgents(): Observable<AgentConfig[]> {
     return this.http.get<AgentConfig[]>(`${this.base}/admin/agents`);
+  }
+
+  // ── Agent versions (draft → promote) ──
+
+  /** New agent: creates it with a v1 draft (only the id is checked — must be unused). */
+  createAgent(config: AgentConfig): Observable<AgentConfigVersion> {
+    return this.http.post<AgentConfigVersion>(`${this.base}/admin/agents`, config);
+  }
+
+  /** Opens an existing agent for editing: returns its draft, creating one if needed. */
+  openAgentDraft(agentId: string): Observable<AgentConfigVersion> {
+    return this.http.post<AgentConfigVersion>(`${this.base}/admin/agents/${encodeURIComponent(agentId)}/versions`, null);
+  }
+
+  getAgentVersions(agentId: string): Observable<AgentConfigVersion[]> {
+    return this.http.get<AgentConfigVersion[]>(`${this.base}/admin/agents/${encodeURIComponent(agentId)}/versions`);
+  }
+
+  /** Saves a draft's config (409 if the version isn't a draft any more). */
+  saveAgentDraft(agentId: string, version: number, config: AgentConfig, note: string | null = null): Observable<void> {
+    return this.http.put<void>(`${this.base}/admin/agents/${encodeURIComponent(agentId)}/versions/${version}`, { config, note });
+  }
+
+  /** Registry tools (stored in an agent's `tools`; MCP tools come from `getMcpTools`). */
+  getTools(): Observable<ToolDefinition[]> {
+    return this.http.get<ToolDefinition[]>(`${this.base}/admin/tools`);
+  }
+
+  /** Tools exposed by the configured MCP servers (stored in an agent's `mcp_tools`). */
+  getMcpTools(): Observable<ToolDefinition[]> {
+    return this.http.get<ToolDefinition[]>(`${this.base}/admin/mcp_tools`);
   }
 
   getProviders(): Observable<ProviderConfig[]> {

@@ -22,6 +22,9 @@ export {
   type ModelConfig,
   type LlmConfig,
   type ExecutionType,
+  type ToolDefinition,
+  type AgentConfigVersion,
+  type VersionStatus,
 } from './lib/services/admin-config.service';
 export {
   TurnLogsService,

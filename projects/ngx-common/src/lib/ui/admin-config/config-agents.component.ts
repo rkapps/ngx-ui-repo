@@ -1,20 +1,16 @@
 import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { RouterLink } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { TwangButtonComponent, TwangTableComponent, type TwangTableColumn } from 'ngx-twang-ui';
 import { finalize } from 'rxjs';
 import { originLabel } from '../../models/origin';
-import { type AgentConfig, AdminConfigService, type ExecutionType, type LlmConfig } from '../../services/admin-config.service';
+import { type AgentConfig, AdminConfigService, EXECUTION_TYPE_LABELS, type ExecutionType, type LlmConfig } from '../../services/admin-config.service';
 import { ADMIN_RIGHT_WIDTH } from '../admin-page/admin-layout';
 import { ThreePanelLayoutComponent } from '../three-panel-layout/three-panel-layout.component';
 import { ConfigNavComponent } from './config-nav.component';
 import { CONFIG_LAYOUT_KEY } from './config-sections';
 
-const EXECUTION_LABELS: Record<ExecutionType, string> = {
-  single_agent: 'Single agent',
-  pipeline: 'Pipeline',
-  pipeline_agent: 'Pipeline agent',
-};
 
 /** `provider / model`, skipping whichever part is unset. The preset is shown separately. */
 function llmLabel(c: LlmConfig | null | undefined): string {
@@ -29,7 +25,7 @@ function llmLabel(c: LlmConfig | null | undefined): string {
 @Component({
   selector: 'app-config-agents',
   standalone: true,
-  imports: [ConfigNavComponent, LucideAngularModule, ThreePanelLayoutComponent, TwangButtonComponent, TwangTableComponent],
+  imports: [ConfigNavComponent, LucideAngularModule, RouterLink, ThreePanelLayoutComponent, TwangButtonComponent, TwangTableComponent],
   template: `
     <app-three-panel-layout
       leftTitle="Config"
@@ -44,8 +40,8 @@ function llmLabel(c: LlmConfig | null | undefined): string {
         <div class="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
           <span class="text-sm font-semibold text-primary-600">Agents</span>
           <span class="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700">{{ agents().length }}</span>
+          <twang-button class="ml-auto" variant="primary" size="sm" icon="plus" label="New agent" routerLink="new" />
           <twang-button
-            class="ml-auto"
             variant="default"
             size="sm"
             icon="refresh-cw"
@@ -76,6 +72,17 @@ function llmLabel(c: LlmConfig | null | undefined): string {
         </div>
       </div>
 
+      @if (selected(); as a) {
+        <twang-button
+          right-action
+          variant="default"
+          size="sm"
+          icon="square-pen"
+          ariaLabel="Edit agent"
+          title="Edit agent"
+          [routerLink]="[a.id, 'edit']"
+        />
+      }
       <div right class="flex flex-col gap-4 p-4 text-sm">
         @if (selected(); as a) {
           <section class="flex flex-col gap-2 border-b border-border pb-4">
@@ -160,7 +167,7 @@ export class ConfigAgentsComponent {
 
   protected readonly llmLabel = llmLabel;
   protected readonly originLabel = originLabel;
-  protected readonly executionLabel = (e: ExecutionType) => EXECUTION_LABELS[e] ?? e;
+  protected readonly executionLabel = (e: ExecutionType) => EXECUTION_TYPE_LABELS[e] ?? e;
 
   protected readonly onRowClick = (row: AgentConfig) => this.selectedId.set(row.id);
   protected readonly rowClass = (row: AgentConfig) =>

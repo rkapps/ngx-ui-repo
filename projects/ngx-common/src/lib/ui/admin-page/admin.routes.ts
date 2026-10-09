@@ -24,6 +24,8 @@ export const ADMIN_ROUTES: Routes = [
     path: 'config',
     children: [
       { path: 'agents', loadComponent: () => import('../admin-config/config-agents.component').then(m => m.ConfigAgentsComponent) },
+      { path: 'agents/new', loadComponent: () => import('../admin-config/agent-editor.component').then(m => m.AgentEditorComponent) },
+      { path: 'agents/:id/edit', loadComponent: () => import('../admin-config/agent-editor.component').then(m => m.AgentEditorComponent) },
       { path: 'providers', loadComponent: () => import('../admin-config/config-providers.component').then(m => m.ConfigProvidersComponent) },
       { path: '', redirectTo: configSectionRedirect, pathMatch: 'full' },
     ],
