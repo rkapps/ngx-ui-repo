@@ -1,6 +1,6 @@
 import { Component, computed, DestroyRef, effect, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe, DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
@@ -8,17 +8,22 @@ import { TwangButtonComponent, TwangDropdownComponent, type TwangDropdownOption,
 import { map, type Observable } from 'rxjs';
 import {
   type AgentConfig,
+  type AgentConfigResponse,
   type AgentConfigVersion,
   AdminConfigService,
+  type AvailableAgent,
   EXECUTION_TYPE_LABELS,
   type ExecutionType,
   type LlmConfig,
   type PipelineConfig,
+  type PipelineStage,
   type PipelineType,
   type Preset,
   type ProviderConfig,
   type ToolDefinition,
 } from '../../services/admin-config.service';
+import { ORIGIN_LABELS, type Origin, originLabel } from '../../models/origin';
+import { UserService } from '../../services/user.service';
 import { ADMIN_RIGHT_WIDTH } from '../admin-page/admin-layout';
 import { PageBreadcrumbs } from '../breadcrumbs/page-breadcrumbs';
 import { MarkdownPipe } from '../chat/markdown.pipe';
@@ -26,6 +31,9 @@ import { JsonViewComponent } from '../logs/json-view.component';
 import { ThreePanelLayoutComponent } from '../three-panel-layout/three-panel-layout.component';
 
 type ToolSource = 'registry' | 'mcp';
+
+/** Which list of sub-agent references the picker edits. */
+type RefTarget = { kind: 'stage'; index: number } | { kind: 'available' };
 
 /** One entry in the left section nav; `depth` 1 = nested under Pipeline (stages, etc.). */
 interface NavItem {
@@ -57,6 +65,14 @@ function withCurrent(options: TwangDropdownOption[], value: string | null | unde
   return value && !options.some(o => o.value === value) ? [...options, { value, label: `${value} (not configured)` }] : options;
 }
 
+/** Copy of `items` with the item at `index` moved by `delta` (clamped). */
+function moved<T>(items: T[], index: number, delta: number): T[] {
+  const to = Math.max(0, Math.min(items.length - 1, index + delta));
+  const next = [...items];
+  next.splice(to, 0, ...next.splice(index, 1));
+  return next;
+}
+
 function blankAgent(): AgentConfig {
   return {
     id: '',
@@ -64,6 +80,7 @@ function blankAgent(): AgentConfig {
     description: '',
     llm_config: null,
     enabled: true,
+    version: null,
     origin: 'client',
     standalone: false,
     execution: 'single_agent',
@@ -99,13 +116,14 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
  * agent's draft (`POST …/versions`, created if needed); Save draft → `PUT …/versions/{v}`. Edits change a local draft;
  * Save creates a new version (create mode: the agent and its version 1).
  *
- * Built so far: General (incl. LLM; type only while creating), Description (markdown), System prompt, Tools (registry + MCP). The remaining sections
+ * Built so far: General (incl. LLM; type only while creating), Description (markdown), System prompt, Tools (registry + MCP),
+ * Pipeline (mode, stages, sub-agents from live pipeline agents, available/follow-up). The remaining sections
  * are placeholders/read-only until they're built out, and Save isn't wired to the backend yet.
  */
 @Component({
   selector: 'app-agent-editor',
   standalone: true,
-  imports: [DatePipe, DecimalPipe, FormsModule, JsonViewComponent, LucideAngularModule, MarkdownPipe, ThreePanelLayoutComponent, TwangButtonComponent, TwangDropdownComponent, TwangInputComponent],
+  imports: [DatePipe, DecimalPipe, NgTemplateOutlet, FormsModule, JsonViewComponent, LucideAngularModule, MarkdownPipe, ThreePanelLayoutComponent, TwangButtonComponent, TwangDropdownComponent, TwangInputComponent],
   template: `
     @if (loading()) {
       <div class="flex min-h-[50vh] items-center justify-center gap-2 rounded-lg border border-border bg-white p-8 text-sm text-text-muted">
@@ -198,6 +216,14 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
                       <twang-dropdown size="sm" [options]="executionOptions" [value]="draft().execution" (valueChange)="setExecution($any($event))" />
                     } @else {
                       <span class="py-2 text-sm">{{ executionLabel(draft().execution) }}</span>
+                    }
+                  </div>
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-xs font-medium text-text-muted">Origin</label>
+                    @if (isSuperAdmin()) {
+                      <twang-dropdown size="sm" [options]="originOptions" [value]="draft().origin" (valueChange)="patch({ origin: $any($event) })" />
+                    } @else {
+                      <span class="py-2 text-sm" title="Only a SuperAdmin can change an agent's origin">{{ originLabel(draft().origin) }}</span>
                     }
                   </div>
                   <label class="flex cursor-pointer items-center gap-2 text-sm">
@@ -300,37 +326,99 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
           }
 
           @if (isPipeline()) {
-            <!-- Pipeline -->
+            <!-- Pipeline: mode, stage list, persisted keys -->
             @if (current() === 'sec-pipeline') {
               <section id="sec-pipeline" class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
-                <h2 class="shrink-0 border-b border-border px-4 py-3 text-sm font-semibold text-primary-600">Pipeline</h2>
-                <p class="p-4 text-sm text-text-muted">
-                  Mode: <span class="font-medium text-text">{{ mode() === 'deterministic' ? 'Deterministic' : 'Dynamic' }}</span> — toggle,
-                  plus {{ mode() === 'deterministic' ? 'ordered stages of sub-agents' : 'available agents and a follow-up agent' }} picked from existing agents.
-                </p>
+                <h2 class="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2 text-sm font-semibold text-primary-600">
+                  Pipeline
+                  <span class="ml-auto inline-flex rounded-lg border border-border p-0.5 text-xs font-normal" role="radiogroup" aria-label="Pipeline mode">
+                    @for (m of pipelineModes; track m.value) {
+                      <button
+                        type="button"
+                        role="radio"
+                        class="rounded-md px-2.5 py-1 transition-colors"
+                        [class]="mode() === m.value ? 'bg-primary-50 font-medium text-primary-700' : 'text-text-muted hover:text-text'"
+                        [attr.aria-checked]="mode() === m.value"
+                        (click)="setMode(m.value)"
+                      >{{ m.label }}</button>
+                    }
+                  </span>
+                </h2>
+                <div class="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-4 text-sm">
+                  @if (mode() === 'deterministic') {
+                    <div class="flex flex-col gap-2">
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Stages</span>
+                        <span class="text-xs text-text-muted">run in order; the last one is the synthesizer</span>
+                        <twang-button class="ml-auto" variant="primarySoft" size="sm" icon="plus" label="Add stage" (buttonClick)="addStage()" />
+                      </div>
+                      <ol class="flex flex-col rounded-lg border border-border">
+                        @for (stage of pipeline()!.stages; track $index; let i = $index; let first = $first; let last = $last) {
+                          <li class="flex items-center gap-2 border-b border-border px-3 py-2 last:border-b-0">
+                            <span class="w-5 shrink-0 text-right tabular-nums text-text-muted">{{ i + 1 }}.</span>
+                            <button type="button" class="min-w-0 flex-1 truncate text-left font-medium hover:text-primary-600" (click)="goTo('sec-stage-' + i)">
+                              {{ stage.name || 'Untitled' }}
+                            </button>
+                            @if (last) {
+                              <span class="rounded bg-green-50 px-1.5 py-0.5 text-[10px] uppercase text-green-700">synthesizer</span>
+                            }
+                            @if (stage.parallel) {
+                              <span class="rounded bg-surface-muted px-1.5 py-0.5 text-[10px] uppercase text-text-muted">parallel</span>
+                            }
+                            <span class="shrink-0 text-xs text-text-muted">{{ stage.sub_agents.length }} agent{{ stage.sub_agents.length === 1 ? '' : 's' }}</span>
+                            <twang-button variant="default" size="xs" icon="chevron-up" ariaLabel="Move stage up" [disabled]="first" (buttonClick)="moveStage(i, -1)" />
+                            <twang-button variant="default" size="xs" icon="chevron-down" ariaLabel="Move stage down" [disabled]="last" (buttonClick)="moveStage(i, 1)" />
+                            <twang-button variant="default" size="xs" icon="trash-2" ariaLabel="Remove stage" (buttonClick)="removeStage(i)" />
+                          </li>
+                        } @empty {
+                          <li class="px-3 py-2 text-text-muted">No stages yet — add one, then pick its sub-agents.</li>
+                        }
+                      </ol>
+                    </div>
+                  } @else {
+                    <p class="text-text-muted">
+                      A dynamic pipeline's orchestrator (this agent, using its system prompt) picks from the
+                      <button type="button" class="text-primary-600 hover:underline" (click)="goTo('sec-available')">available agents</button>
+                      each turn, and can hand follow-up turns to a
+                      <button type="button" class="text-primary-600 hover:underline" (click)="goTo('sec-followup')">follow-up agent</button>.
+                    </p>
+                  }
+
+                  <div class="flex max-w-xl flex-col gap-1.5">
+                    <label class="text-xs font-medium text-text-muted">Persisted blackboard keys</label>
+                    <twang-input
+                      placeholder="Comma-separated, e.g. symbols, fiscal_context"
+                      [mono]="true"
+                      [ngModel]="persistedKeysText()"
+                      (ngModelChange)="setPersistedKeys($event)"
+                    />
+                    <span class="text-xs text-text-muted">Blackboard entries kept across stages.</span>
+                  </div>
+                </div>
               </section>
             }
 
             @if (mode() === 'deterministic') {
-              @for (stage of draft().pipeline!.stages; track $index; let i = $index; let last = $last) {
-@if (current() === 'sec-stage-' + i) {
-                    <section [id]="'sec-stage-' + i" class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
+              @for (stage of pipeline()!.stages; track $index; let i = $index; let last = $last) {
+                @if (current() === 'sec-stage-' + i) {
+                  <section [id]="'sec-stage-' + i" class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
                     <h2 class="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3 text-sm font-semibold text-primary-600">
-                      Stage {{ i + 1 }} · {{ stage.name || 'Untitled' }}
+                      Stage {{ i + 1 }}
                       @if (last) {
                         <span class="rounded bg-green-50 px-1.5 py-0.5 text-[10px] uppercase text-green-700">synthesizer</span>
                       }
-                      @if (stage.parallel) {
-                        <span class="rounded bg-surface-muted px-1.5 py-0.5 text-[10px] uppercase text-text-muted">parallel</span>
-                      }
                     </h2>
-                    <div class="flex flex-wrap gap-1 p-4">
-                      @for (sub of stage.sub_agents; track $index) {
-                        <span class="rounded bg-surface-muted px-2 py-0.5 font-mono text-xs">{{ sub.id }}</span>
-                      } @empty {
-                        <span class="text-sm text-text-muted">No sub-agents.</span>
-                      }
+                    <div class="flex shrink-0 flex-wrap items-end gap-4 border-b border-border p-4">
+                      <div class="flex w-72 flex-col gap-1.5">
+                        <label class="text-xs font-medium text-text-muted">Name</label>
+                        <twang-input placeholder="e.g. fetch-data" [ngModel]="stage.name" (ngModelChange)="updateStage(i, { name: $event })" />
+                      </div>
+                      <label class="flex cursor-pointer items-center gap-2 pb-2 text-sm" title="Run this stage's sub-agents concurrently instead of one after another">
+                        <input type="checkbox" class="accent-primary-600" [checked]="stage.parallel" (change)="updateStage(i, { parallel: !stage.parallel })" />
+                        Run sub-agents in parallel
+                      </label>
                     </div>
+                    <ng-container *ngTemplateOutlet="subAgentPicker; context: { $implicit: { kind: 'stage', index: i }, label: stage.parallel ? 'Sub-agents' : 'Sub-agents (run in order)' }" />
                   </section>
                 }
               }
@@ -338,19 +426,22 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
               @if (current() === 'sec-available') {
                 <section id="sec-available" class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
                   <h2 class="shrink-0 border-b border-border px-4 py-3 text-sm font-semibold text-primary-600">Available agents</h2>
-                  <div class="flex flex-wrap gap-1 p-4">
-                    @for (sub of draft().pipeline!.available_agents; track $index) {
-                      <span class="rounded bg-surface-muted px-2 py-0.5 font-mono text-xs">{{ sub.id }}</span>
-                    } @empty {
-                      <span class="text-sm text-text-muted">No agents selected.</span>
-                    }
-                  </div>
+                  <ng-container *ngTemplateOutlet="subAgentPicker; context: { $implicit: { kind: 'available' }, label: 'Available to the orchestrator' }" />
                 </section>
               }
               @if (current() === 'sec-followup') {
                 <section id="sec-followup" class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
                   <h2 class="shrink-0 border-b border-border px-4 py-3 text-sm font-semibold text-primary-600">Follow-up</h2>
-                  <p class="p-4 font-mono text-sm">{{ draft().pipeline!.followup_agent || '—' }}</p>
+                  <div class="flex max-w-md flex-col gap-1.5 p-4">
+                    <label class="text-xs font-medium text-text-muted">Follow-up agent</label>
+                    <twang-dropdown
+                      size="sm"
+                      [options]="followupOptions()"
+                      [value]="pipeline()!.followup_agent ?? ''"
+                      (valueChange)="updatePipeline({ followup_agent: $event || null })"
+                    />
+                    <span class="text-xs text-text-muted">Handles follow-up turns after the pipeline completes.</span>
+                  </div>
                 </section>
               }
             }
@@ -485,18 +576,80 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
         </div>
       </app-three-panel-layout>
     }
+
+    <!-- Sub-agent picker: ordered selection (left) | live pipeline agents (right). target = stage or available. -->
+    <ng-template #subAgentPicker let-target let-label="label">
+      <div class="grid min-h-0 flex-1 md:grid-cols-2">
+        <div class="flex min-h-0 flex-col border-border md:border-r">
+          <div class="shrink-0 border-b border-border bg-gray-50 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+            {{ label }} · {{ refs(target).length }}
+          </div>
+          <ol class="min-h-0 flex-1 overflow-y-auto">
+            @for (ref of refs(target); track ref.id; let j = $index; let first = $first; let last = $last) {
+              <li class="flex items-center gap-2 border-b border-border px-4 py-2">
+                <span class="w-5 shrink-0 text-right text-xs tabular-nums text-text-muted">{{ j + 1 }}.</span>
+                <div class="min-w-0 flex-1">
+                  <div class="truncate text-sm">{{ agentName(ref.id) }}</div>
+                  <div class="truncate font-mono text-[11px] text-text-muted">{{ ref.id }}</div>
+                </div>
+                @if (!isChoice(ref.id)) {
+                  <span class="shrink-0 rounded bg-red-50 px-1.5 py-0.5 text-[10px] uppercase text-red-700" title="Not a live pipeline agent">missing</span>
+                }
+                <twang-button variant="default" size="xs" icon="chevron-up" ariaLabel="Move up" [disabled]="first" (buttonClick)="moveRef(target, j, -1)" />
+                <twang-button variant="default" size="xs" icon="chevron-down" ariaLabel="Move down" [disabled]="last" (buttonClick)="moveRef(target, j, 1)" />
+                <twang-button variant="default" size="xs" icon="x" ariaLabel="Remove" (buttonClick)="toggleRef(target, ref.id)" />
+              </li>
+            } @empty {
+              <li class="px-4 py-3 text-sm text-text-muted">None yet — pick pipeline agents on the right.</li>
+            }
+          </ol>
+        </div>
+        <div class="flex min-h-0 flex-col">
+          <div class="shrink-0 border-b border-border bg-gray-50 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+            Pipeline agents
+          </div>
+          <ul class="min-h-0 flex-1 overflow-y-auto">
+            @for (c of subAgentChoices(); track c.id) {
+              <li>
+                <label class="flex cursor-pointer items-center gap-3 border-b border-border px-4 py-2 hover:bg-surface-muted">
+                  <input type="checkbox" class="accent-primary-600" [checked]="hasRef(target, c.id)" (change)="toggleRef(target, c.id)" />
+                  <div class="min-w-0 flex-1">
+                    <div class="truncate text-sm" [class.font-semibold]="hasRef(target, c.id)">{{ c.name || c.id }}</div>
+                    <div class="truncate font-mono text-[11px] text-text-muted">{{ c.id }}</div>
+                  </div>
+                  @if (!c.enabled) {
+                    <span class="shrink-0 rounded bg-surface-muted px-1.5 py-0.5 text-[10px] uppercase text-text-muted">disabled</span>
+                  }
+                </label>
+              </li>
+            } @empty {
+              <li class="px-4 py-3 text-sm text-text-muted">{{ agentsLoaded() ? 'No live pipeline agents yet — create and promote one first.' : 'Loading agents…' }}</li>
+            }
+          </ul>
+        </div>
+      </div>
+    </ng-template>
   `,
 })
 export class AgentEditorComponent {
   private readonly configService = inject(AdminConfigService);
   private readonly breadcrumbs = inject(PageBreadcrumbs);
   private readonly route = inject(ActivatedRoute);
+  private readonly userService = inject(UserService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly rightWidth = ADMIN_RIGHT_WIDTH;
   protected readonly executionOptions = EXECUTION_OPTIONS;
   protected readonly executionLabel = (e: ExecutionType) => EXECUTION_TYPE_LABELS[e] ?? e;
+
+  // ── Origin: SuperAdmins choose system/client; everyone else gets client (new) or read-only ──
+  protected readonly isSuperAdmin = computed(() => this.userService.user()?.role === 'SuperAdmin');
+  protected readonly originOptions: TwangDropdownOption[] = (Object.keys(ORIGIN_LABELS) as Origin[]).map(value => ({
+    value,
+    label: ORIGIN_LABELS[value],
+  }));
+  protected readonly originLabel = originLabel;
 
   /** Agent id from `:id`; null on the `new` route. */
   private readonly agentId = toSignal(this.route.paramMap.pipe(map(p => p.get('id'))), { requireSync: true });
@@ -615,7 +768,38 @@ export class AgentEditorComponent {
     return this.toolSources[source].defs().find(t => t.name === name) ?? null;
   });
 
-  // ── System prompt ──
+  // ── Pipeline ──
+  protected readonly pipelineModes: { value: PipelineType; label: string }[] = [
+    { value: 'deterministic', label: 'Deterministic' },
+    { value: 'dynamic', label: 'Dynamic' },
+  ];
+  protected readonly pipeline = computed(() => this.draft().pipeline);
+  private readonly agentList = signal<AgentConfigResponse[]>([]);
+  protected readonly agentsLoaded = signal(false);
+
+  /** Sub-agent candidates: live pipeline agents (promoted at least once), never this agent itself. */
+  protected readonly subAgentChoices = computed(() =>
+    this.agentList()
+      .filter(r => r.config.execution === 'pipeline_agent' && r.status !== 'draft' && r.config.id !== this.draft().id)
+      .map(r => ({ id: r.config.id, name: r.config.name, enabled: r.config.enabled }))
+      .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id)),
+  );
+  private readonly choiceIds = computed(() => new Set(this.subAgentChoices().map(c => c.id)));
+  private readonly agentNames = computed(() => new Map(this.agentList().map(r => [r.config.id, r.config.name])));
+
+  protected readonly followupOptions = computed<TwangDropdownOption[]>(() =>
+    withCurrent(
+      [{ value: '', label: 'None' }, ...this.subAgentChoices().map(c => ({ value: c.id, label: `${c.name || c.id} (${c.id})` }))],
+      this.pipeline()?.followup_agent,
+    ),
+  );
+
+  protected readonly persistedKeysText = computed(() => (this.pipeline()?.persisted_blackboard_keys ?? []).join(', '));
+
+  protected readonly agentName = (id: string) => this.agentNames().get(id) || id;
+  protected readonly isChoice = (id: string) => this.choiceIds().has(id);
+
+    // ── System prompt ──
   /** Rough token estimate (~4 chars/token) — just a size hint. */
   protected readonly promptTokens = computed(() => Math.ceil(this.draft().system_prompt.length / 4));
 
@@ -653,6 +837,20 @@ export class AgentEditorComponent {
   constructor() {
     const destroyRef = this.destroyRef;
 
+    this.configService
+      .getAgents()
+      .pipe(takeUntilDestroyed(destroyRef))
+      .subscribe({
+        next: agents => {
+          this.agentList.set(agents);
+          this.agentsLoaded.set(true);
+        },
+        error: err => {
+          console.error('Failed to load agents', err);
+          this.agentsLoaded.set(true);
+        },
+      });
+
     this.loadToolSource('registry', this.configService.getTools(), destroyRef);
     this.loadToolSource('mcp', this.configService.getMcpTools(), destroyRef);
 
@@ -677,9 +875,13 @@ export class AgentEditorComponent {
         .pipe(takeUntilDestroyed(destroyRef))
         .subscribe({
           next: version => {
+            // A pipeline always edits through `pipeline`; fill in an empty one if it's missing.
+            const config = version.config.execution === 'pipeline' && !version.config.pipeline
+              ? { ...version.config, pipeline: blankPipeline() }
+              : version.config;
             this.draftVersion.set(version);
-            this.original.set(structuredClone(version.config));
-            this.draft.set(structuredClone(version.config));
+            this.original.set(structuredClone(config));
+            this.draft.set(structuredClone(config));
             this.loading.set(false);
             this.loadVersions();
           },
@@ -743,6 +945,67 @@ export class AgentEditorComponent {
         src.loaded.set(true);
       },
     });
+  }
+
+  // ── Pipeline edits ──
+
+  protected updatePipeline(changes: Partial<PipelineConfig>): void {
+    this.draft.update(d => ({ ...d, pipeline: { ...(d.pipeline ?? blankPipeline()), ...changes } }));
+  }
+
+  /** Switching mode keeps both stages and available agents, so flipping back loses nothing. */
+  protected setMode(mode: PipelineType): void {
+    this.updatePipeline({ type: mode });
+  }
+
+  protected addStage(): void {
+    const stages = this.pipeline()?.stages ?? [];
+    this.updatePipeline({ stages: [...stages, { name: `stage-${stages.length + 1}`, parallel: false, sub_agents: [] }] });
+    this.goTo(`sec-stage-${stages.length}`);
+  }
+
+  protected updateStage(index: number, changes: Partial<PipelineStage>): void {
+    this.updatePipeline({ stages: (this.pipeline()?.stages ?? []).map((s, i) => (i === index ? { ...s, ...changes } : s)) });
+  }
+
+  protected removeStage(index: number): void {
+    this.updatePipeline({ stages: (this.pipeline()?.stages ?? []).filter((_, i) => i !== index) });
+    this.goTo('sec-pipeline'); // the removed stage's section is gone
+  }
+
+  protected moveStage(index: number, delta: number): void {
+    this.updatePipeline({ stages: moved(this.pipeline()?.stages ?? [], index, delta) });
+  }
+
+  protected setPersistedKeys(text: string): void {
+    const keys = text.split(',').map(k => k.trim()).filter(Boolean);
+    this.updatePipeline({ persisted_blackboard_keys: keys.length ? keys : null });
+  }
+
+  // Sub-agent references for a stage or the dynamic pipeline's available agents.
+  protected refs(target: RefTarget): AvailableAgent[] {
+    const p = this.pipeline();
+    if (!p) return [];
+    return target.kind === 'stage' ? (p.stages[target.index]?.sub_agents ?? []) : p.available_agents;
+  }
+
+  private setRefs(target: RefTarget, refs: AvailableAgent[]): void {
+    if (target.kind === 'stage') this.updateStage(target.index, { sub_agents: refs });
+    else this.updatePipeline({ available_agents: refs });
+  }
+
+  protected hasRef(target: RefTarget, id: string): boolean {
+    return this.refs(target).some(r => r.id === id);
+  }
+
+  /** Adds (at the end) or removes; existing references keep their per-agent overrides. */
+  protected toggleRef(target: RefTarget, id: string): void {
+    const refs = this.refs(target);
+    this.setRefs(target, refs.some(r => r.id === id) ? refs.filter(r => r.id !== id) : [...refs, { id, llm_config: null, relay_tool_output: null }]);
+  }
+
+  protected moveRef(target: RefTarget, index: number, delta: number): void {
+    this.setRefs(target, moved(this.refs(target), index, delta));
   }
 
   /** Create mode only: switching to/from a pipeline adds or drops the pipeline settings. */

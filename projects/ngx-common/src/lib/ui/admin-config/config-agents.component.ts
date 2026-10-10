@@ -5,7 +5,7 @@ import { LucideAngularModule } from 'lucide-angular';
 import { TwangButtonComponent, TwangTableComponent, type TwangTableColumn } from 'ngx-twang-ui';
 import { finalize } from 'rxjs';
 import { originLabel } from '../../models/origin';
-import { type AgentConfig, AdminConfigService, EXECUTION_TYPE_LABELS, type ExecutionType, type LlmConfig } from '../../services/admin-config.service';
+import { type AgentConfig, type AgentConfigResponse, AdminConfigService, EXECUTION_TYPE_LABELS, type ExecutionType, type LlmConfig } from '../../services/admin-config.service';
 import { ADMIN_RIGHT_WIDTH } from '../admin-page/admin-layout';
 import { ThreePanelLayoutComponent } from '../three-panel-layout/three-panel-layout.component';
 import { ConfigNavComponent } from './config-nav.component';
@@ -18,9 +18,13 @@ function llmLabel(c: LlmConfig | null | undefined): string {
   return [c.llm, c.model].filter(Boolean).join(' / ');
 }
 
+/** Version column sort: live first, then live with a draft open, then draft-only. */
+const STATUS_ORDER: Record<AgentConfigResponse['status'], number> = { live: 0, live_with_draft: 1, draft: 2 };
+
 /**
- * Admin > Config > Agents: read-only view of every agent configuration. The middle table lists
- * agents (the first is selected on load); the right panel shows the selected agent's full config.
+ * Admin > Config > Agents: every agent — live and draft-only — with its version status. The middle
+ * table lists agents (the first is selected on load); the right panel shows the selected agent's
+ * config (the draft's, for agents not yet promoted).
  */
 @Component({
   selector: 'app-config-agents',
@@ -65,7 +69,7 @@ function llmLabel(c: LlmConfig | null | undefined): string {
               [rowClass]="rowClass"
               initialSortKey="execution"
               initialSortDir="asc"
-              tableMinWidthClass="min-w-[1190px]"
+              tableMinWidthClass="min-w-[1360px]"
               emptyMessage="No agents configured."
             />
           }
@@ -99,6 +103,8 @@ function llmLabel(c: LlmConfig | null | undefined): string {
             <dd class="break-all font-mono text-xs">{{ a.id }}</dd>
             <dt class="text-xs text-text-muted">Status</dt>
             <dd [class.text-red-600]="!a.enabled">{{ a.enabled ? 'Enabled' : 'Disabled' }}</dd>
+            <dt class="text-xs text-text-muted">Version</dt>
+            <dd><span class="rounded px-1.5 py-0.5 text-xs" [class]="versionClass(a)">{{ versionLabel(a) }}</span></dd>
             <dt class="text-xs text-text-muted">Origin</dt>
             <dd>
               <span
@@ -158,7 +164,10 @@ export class ConfigAgentsComponent {
   protected readonly layoutKey = CONFIG_LAYOUT_KEY;
   protected readonly rightWidth = ADMIN_RIGHT_WIDTH;
 
-  protected readonly agents = signal<AgentConfig[]>([]);
+  /** Rows from `/admin/agents`; the table and panel work on the configs, version state is looked up by id. */
+  private readonly responses = signal<AgentConfigResponse[]>([]);
+  protected readonly agents = computed<AgentConfig[]>(() => this.responses().map(r => r.config));
+  private readonly versionInfo = computed(() => new Map(this.responses().map(r => [r.config.id, r])));
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
 
@@ -169,6 +178,22 @@ export class ConfigAgentsComponent {
   protected readonly originLabel = originLabel;
   protected readonly executionLabel = (e: ExecutionType) => EXECUTION_TYPE_LABELS[e] ?? e;
 
+  /** "Live v3", "Draft v1", "Live v3 · draft v4"; "Live" for agents never versioned. */
+  protected readonly versionLabel = (a: AgentConfig): string => {
+    const info = this.versionInfo().get(a.id);
+    if (!info) return '';
+    const live = info.live_version != null ? `Live v${info.live_version}` : 'Live';
+    if (info.status === 'draft') return info.draft_version != null ? `Draft v${info.draft_version}` : 'Draft';
+    if (info.status === 'live_with_draft') return `${live} · draft v${info.draft_version}`;
+    return live;
+  };
+  protected readonly versionClass = (a: AgentConfig): string =>
+    ({ live: 'bg-green-50 text-green-700', draft: 'bg-amber-50 text-amber-700', live_with_draft: 'bg-primary-50 text-primary-700' })[
+      this.versionInfo().get(a.id)?.status ?? 'live'
+    ];
+  private readonly versionTextClass = (a: AgentConfig): string =>
+    ({ live: 'text-green-700', draft: 'text-amber-700', live_with_draft: 'text-primary-700' })[this.versionInfo().get(a.id)?.status ?? 'live'];
+
   protected readonly onRowClick = (row: AgentConfig) => this.selectedId.set(row.id);
   protected readonly rowClass = (row: AgentConfig) =>
     [row.id === this.selectedId() ? 'bg-primary-50' : '', row.enabled ? '' : 'opacity-60'].join(' ');
@@ -176,6 +201,16 @@ export class ConfigAgentsComponent {
   protected readonly columns: TwangTableColumn<AgentConfig>[] = [
     { id: 'id', header: 'ID', align: 'left', sortable: true, width: '280px', cellTruncate: true, value: a => a.id },
     { id: 'name', header: 'Name', align: 'left', sortable: true, fillRemaining: true, minWidth: '200px', cellTruncate: true, value: a => a.name },
+    {
+      id: 'version',
+      header: 'Version',
+      align: 'left',
+      sortable: true,
+      width: '170px',
+      value: a => this.versionLabel(a),
+      sortValue: a => STATUS_ORDER[this.versionInfo().get(a.id)?.status ?? 'live'],
+      cellClass: a => this.versionTextClass(a),
+    },
     { id: 'enabled', header: 'Status', align: 'left', sortable: true, width: '100px', value: a => (a.enabled ? 'Enabled' : 'Disabled') },
     { id: 'origin', header: 'Origin', align: 'left', sortable: true, width: '110px', value: a => originLabel(a.origin) },
     { id: 'execution', header: 'Execution', align: 'left', sortable: true, width: '130px', value: a => this.executionLabel(a.execution) },
@@ -199,8 +234,9 @@ export class ConfigAgentsComponent {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe({
-        next: agents => {
-          this.agents.set(agents);
+        next: responses => {
+          this.responses.set(responses);
+          const agents = this.agents();
           // Keep the current selection if it's still there; otherwise select the top row in the
           // table's default order (execution A–Z; the sort is stable, so ties keep server order).
           if (this.selected()) return;

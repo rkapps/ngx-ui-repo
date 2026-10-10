@@ -58,6 +58,8 @@ export interface AgentConfig {
   llm_config: LlmConfig | null;
   /** When `false` the agent is skipped at startup / not offered to users. */
   enabled: boolean;
+  /** Live version number, set when a version is promoted; null for agents never versioned. Server-owned. */
+  version: number | null;
   origin: Origin;
   standalone: boolean;
   execution: ExecutionType;
@@ -88,6 +90,18 @@ export interface ProviderConfig {
   base_url_env: string | null;
   models: ModelConfig[];
   default_model: string;
+}
+
+/** Where an agent stands in the draft → promote flow (`snake_case` from the backend). */
+export type AgentStatus = 'live' | 'draft' | 'live_with_draft';
+
+/** `GET /admin/agents` row: the live config (or the draft's, if never promoted) plus version state. */
+export interface AgentConfigResponse {
+  config: AgentConfig;
+  status: AgentStatus;
+  /** Null for agents never versioned (imported) or never promoted. */
+  live_version: number | null;
+  draft_version: number | null;
 }
 
 /** Serde's default enum names (no rename on the backend). */
@@ -123,8 +137,9 @@ export class AdminConfigService {
   private readonly http = inject(HttpClient);
   private readonly base = inject(API_BASE_URL);
 
-  getAgents(): Observable<AgentConfig[]> {
-    return this.http.get<AgentConfig[]>(`${this.base}/admin/agents`);
+  /** Every agent — live ones and draft-only ones — with its version status. */
+  getAgents(): Observable<AgentConfigResponse[]> {
+    return this.http.get<AgentConfigResponse[]>(`${this.base}/admin/agents`);
   }
 
   // ── Agent versions (draft → promote) ──

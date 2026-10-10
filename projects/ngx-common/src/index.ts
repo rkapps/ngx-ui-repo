@@ -24,6 +24,8 @@ export {
   type ExecutionType,
   type ToolDefinition,
   type AgentConfigVersion,
+  type AgentConfigResponse,
+  type AgentStatus,
   type VersionStatus,
 } from './lib/services/admin-config.service';
 export {
