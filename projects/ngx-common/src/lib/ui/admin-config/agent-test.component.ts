@@ -489,7 +489,7 @@ export class AgentTestComponent {
             ...s,
             executions: { ...s.executions, [id]: chunk.execution ?? null },
             lastRunId: id,
-            lastResponseId: chunk.response_id || s.lastResponseId,
+            lastResponseId: chunk.execution?.response_id || s.lastResponseId,
           }));
         }
       },

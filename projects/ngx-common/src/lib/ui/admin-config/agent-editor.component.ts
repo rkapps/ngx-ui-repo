@@ -119,7 +119,7 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
  * Save creates a new version (create mode: the agent and its version 1).
  *
  * Built so far: General (identity, markdown description, LLM; type only while creating), System prompt, Tools (registry + MCP),
- * Pipeline (mode, stages, sub-agents from live pipeline agents, available/follow-up). The remaining sections
+ * Pipeline (mode, stages, sub-agents from any live agent, available/follow-up). The remaining sections
  * are placeholders/read-only until they're built out, and Save isn't wired to the backend yet.
  */
 @Component({
@@ -573,7 +573,7 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
       </app-three-panel-layout>
     }
 
-    <!-- Sub-agent picker: ordered selection (left) | live pipeline agents (right). target = stage or available. -->
+    <!-- Sub-agent picker: ordered selection (left) | live agents of any type (right). target = stage or available. -->
     <ng-template #subAgentPicker let-target let-label="label">
       <div class="grid min-h-0 flex-1 md:grid-cols-2">
         <div class="flex min-h-0 flex-col border-border md:border-r">
@@ -588,21 +588,21 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
                   <div class="truncate text-sm">{{ agentName(ref.id) }}</div>
                   <div class="truncate font-mono text-[11px] text-text-muted">{{ ref.id }}</div>
                 </div>
-                @if (!isChoice(ref.id)) {
-                  <span class="shrink-0 rounded bg-red-50 px-1.5 py-0.5 text-[10px] uppercase text-red-700" title="Not a live pipeline agent">missing</span>
+                @if (refIssue(ref.id); as issue) {
+                  <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase" [class]="issue.cls" [title]="issue.title">{{ issue.label }}</span>
                 }
                 <twang-button variant="default" size="xs" icon="chevron-up" ariaLabel="Move up" [disabled]="first" (buttonClick)="moveRef(target, j, -1)" />
                 <twang-button variant="default" size="xs" icon="chevron-down" ariaLabel="Move down" [disabled]="last" (buttonClick)="moveRef(target, j, 1)" />
                 <twang-button variant="default" size="xs" icon="x" ariaLabel="Remove" (buttonClick)="toggleRef(target, ref.id)" />
               </li>
             } @empty {
-              <li class="px-4 py-3 text-sm text-text-muted">None yet — pick pipeline agents on the right.</li>
+              <li class="px-4 py-3 text-sm text-text-muted">None yet — pick agents on the right.</li>
             }
           </ol>
         </div>
         <div class="flex min-h-0 flex-col">
           <div class="shrink-0 border-b border-border bg-gray-50 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-            Pipeline agents
+            Agents
           </div>
           <ul class="min-h-0 flex-1 overflow-y-auto">
             @for (c of subAgentChoices(); track c.id) {
@@ -613,13 +613,16 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
                     <div class="truncate text-sm" [class.font-semibold]="hasRef(target, c.id)">{{ c.name || c.id }}</div>
                     <div class="truncate font-mono text-[11px] text-text-muted">{{ c.id }}</div>
                   </div>
+                  @if (c.execution !== 'pipeline_agent') {
+                    <span class="shrink-0 rounded bg-primary-50 px-1.5 py-0.5 text-[10px] uppercase text-primary-700">{{ executionLabel(c.execution) }}</span>
+                  }
                   @if (!c.enabled) {
                     <span class="shrink-0 rounded bg-surface-muted px-1.5 py-0.5 text-[10px] uppercase text-text-muted">disabled</span>
                   }
                 </label>
               </li>
             } @empty {
-              <li class="px-4 py-3 text-sm text-text-muted">{{ agentsLoaded() ? 'No live pipeline agents yet — create and promote one first.' : 'Loading agents…' }}</li>
+              <li class="px-4 py-3 text-sm text-text-muted">{{ agentsLoaded() ? 'No live agents yet — create and promote one first.' : 'Loading agents…' }}</li>
             }
           </ul>
         </div>
@@ -834,11 +837,11 @@ export class AgentEditorComponent {
   private readonly agentList = signal<AgentConfigResponse[]>([]);
   protected readonly agentsLoaded = signal(false);
 
-  /** Sub-agent candidates: live pipeline agents (promoted at least once), never this agent itself. */
+  /** Sub-agent candidates: live agents of any type (promoted at least once), never this agent itself. */
   protected readonly subAgentChoices = computed(() =>
     this.agentList()
-      .filter(r => r.config.execution === 'pipeline_agent' && r.status !== 'draft' && r.config.id !== this.draft().id)
-      .map(r => ({ id: r.config.id, name: r.config.name, enabled: r.config.enabled }))
+      .filter(r => r.status !== 'draft' && r.config.id !== this.draft().id)
+      .map(r => ({ id: r.config.id, name: r.config.name, enabled: r.config.enabled, execution: r.config.execution }))
       .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id)),
   );
   private readonly choiceIds = computed(() => new Set(this.subAgentChoices().map(c => c.id)));
@@ -860,6 +863,16 @@ export class AgentEditorComponent {
 
   protected readonly agentName = (id: string) => this.agentNames().get(id) || id;
   protected readonly isChoice = (id: string) => this.choiceIds().has(id);
+  private readonly agentsById = computed(() => new Map(this.agentList().map(r => [r.config.id, r])));
+
+  /** Why a selected sub-agent isn't a valid choice: unknown id, itself, or draft-only. */
+  protected readonly refIssue = (id: string): { label: string; title: string; cls: string } | null => {
+    if (!this.agentsLoaded() || this.isChoice(id)) return null;
+    const r = this.agentsById().get(id);
+    if (!r) return { label: 'missing', title: 'No agent with this id', cls: 'bg-red-50 text-red-700' };
+    if (r.config.id === this.draft().id) return { label: 'self', title: 'A pipeline cannot include itself', cls: 'bg-red-50 text-red-700' };
+    return { label: 'draft only', title: 'Not promoted yet — has no live version', cls: 'bg-amber-50 text-amber-700' };
+  };
 
     // ── System prompt ──
   /** Rough token estimate (~4 chars/token) — just a size hint. */
@@ -1016,7 +1029,7 @@ export class AgentEditorComponent {
 
   protected addStage(): void {
     const stages = this.pipeline()?.stages ?? [];
-    this.updatePipeline({ stages: [...stages, { name: `stage-${stages.length + 1}`, parallel: false, sub_agents: [] }] });
+    this.updatePipeline({ stages: [...stages, { name: `stage-${stages.length + 1}`, parallel: true, sub_agents: [] }] });
     this.selectedStage.set(stages.length);
   }
 

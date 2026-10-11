@@ -23,7 +23,8 @@ import { PageBreadcrumbs } from '../breadcrumbs/page-breadcrumbs';
         </div>
       }
     </header>
-    <div class="min-h-0 flex-1 overflow-y-auto bg-gray-50 px-2 md:px-2 lg:px-4 3xl:px-16 pt-2 pb-2 lg:pt-4 xl:pt-6">
+    <!-- Flex column so a page can fill the height (e.g. a three-panel layout with "fill"). -->
+    <div class="flex min-h-0 flex-1 flex-col overflow-y-auto bg-gray-50 px-2 md:px-2 lg:px-4 3xl:px-16 pt-2 pb-2 lg:pt-4 xl:pt-6">
       <router-outlet />
     </div>
   `,

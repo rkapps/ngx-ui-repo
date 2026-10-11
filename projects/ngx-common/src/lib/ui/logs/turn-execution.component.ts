@@ -9,7 +9,6 @@ import { buildTurnTree, type ExecNode, execNodePath, type ExecRow, findExecNode,
 import { AgentTestSessions } from '../../services/agent-test-sessions';
 import { TURN_LOGS, type TurnLogDetail } from '../../services/turn-logs.service';
 import { type PageCrumb, PageBreadcrumbs } from '../breadcrumbs/page-breadcrumbs';
-import { ADMIN_TABLE_HEIGHT } from '../admin-page/admin-layout';
 import { ThreePanelLayoutComponent } from '../three-panel-layout/three-panel-layout.component';
 import { JsonViewComponent } from './json-view.component';
 
@@ -69,19 +68,21 @@ const seconds = (ms: number | null | undefined) => (ms == null ? '—' : (ms / 1
 @Component({
   selector: 'app-turn-execution',
   standalone: true,
+  // Fill the page body (a flex column) so the layout can stretch to the remaining height.
+  host: { class: 'flex min-h-0 flex-1 flex-col' },
   imports: [DecimalPipe, JsonViewComponent, LucideAngularModule, NgTemplateOutlet, ThreePanelLayoutComponent, TwangTreeTableComponent],
   template: `
     @if (load().loading) {
-      <div class="flex min-h-[50vh] items-center justify-center gap-2 rounded-lg border border-border bg-white p-8 text-sm text-text-muted">
+      <div class="flex min-h-[50vh] flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-white p-8 text-sm text-text-muted">
         <lucide-icon name="loader-circle" [size]="16" class="animate-spin" /> Loading execution…
       </div>
     } @else if (load().error) {
-      <div class="flex min-h-[50vh] flex-col items-center justify-center gap-3 rounded-lg border border-border bg-white p-8 text-center text-sm">
+      <div class="flex min-h-[50vh] flex-1 flex-col items-center justify-center gap-3 rounded-lg border border-border bg-white p-8 text-center text-sm">
         <lucide-icon name="git-branch" [size]="28" class="text-text-muted" />
         <p class="text-red-600">{{ load().error }}</p>
       </div>
     } @else if (!tree()) {
-      <div class="flex min-h-[50vh] items-center justify-center rounded-lg border border-border bg-white p-8 text-sm text-text-muted">
+      <div class="flex min-h-[50vh] flex-1 items-center justify-center rounded-lg border border-border bg-white p-8 text-sm text-text-muted">
         No execution trace was recorded for this turn.
       </div>
     } @else {
@@ -90,12 +91,11 @@ const seconds = (ms: number | null | undefined) => (ms == null ? '—' : (ms / 1
         rightTitle="Execution"
         rightWidth="w-[32rem]"
         [storageKey]="logsService.scope + '.logs.execution.layout'"
-        panelMinHeight="min-h-[70vh]"
+        [fill]="true"
       >
-        <!-- Middle: the selected step as rows — properties, token usage, payloads. Fixed to the tree's
-             height; the main payload fills what's left. -->
-        <!-- flex-none, not flex-1: in the auto-height middle column flex-1 sizes to content and overrides h-[70vh]. -->
-        <div middle class="flex h-[70vh] flex-none flex-col overflow-hidden rounded-lg border border-border bg-white">
+        <!-- Middle: the selected step as rows — properties, token usage, payloads. Fills the page height;
+             the main payload fills what's left. min-h keeps payloads usable on short screens. -->
+        <div middle class="flex min-h-[28rem] flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
           @if (selected(); as row) {
             <div class="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
               <lucide-icon [name]="icon(row)" [size]="16" [class]="kindText(row) || 'text-text-muted'" />
@@ -273,16 +273,17 @@ const seconds = (ms: number | null | undefined) => (ms == null ? '—' : (ms / 1
           }
         </div>
 
-        <!-- Right (collapsible): the tree; fixed height so it scrolls under its sticky header. -->
-        <div right>
+        <!-- Right (collapsible): the tree fills the panel and scrolls under its sticky header. -->
+        <div right class="h-full">
           <twang-tree-table
             [nodes]="nodes()"
             [columns]="columns"
             [selectedId]="selectedId()"
             [initialExpandedDepth]="99"
             [fillContainerWidth]="true"
-            [scrollPanelMaxHeight]="treeHeight"
-            [scrollPanelMinHeight]="treeHeight"
+            class="block h-full"
+            scrollPanelMaxHeight="100%"
+            scrollPanelMinHeight="100%"
             tableMinWidthClass="min-w-0"
             (nodeSelected)="select($event.id)"
           />
@@ -318,7 +319,6 @@ export class TurnExecutionComponent {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 
-  protected readonly treeHeight = ADMIN_TABLE_HEIGHT;
   protected readonly usageFields = USAGE_FIELDS;
   protected readonly seconds = seconds;
 

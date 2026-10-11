@@ -5,7 +5,6 @@ import { AuthService } from '../auth/auth.service';
 import { postEventStream } from '../http/event-stream';
 import type { TurnResponse } from '../models/turn-execution';
 import { API_BASE_URL } from './api-url.token';
-import type { CompletionChunkResponse } from './conversation.service';
 import type { Origin } from '../models/origin';
 import type { ConversationStrategy, HistoryMode } from './conversation.service';
 
@@ -126,8 +125,14 @@ export interface AgentTestRequest {
 }
 
 /** A test-run stream chunk: the chat chunk format; the final chunk also carries the full execution. */
-export interface AgentTestChunk extends CompletionChunkResponse {
-  execution?: TurnResponse | null;
+/** Backend `AgentConfigTestResponseChunk`; `execution` (the full TurnResponse) comes on the final chunk. */
+export interface AgentTestChunk {
+  id: string;
+  content: string;
+  thought: string;
+  status: string;
+  is_final: boolean;
+  execution: TurnResponse | null;
 }
 
 /** Serde's default enum names (no rename on the backend). */

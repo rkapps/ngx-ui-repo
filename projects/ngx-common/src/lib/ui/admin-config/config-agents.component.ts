@@ -77,9 +77,11 @@ const STATUS_ORDER: Record<AgentConfigResponse['status'], number> = { live: 0, l
         </div>
       </div>
 
-      <div right class="flex flex-col gap-4 p-4 text-sm">
+      <!-- Fills the panel (min 70vh, same as the middle): the system prompt takes what's left and scrolls
+           inside. Its text is absolutely positioned so a long prompt can't grow the panel. -->
+      <div right class="flex min-h-0 flex-1 flex-col gap-4 p-4 text-sm">
         @if (selected(); as a) {
-          <section class="flex flex-col gap-2 border-b border-border pb-4">
+          <section class="flex shrink-0 flex-col gap-2 border-b border-border pb-4">
             <span class="text-xs font-semibold uppercase tracking-wider text-primary-600">Description</span>
             @if (a.description) {
               <p>{{ a.description }}</p>
@@ -88,7 +90,7 @@ const STATUS_ORDER: Record<AgentConfigResponse['status'], number> = { live: 0, l
             }
           </section>
 
-          <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+          <dl class="grid shrink-0 grid-cols-[auto_1fr] gap-x-4 gap-y-2">
             <dt class="text-xs text-text-muted">ID</dt>
             <dd class="break-all font-mono text-xs">{{ a.id }}</dd>
             <dt class="text-xs text-text-muted">Status</dt>
@@ -116,7 +118,7 @@ const STATUS_ORDER: Record<AgentConfigResponse['status'], number> = { live: 0, l
             <dd>{{ a.llm_config?.preset ?? '—' }}</dd>
           </dl>
 
-          <section class="flex flex-col gap-2 border-t border-border pt-4">
+          <section class="flex shrink-0 flex-col gap-2 border-t border-border pt-4">
             <span class="text-xs font-semibold uppercase tracking-wider text-primary-600">Tools</span>
             @if (a.tools.length || a.mcp_tools.length) {
               <div class="flex flex-wrap gap-1">
@@ -132,10 +134,12 @@ const STATUS_ORDER: Record<AgentConfigResponse['status'], number> = { live: 0, l
             }
           </section>
 
-          <section class="flex flex-col gap-2 border-t border-border pt-4">
+          <section class="flex min-h-48 flex-1 flex-col gap-2 border-t border-border pt-4">
             <span class="text-xs font-semibold uppercase tracking-wider text-primary-600">System prompt</span>
             @if (a.system_prompt) {
-              <pre class="max-h-72 overflow-auto whitespace-pre-wrap rounded-md bg-surface-muted p-3 text-xs">{{ a.system_prompt }}</pre>
+              <div class="relative min-h-0 flex-1">
+                <pre class="absolute inset-0 overflow-auto whitespace-pre-wrap rounded-md bg-surface-muted p-3 text-xs">{{ a.system_prompt }}</pre>
+              </div>
             } @else {
               <p class="text-text-muted">None.</p>
             }

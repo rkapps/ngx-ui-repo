@@ -111,7 +111,8 @@ import { TwangButtonComponent } from 'ngx-twang-ui';
             }
           </div>
           @if (!rightCollapsed()) {
-            <div class="min-h-0 flex-1 overflow-y-auto">
+            <!-- Flex column so [right] content can grow (flex-1) to the panel's height. -->
+            <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
               <ng-content select="[right]" />
             </div>
           }
