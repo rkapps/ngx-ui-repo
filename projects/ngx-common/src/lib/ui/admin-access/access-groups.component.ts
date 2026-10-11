@@ -9,7 +9,6 @@ import { type GroupWithCount, GroupService } from '../../services/group.service'
 import { type UserResponse, UserService } from '../../services/user.service';
 import { ThreePanelLayoutComponent } from '../three-panel-layout/three-panel-layout.component';
 import { ADMIN_RIGHT_WIDTH } from '../admin-page/admin-layout';
-import { AccessNavComponent } from './access-nav.component';
 import { ACCESS_LAYOUT_KEY } from './access-sections';
 
 type Mode = 'none' | 'create' | 'edit';
@@ -23,7 +22,6 @@ type Mode = 'none' | 'create' | 'edit';
   selector: 'app-access-groups',
   standalone: true,
   imports: [
-    AccessNavComponent,
     FormsModule,
     LucideAngularModule,
     ThreePanelLayoutComponent,
@@ -33,13 +31,12 @@ type Mode = 'none' | 'create' | 'edit';
   ],
   template: `
     <app-three-panel-layout
-      leftTitle="Access"
+      [showLeft]="false"
       [rightTitle]="rightTitle()"
       [storageKey]="layoutKey"
       [rightWidth]="rightWidth"
       panelMinHeight="min-h-[70vh]"
     >
-      <app-access-nav left />
 
       <!-- Middle: groups table -->
       <div middle class="flex flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">

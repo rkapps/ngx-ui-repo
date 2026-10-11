@@ -1,12 +1,12 @@
 import { Component, computed, input, model, signal } from '@angular/core';
 import { LucideAngularModule } from 'lucide-angular';
 import { TwangButtonComponent } from 'ngx-twang-ui';
-import { parseJsonContent } from '../../models/turn-execution';
+import { formatLooseJson, parseJsonContent } from '../../models/turn-execution';
 
 /**
- * Titled, scrollable block for a JSON value or a text payload. Text that is itself JSON (bare or
- * in a ```json fence, as agent `content` usually is) is pretty-printed; anything else is shown as
- * wrapped text. Has a copy button for the raw value, and can be collapsed to its header.
+ * Titled, scrollable block for a JSON value or a text payload. Text containing JSON (bare, in a
+ * ```json fence, wrapped in prose, or double-encoded) is pretty-printed; JSON-looking text that does
+ * not parse (e.g. truncated) is indented best-effort; anything else is shown as wrapped text. Has a copy button for the raw value, and can be collapsed to its header.
  */
 @Component({
   selector: 'app-json-view',
@@ -33,6 +33,12 @@ import { parseJsonContent } from '../../models/turn-execution';
         }
         @if (isJson()) {
           <span class="rounded bg-surface-muted px-1.5 py-0.5 text-[10px] uppercase text-text-muted">json</span>
+        } @else if (loose()) {
+          <span
+            class="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] uppercase text-amber-700"
+            title="Not valid JSON (possibly truncated) — indented on a best-effort basis"
+            >json · invalid</span
+          >
         }
         @if (!empty()) {
           <twang-button
@@ -54,7 +60,7 @@ import { parseJsonContent } from '../../models/turn-execution';
         <pre
           class="overflow-auto rounded-md border border-border bg-surface-muted p-3 font-mono text-xs leading-relaxed"
           [class]="fill() ? 'min-h-40 flex-1' : maxHeightClass()"
-          [class.whitespace-pre-wrap]="!isJson()"
+          [class.whitespace-pre-wrap]="!isJson() && !loose()"
         >{{ display() }}</pre>
       }
     </section>
@@ -87,13 +93,15 @@ export class JsonViewComponent {
   });
 
   protected readonly isJson = computed(() => this.parsed().json);
+  /** Text that looks like JSON but does not parse (e.g. truncated), indented best-effort. */
+  protected readonly loose = computed(() => (this.parsed().json ? undefined : formatLooseJson(this.text())));
   protected readonly empty = computed(() => {
     const { json, data } = this.parsed();
     return json ? data === null || data === undefined : !String(data).trim();
   });
   protected readonly display = computed(() => {
     const { json, data } = this.parsed();
-    return json ? JSON.stringify(data, null, 2) : String(data);
+    return json ? JSON.stringify(data, null, 2) : (this.loose() ?? String(data));
   });
 
   protected copy(): void {

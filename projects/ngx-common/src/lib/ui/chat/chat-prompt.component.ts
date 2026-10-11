@@ -4,7 +4,7 @@ import { LucideAngularModule } from 'lucide-angular';
 const SUGGESTED_COLLAPSED_KEY = 'ngx-chat-prompt.suggestedCollapsed';
 const ACTIVE_TAB_KEY = 'ngx-chat-prompt.activeTab';
 const LAST_PROMPTS_KEY = 'ngx-chat-prompt.lastPrompts';
-const LAST_PROMPTS_LIMIT = 8;
+const LAST_PROMPTS_LIMIT = 5;
 const MOBILE_QUERY = '(max-width: 639.98px)';
 
 type PromptTabId = 'default' | 'last' | 'suggested';
@@ -31,7 +31,8 @@ function readActiveTab(): PromptTabId {
 function readLastPrompts(): string[] {
   try {
     const parsed = JSON.parse(localStorage.getItem(LAST_PROMPTS_KEY) ?? '');
-    return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === 'string') : [];
+    // Trimmed on read too, so lists saved under an older, larger limit shrink straight away.
+    return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === 'string').slice(0, LAST_PROMPTS_LIMIT) : [];
   } catch {
     return [];
   }

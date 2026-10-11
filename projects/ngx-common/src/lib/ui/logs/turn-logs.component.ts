@@ -1,5 +1,5 @@
 import { DatePipe, formatDate } from '@angular/common';
-import { Component, computed, inject, LOCALE_ID, signal } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, LOCALE_ID, signal, type TemplateRef, viewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { LucideAngularModule } from 'lucide-angular';
@@ -7,6 +7,7 @@ import { TwangButtonComponent, TwangDatepickerComponent, TwangTableComponent, ty
 import { catchError, map, of, startWith, switchMap } from 'rxjs';
 import { TURN_LOGS, type TurnLog, type TurnLogRequest } from '../../services/turn-logs.service';
 import { ADMIN_RIGHT_WIDTH, ADMIN_TABLE_HEIGHT } from '../admin-page/admin-layout';
+import { PageBreadcrumbs } from '../breadcrumbs/page-breadcrumbs';
 import { ThreePanelLayoutComponent } from '../three-panel-layout/three-panel-layout.component';
 
 /** Default range: the last 7 days, today included. */
@@ -44,7 +45,7 @@ interface LoadState {
 
 /**
  * Logs (Admin > Logs, or the user's own Logs page — scope comes from the route's `TURN_LOGS`):
- * conversation turns in a date range, with their model and cost. Left panel
+ * conversation turns in a date range, with their model and cost. A filter card above the table
  * filters by From/To date (inclusive local days; last 7 days by default), the middle table lists
  * turns newest first (the newest is selected on load), and the right panel shows the selected
  * turn's details and cost breakdown.
@@ -55,59 +56,67 @@ interface LoadState {
   imports: [DatePipe, LucideAngularModule, ThreePanelLayoutComponent, TwangButtonComponent, TwangDatepickerComponent, TwangTableComponent],
   template: `
     <app-three-panel-layout
-      leftTitle="Filters"
+      [showLeft]="false"
       [rightTitle]="selected()?.title || 'Details'"
       [storageKey]="scope + '.logs.layout'"
       [rightWidth]="rightWidth"
       panelMinHeight="min-h-[70vh]"
     >
-      <div left class="flex flex-col gap-4">
-        <twang-datepicker label="From" placeholder="Start date" [value]="fromDay() ?? ''" (valueChange)="fromDay.set($event)" />
-        <twang-datepicker label="To" placeholder="End date" [value]="toDay() ?? ''" (valueChange)="toDay.set($event)" />
-        @if (rangeError()) {
-          <p class="text-xs text-red-600">{{ rangeError() }}</p>
-        }
-        <twang-button variant="default" size="sm" label="Last 7 days" (buttonClick)="resetRange()" />
-      </div>
-
-      <div middle class="flex flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
-        <div class="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
-          <span class="text-sm font-semibold text-primary-600">Turn Logs</span>
-          <span class="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700">{{ logs().length }}</span>
-          @if (logs().length) {
-            <span class="text-xs text-text-muted">· {{ money(totalCost()) }} total</span>
+      <!-- Middle: filters card above the logs card -->
+      <div middle class="flex flex-1 flex-col gap-3">
+        <!-- Filters -->
+        <div class="flex shrink-0 flex-wrap items-end gap-3 rounded-lg border border-border bg-white px-4 py-3">
+          <div class="w-44">
+            <twang-datepicker label="From" placeholder="Start date" [value]="fromDay() ?? ''" (valueChange)="fromDay.set($event)" />
+          </div>
+          <div class="w-44">
+            <twang-datepicker label="To" placeholder="End date" [value]="toDay() ?? ''" (valueChange)="toDay.set($event)" />
+          </div>
+          <twang-button variant="default" size="sm" label="Last 7 days" (buttonClick)="resetRange()" />
+          @if (rangeError()) {
+            <span class="pb-2 text-xs text-red-600">{{ rangeError() }}</span>
           }
-          <twang-button
-            class="ml-auto"
-            variant="default"
-            size="sm"
-            icon="refresh-cw"
-            ariaLabel="Refresh logs"
-            title="Refresh logs"
-            [loading]="loading()"
-            [disabled]="loading() || !!rangeError()"
-            (buttonClick)="refresh()"
-          />
         </div>
-        <div class="flex min-h-0 flex-1 flex-col">
-          @if (error()) {
-            <div class="flex flex-1 items-center justify-center p-8 text-sm text-red-600">{{ error() }}</div>
-          } @else {
-            <twang-table
-              [rows]="logs()"
-              [columns]="columns"
+        <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
+          <div class="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
+            <span class="text-sm font-semibold text-primary-600">Turn Logs</span>
+            <span class="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700">{{ logs().length }}</span>
+            @if (logs().length) {
+              <span class="text-xs text-text-muted">· {{ money(totalCost()) }} total</span>
+            }
+            <twang-button
+              class="ml-auto"
+              variant="default"
+              size="sm"
+              icon="refresh-cw"
+              ariaLabel="Refresh logs"
+              title="Refresh logs"
               [loading]="loading()"
-              [fillContainerWidth]="true"
-              [onRowClick]="onRowClick"
-              [rowClass]="rowClass"
-              [scrollPanelMaxHeight]="tableHeight"
-              [scrollPanelMinHeight]="tableHeight"
-              initialSortKey="created_at"
-              initialSortDir="desc"
-              [tableMinWidthClass]="tableMinWidthClass"
-              emptyMessage="No turns in this range."
+              [disabled]="loading() || !!rangeError()"
+              (buttonClick)="refresh()"
             />
-          }
+          </div>
+          <div class="flex min-h-0 flex-1 flex-col">
+            @if (error()) {
+              <div class="flex flex-1 items-center justify-center p-8 text-sm text-red-600">{{ error() }}</div>
+            } @else {
+              <twang-table
+                [rows]="logs()"
+                [columns]="columns"
+                [loading]="loading()"
+                [fillContainerWidth]="true"
+                [onRowClick]="onRowClick"
+              [onRowDoubleClick]="onRowDoubleClick"
+                [rowClass]="rowClass"
+                [scrollPanelMaxHeight]="tableHeight"
+                [scrollPanelMinHeight]="tableHeight"
+                initialSortKey="created_at"
+                initialSortDir="desc"
+                [tableMinWidthClass]="tableMinWidthClass"
+                emptyMessage="No turns in this range."
+              />
+            }
+          </div>
         </div>
       </div>
 
@@ -134,16 +143,6 @@ interface LoadState {
             <dd>{{ seconds(t.execution_time_ms) }}</dd>
           </dl>
 
-          <twang-button
-            variant="primarySoft"
-            size="sm"
-            icon="git-branch"
-            label="View execution"
-            [title]="t.has_execution ? 'Agents, iterations and tool calls for this turn' : 'No execution trace recorded for this turn'"
-            [disabled]="!t.has_execution"
-            (buttonClick)="openExecution(t)"
-          />
-
           <section class="flex flex-col gap-2 border-t border-border pt-4">
             <span class="text-xs font-semibold uppercase tracking-wider text-primary-600">Cost</span>
             <dl class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-2">
@@ -164,6 +163,21 @@ interface LoadState {
         }
       </div>
     </app-three-panel-layout>
+
+    <!-- Rendered on the right of the page header (admin or user Logs) via PageBreadcrumbs.actions. -->
+    <ng-template #headerActions>
+      @if (selected(); as t) {
+        <twang-button
+          variant="primary"
+          size="sm"
+          icon="git-branch"
+          label="View execution"
+          [title]="t.has_execution ? 'Agents, iterations and tool calls for this turn' : 'No execution trace recorded for this turn'"
+          [disabled]="!t.has_execution"
+          (buttonClick)="openExecution(t)"
+        />
+      }
+    </ng-template>
   `,
 })
 export class TurnLogsComponent {
@@ -174,8 +188,12 @@ export class TurnLogsComponent {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 
+  /** View execution, shown on the right of the page header while this page is open. */
+  private readonly headerActions = viewChild<TemplateRef<unknown>>('headerActions');
+
   protected readonly rightWidth = ADMIN_RIGHT_WIDTH;
-  protected readonly tableHeight = ADMIN_TABLE_HEIGHT;
+  // The filter card sits above the table card, so take its height (~4rem) off the shared one.
+  protected readonly tableHeight = `calc(${ADMIN_TABLE_HEIGHT} - 4rem)`;
 
   // Filters (date picker `YYYY-MM-DD`; empty = unbounded) and selection live in the service so
   // they survive a trip to a turn's execution page and back.
@@ -210,6 +228,10 @@ export class TurnLogsComponent {
   protected readonly money = money;
   protected readonly seconds = seconds;
 
+  /** Double-click = View execution (when the turn has a trace). */
+  protected readonly onRowDoubleClick = (row: TurnLog) => {
+    if (row.has_execution) this.openExecution(row);
+  };
   protected readonly onRowClick = (row: TurnLog) => this.selectedKey.set(rowKey(row));
   // Guard on a real key: rows without a `turn_id` would otherwise all match an unset selection.
   protected readonly rowClass = (row: TurnLog) => (!!rowKey(row) && rowKey(row) === this.selectedKey() ? 'bg-primary-50' : '');
@@ -247,6 +269,13 @@ export class TurnLogsComponent {
   protected readonly tableMinWidthClass = this.scope === 'admin' ? 'min-w-[1400px]' : 'min-w-[1180px]';
 
   constructor() {
+    const breadcrumbs = inject(PageBreadcrumbs);
+    effect(() => breadcrumbs.actions.set(this.headerActions() ?? null));
+    // Only drop our actions (not the crumbs): the next page may already have set its own.
+    inject(DestroyRef).onDestroy(() => {
+      if (breadcrumbs.actions() === this.headerActions()) breadcrumbs.actions.set(null);
+    });
+
     if (this.fromDay() === null && this.toDay() === null) this.resetRange();
 
     toObservable(this.request)

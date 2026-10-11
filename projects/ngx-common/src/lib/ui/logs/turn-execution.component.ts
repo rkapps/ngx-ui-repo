@@ -6,9 +6,10 @@ import { LucideAngularModule } from 'lucide-angular';
 import { TwangTreeTableComponent, type TwangTreeTableColumn } from 'ngx-twang-ui';
 import { catchError, map, of, startWith, switchMap } from 'rxjs';
 import { buildTurnTree, type ExecNode, execNodePath, type ExecRow, findExecNode, rowOf, type TokenUsage } from '../../models/turn-execution';
+import { AgentTestSessions } from '../../services/agent-test-sessions';
 import { TURN_LOGS, type TurnLogDetail } from '../../services/turn-logs.service';
 import { type PageCrumb, PageBreadcrumbs } from '../breadcrumbs/page-breadcrumbs';
-import { ADMIN_RIGHT_WIDTH, ADMIN_TABLE_HEIGHT } from '../admin-page/admin-layout';
+import { ADMIN_TABLE_HEIGHT } from '../admin-page/admin-layout';
 import { ThreePanelLayoutComponent } from '../three-panel-layout/three-panel-layout.component';
 import { JsonViewComponent } from './json-view.component';
 
@@ -55,10 +56,11 @@ const USAGE_FIELDS: { key: keyof TokenUsage; label: string }[] = [
 const seconds = (ms: number | null | undefined) => (ms == null ? '—' : (ms / 1000).toFixed(2));
 
 /**
- * Logs > Execution (admin or user scope, via the route's `TURN_LOGS`): one turn's full execution trace across three panels — the left is the
- * tree (agents, pipeline stages / orchestrator decisions, iterations, tool calls) in a scrolling
- * `twang-tree-table`; the middle shows the selected step's payloads (prompt/content, tool
- * input/output JSON, reasoning, child steps); the right shows its properties and token usage.
+ * Logs > Execution (admin or user scope, via the route's `TURN_LOGS`): one turn's full execution
+ * trace. The right (collapsible) panel is the tree (agents, pipelines, stages / orchestrator
+ * decisions, iterations, tool calls) in a scrolling `twang-tree-table`; the middle shows the
+ * selected step as rows — properties beside token usage, then payloads (prompt/content, tool input/output
+ * JSON, reasoning, child steps).
  * The selection lives in `?node=`, and the breadcrumb bar above the page shows the path to it.
  *
  * The turn is fetched by `:turnId` (so reloads and shared links work); when arriving from Logs,
@@ -84,29 +86,14 @@ const seconds = (ms: number | null | undefined) => (ms == null ? '—' : (ms / 1
       </div>
     } @else {
       <app-three-panel-layout
-        leftTitle="Execution"
-        leftWidth="w-[32rem]"
-        [rightTitle]="selected() ? kindLabel(selected()!) : 'Details'"
-        [rightWidth]="rightWidth"
+        [showLeft]="false"
+        rightTitle="Execution"
+        rightWidth="w-[32rem]"
         [storageKey]="logsService.scope + '.logs.execution.layout'"
         panelMinHeight="min-h-[70vh]"
       >
-        <!-- Left: the tree; fixed height so it scrolls under its sticky header. -->
-        <div left class="-m-3">
-          <twang-tree-table
-            [nodes]="nodes()"
-            [columns]="columns"
-            [selectedId]="selectedId()"
-            [initialExpandedDepth]="99"
-            [fillContainerWidth]="true"
-            [scrollPanelMaxHeight]="treeHeight"
-            [scrollPanelMinHeight]="treeHeight"
-            tableMinWidthClass="min-w-0"
-            (nodeSelected)="select($event.id)"
-          />
-        </div>
-
-        <!-- Middle: payloads. Fixed to the tree's height; the main payload fills what's left. -->
+        <!-- Middle: the selected step as rows — properties, token usage, payloads. Fixed to the tree's
+             height; the main payload fills what's left. -->
         <!-- flex-none, not flex-1: in the auto-height middle column flex-1 sizes to content and overrides h-[70vh]. -->
         <div middle class="flex h-[70vh] flex-none flex-col overflow-hidden rounded-lg border border-border bg-white">
           @if (selected(); as row) {
@@ -119,6 +106,97 @@ const seconds = (ms: number | null | undefined) => (ms == null ? '—' : (ms / 1
             </div>
 
             <div class="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-4 text-sm">
+              <!-- Properties (fills the width) | token usage (sized to fit, right) -->
+              <div class="grid shrink-0 gap-x-8 gap-y-4 border-b border-border pb-5" [class]="usage() ? 'md:grid-cols-[minmax(0,1fr)_auto]' : ''">
+                <dl class="grid min-w-0 content-start grid-cols-[9rem_minmax(0,1fr)] gap-x-4 gap-y-1.5">
+
+
+                <dt class="text-xs text-text-muted">Type</dt>
+                <dd>{{ kindLabel(row) }}</dd>
+                <dt class="text-xs text-text-muted">Time (s)</dt>
+                <dd class="tabular-nums" [class.text-red-600]="row.error">{{ seconds(row.duration_ms) }}</dd>
+                @switch (row.kind) {
+                  @case ('tool') {
+                    @if (asTool(row); as t) {
+                      <dt class="text-xs text-text-muted">Tool</dt>
+                      <dd class="break-all font-mono text-xs">{{ t.name }}</dd>
+                      <dt class="text-xs text-text-muted">Call id</dt>
+                      <dd class="break-all font-mono text-xs">{{ t.id }}</dd>
+                      <dt class="text-xs text-text-muted">Status</dt>
+                      <dd [class.text-red-600]="!!t.error">{{ t.error ? 'Error' : 'OK' }}</dd>
+                    }
+                  }
+                  @case ('iteration') {
+                    @if (asIteration(row); as it) {
+                      <dt class="text-xs text-text-muted">Iteration</dt>
+                      <dd>{{ it.iteration }}</dd>
+                      <dt class="text-xs text-text-muted">Tool calls</dt>
+                      <dd>{{ it.tool_calls.length }}</dd>
+                      <dt class="text-xs text-text-muted">Finish reason</dt>
+                      <dd>{{ it.finish_reason || '—' }}</dd>
+                      <dt class="text-xs text-text-muted">Response id</dt>
+                      <dd class="break-all font-mono text-xs">{{ it.response_id || '—' }}</dd>
+                    }
+                  }
+                  @case ('pipeline') {
+                    @if (asPipeline(row); as p) {
+                      <dt class="text-xs text-text-muted">Mode</dt>
+                      <dd>{{ p.mode }}</dd>
+                      <dt class="text-xs text-text-muted">{{ p.mode === 'Deterministic' ? 'Stages' : 'Decisions' }}</dt>
+                      <dd>{{ p.steps }}</dd>
+                      <dt class="text-xs text-text-muted">Synthesizer</dt>
+                      <dd class="break-all font-mono text-xs">{{ p.synthesizer?.agent_id ?? '—' }}</dd>
+                    }
+                  }
+                  @case ('stage') {
+                    @if (asStage(row); as s) {
+                      <dt class="text-xs text-text-muted">Stage</dt>
+                      <dd class="break-all">{{ s.name }}</dd>
+                      <dt class="text-xs text-text-muted">Agents</dt>
+                      <dd>{{ s.responses.length }}</dd>
+                    }
+                  }
+                  @case ('decision') {
+                    @if (asDecision(row); as d) {
+                      <dt class="text-xs text-text-muted">Iteration</dt>
+                      <dd>{{ d.iteration }}</dd>
+                      <dt class="text-xs text-text-muted">Execution</dt>
+                      <dd>{{ d.decision.execution }}</dd>
+                      <dt class="text-xs text-text-muted">Stop</dt>
+                      <dd>{{ d.decision.stop ? 'Yes (synthesis)' : 'No' }}</dd>
+                    }
+                  }
+                  @default {
+                    @if (asAgent(row); as a) {
+                      <dt class="text-xs text-text-muted">Agent</dt>
+                      <dd class="break-all font-mono text-xs">{{ a.turn.agent_id }}</dd>
+                      @if (a.agent?.model) {
+                        <dt class="text-xs text-text-muted">Model</dt>
+                        <dd class="break-all">{{ a.agent!.model }}</dd>
+                      }
+                      <dt class="text-xs text-text-muted">Steps</dt>
+                      <dd>{{ row.meta || '—' }}</dd>
+                      <dt class="text-xs text-text-muted">Response id</dt>
+                      <dd class="break-all font-mono text-xs">{{ a.turn.response_id || a.agent?.response_id || '—' }}</dd>
+                    }
+                  }
+                }
+                </dl>
+
+                @if (usage(); as u) {
+                  <div class="flex min-w-56 flex-col gap-1.5 md:border-l md:border-border md:pl-8">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Token usage</span>
+                    <dl class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1">
+                      @for (f of usageFields; track f.key) {
+                        <dt class="text-xs text-text-muted" [class.font-semibold]="f.key === 'total_tokens'">{{ f.label }}</dt>
+                        <dd class="text-right text-sm tabular-nums" [class.font-semibold]="f.key === 'total_tokens'">{{ u[f.key] | number }}</dd>
+                      }
+                    </dl>
+                  </div>
+                }
+              </div>
+
+              <!-- Payloads -->
               @switch (row.kind) {
                 @case ('tool') {
                   @if (asTool(row); as t) {
@@ -195,96 +273,19 @@ const seconds = (ms: number | null | undefined) => (ms == null ? '—' : (ms / 1
           }
         </div>
 
-        <!-- Right: properties -->
-        <div right class="flex flex-col gap-4 p-4 text-sm">
-          @if (selected(); as row) {
-            <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-              <dt class="text-xs text-text-muted">Type</dt>
-              <dd>{{ kindLabel(row) }}</dd>
-              <dt class="text-xs text-text-muted">Time (s)</dt>
-              <dd class="tabular-nums" [class.text-red-600]="row.error">{{ seconds(row.duration_ms) }}</dd>
-              @switch (row.kind) {
-                @case ('tool') {
-                  @if (asTool(row); as t) {
-                    <dt class="text-xs text-text-muted">Tool</dt>
-                    <dd class="break-all font-mono text-xs">{{ t.name }}</dd>
-                    <dt class="text-xs text-text-muted">Call id</dt>
-                    <dd class="break-all font-mono text-xs">{{ t.id }}</dd>
-                    <dt class="text-xs text-text-muted">Status</dt>
-                    <dd [class.text-red-600]="!!t.error">{{ t.error ? 'Error' : 'OK' }}</dd>
-                  }
-                }
-                @case ('iteration') {
-                  @if (asIteration(row); as it) {
-                    <dt class="text-xs text-text-muted">Iteration</dt>
-                    <dd>{{ it.iteration }}</dd>
-                    <dt class="text-xs text-text-muted">Tool calls</dt>
-                    <dd>{{ it.tool_calls.length }}</dd>
-                    <dt class="text-xs text-text-muted">Finish reason</dt>
-                    <dd>{{ it.finish_reason || '—' }}</dd>
-                    <dt class="text-xs text-text-muted">Response id</dt>
-                    <dd class="break-all font-mono text-xs">{{ it.response_id || '—' }}</dd>
-                  }
-                }
-                @case ('pipeline') {
-                  @if (asPipeline(row); as p) {
-                    <dt class="text-xs text-text-muted">Mode</dt>
-                    <dd>{{ p.mode }}</dd>
-                    <dt class="text-xs text-text-muted">{{ p.mode === 'Deterministic' ? 'Stages' : 'Decisions' }}</dt>
-                    <dd>{{ p.steps }}</dd>
-                    <dt class="text-xs text-text-muted">Synthesizer</dt>
-                    <dd class="break-all font-mono text-xs">{{ p.synthesizer?.agent_id ?? '—' }}</dd>
-                  }
-                }
-                @case ('stage') {
-                  @if (asStage(row); as s) {
-                    <dt class="text-xs text-text-muted">Stage</dt>
-                    <dd class="break-all">{{ s.name }}</dd>
-                    <dt class="text-xs text-text-muted">Agents</dt>
-                    <dd>{{ s.responses.length }}</dd>
-                  }
-                }
-                @case ('decision') {
-                  @if (asDecision(row); as d) {
-                    <dt class="text-xs text-text-muted">Iteration</dt>
-                    <dd>{{ d.iteration }}</dd>
-                    <dt class="text-xs text-text-muted">Execution</dt>
-                    <dd>{{ d.decision.execution }}</dd>
-                    <dt class="text-xs text-text-muted">Stop</dt>
-                    <dd>{{ d.decision.stop ? 'Yes (synthesis)' : 'No' }}</dd>
-                  }
-                }
-                @default {
-                  @if (asAgent(row); as a) {
-                    <dt class="text-xs text-text-muted">Agent</dt>
-                    <dd class="break-all font-mono text-xs">{{ a.turn.agent_id }}</dd>
-                    @if (a.agent?.model) {
-                      <dt class="text-xs text-text-muted">Model</dt>
-                      <dd class="break-all">{{ a.agent!.model }}</dd>
-                    }
-                    <dt class="text-xs text-text-muted">Steps</dt>
-                    <dd>{{ row.meta || '—' }}</dd>
-                    <dt class="text-xs text-text-muted">Response id</dt>
-                    <dd class="break-all font-mono text-xs">{{ a.turn.response_id || a.agent?.response_id || '—' }}</dd>
-                  }
-                }
-              }
-            </dl>
-
-            @if (usage(); as u) {
-              <section class="flex flex-col gap-2 border-t border-border pt-4">
-                <span class="text-xs font-semibold uppercase tracking-wider text-primary-600">Token usage</span>
-                <dl class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1.5">
-                  @for (f of usageFields; track f.key) {
-                    <dt class="text-xs text-text-muted" [class.font-semibold]="f.key === 'total_tokens'">{{ f.label }}</dt>
-                    <dd class="text-right tabular-nums" [class.font-semibold]="f.key === 'total_tokens'">{{ u[f.key] | number }}</dd>
-                  }
-                </dl>
-              </section>
-            }
-          } @else {
-            <p class="text-text-muted">Select a step in the tree.</p>
-          }
+        <!-- Right (collapsible): the tree; fixed height so it scrolls under its sticky header. -->
+        <div right>
+          <twang-tree-table
+            [nodes]="nodes()"
+            [columns]="columns"
+            [selectedId]="selectedId()"
+            [initialExpandedDepth]="99"
+            [fillContainerWidth]="true"
+            [scrollPanelMaxHeight]="treeHeight"
+            [scrollPanelMinHeight]="treeHeight"
+            tableMinWidthClass="min-w-0"
+            (nodeSelected)="select($event.id)"
+          />
         </div>
       </app-three-panel-layout>
     }
@@ -318,7 +319,6 @@ export class TurnExecutionComponent {
   private readonly route = inject(ActivatedRoute);
 
   protected readonly treeHeight = ADMIN_TABLE_HEIGHT;
-  protected readonly rightWidth = ADMIN_RIGHT_WIDTH;
   protected readonly usageFields = USAGE_FIELDS;
   protected readonly seconds = seconds;
 
@@ -332,11 +332,23 @@ export class TurnExecutionComponent {
   private readonly turnId = toSignal(this.route.paramMap.pipe(map(p => p.get('turnId') ?? '')), { requireSync: true });
   private readonly nodeParam = toSignal(this.route.queryParamMap.pipe(map(q => q.get('node'))), { initialValue: null });
 
+  /**
+   * Agent test runs (route data `testRun`, under `/admin/config/agents/:id/test/execution`) aren't
+   * saved on the server — the last run comes from the in-browser test session instead.
+   */
+  private readonly testAgentId = this.route.snapshot.data['testRun'] ? this.route.snapshot.paramMap.get('id') : null;
+  private readonly testSessions = inject(AgentTestSessions);
+
   /** The turn's detail (log row + execution), fetched whenever `:turnId` changes. */
   protected readonly load = toSignal(
     toObservable(this.turnId).pipe(
-      switchMap(id =>
-        this.logsService.getTurnDetail(id).pipe(
+      switchMap(id => {
+        if (this.testAgentId) {
+          const detail = this.testSessions.lastRunDetail(this.testAgentId);
+          const error = detail ? null : 'No test run to show — test runs live in this browser tab only. Run a prompt on the Test page first.';
+          return of({ loading: false, detail, error });
+        }
+        return this.logsService.getTurnDetail(id).pipe(
           map(detail => ({ loading: false, detail, error: null as string | null })),
           catchError(err => {
             console.error('Failed to load turn execution', err);
@@ -344,8 +356,8 @@ export class TurnExecutionComponent {
             return of({ loading: false, detail: null as TurnLogDetail | null, error });
           }),
           startWith({ loading: true, detail: null as TurnLogDetail | null, error: null as string | null }),
-        ),
-      ),
+        );
+      }),
     ),
     { initialValue: { loading: true, detail: null as TurnLogDetail | null, error: null as string | null } },
   );
@@ -426,7 +438,16 @@ export class TurnExecutionComponent {
         return;
       }
       const base = [this.router.url.split(/[?#]/)[0]];
-      const crumbs: PageCrumb[] = [{ label: `${turn.title || 'Untitled conversation'} · #${turn.sequence}`, path: base }];
+      // Test runs: the agent, (Edit,) Test — the Test crumb is this page's URL without "/execution".
+      const fromEdit = !!this.route.snapshot.data['fromEdit'];
+      const crumbs: PageCrumb[] = this.testAgentId
+        ? [
+            { label: this.testAgentId },
+            ...(fromEdit ? [{ label: 'Edit', path: ['/admin', 'config', 'agents', this.testAgentId, 'edit'] }] : []),
+            { label: 'Test', path: [base[0].replace(/\/execution$/, '')] },
+          ]
+        : [];
+      crumbs.push({ label: `${turn.title || 'Untitled conversation'} · #${turn.sequence}`, path: base });
       for (const node of this.path().slice(1)) {
         crumbs.push({ label: node.label, path: base, queryParams: { node: node.id } });
       }

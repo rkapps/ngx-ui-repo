@@ -1,6 +1,7 @@
-import { Component, input, signal } from '@angular/core';
+import { Component, computed, input, signal } from '@angular/core';
 import { JsonPipe } from '@angular/common';
 import { LucideAngularModule } from 'lucide-angular';
+import { formatLooseJson, parseJsonContent } from '../../models/turn-execution';
 import { MarkdownPipe } from '../chat/markdown.pipe';
 import { Section, StructuredResponse, TableCell } from './message-renderer.types';
 import { ContextSectionComponent } from './sections/context-section.component';
@@ -36,6 +37,12 @@ import { PriceTargetsSectionComponent } from './sections/price-targets-section.c
 })
 export class MessageRendererComponent {
     content = input.required<string>();
+
+    /** JSON without sections (e.g. a data agent's output), pretty-printed — best-effort indentation if it doesn't parse (truncated/streaming). */
+    protected readonly formattedJson = computed(() => {
+        const value = parseJsonContent(this.content());
+        return value !== undefined ? JSON.stringify(value, null, 2) : formatLooseJson(this.content());
+    });
 
     protected readonly copiedSection = signal<unknown>(null);
 
@@ -252,7 +259,7 @@ export class MessageRendererComponent {
 
     get looksLikeJson(): boolean {
         const raw = this.content().trim();
-        return raw.startsWith('{') || raw.startsWith('```');
+        return raw.startsWith('{') || raw.startsWith('[') || raw.startsWith('```');
     }
 
     private cleanJson(raw: string): string {
@@ -263,7 +270,9 @@ export class MessageRendererComponent {
     }
 
     private extractPartialSections(raw: string): StructuredResponse | null {
-        const arrStart = raw.indexOf('[', raw.indexOf('"sections"'));
+        const key = raw.indexOf('"sections"');
+        if (key === -1) return null; // not a sectioned response (e.g. a data agent's JSON)
+        const arrStart = raw.indexOf('[', key);
         if (arrStart === -1) return null;
         const sections: unknown[] = [];
         let pos = arrStart + 1;

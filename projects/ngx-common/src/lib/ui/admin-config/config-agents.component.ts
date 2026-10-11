@@ -1,15 +1,16 @@
-import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, signal, type TemplateRef, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { TwangButtonComponent, TwangTableComponent, type TwangTableColumn } from 'ngx-twang-ui';
 import { finalize } from 'rxjs';
 import { originLabel } from '../../models/origin';
 import { type AgentConfig, type AgentConfigResponse, AdminConfigService, EXECUTION_TYPE_LABELS, type ExecutionType, type LlmConfig } from '../../services/admin-config.service';
 import { ADMIN_RIGHT_WIDTH } from '../admin-page/admin-layout';
+import { PageBreadcrumbs } from '../breadcrumbs/page-breadcrumbs';
 import { ThreePanelLayoutComponent } from '../three-panel-layout/three-panel-layout.component';
-import { ConfigNavComponent } from './config-nav.component';
-import { CONFIG_LAYOUT_KEY } from './config-sections';
+import { CONFIG_LAYOUT_KEY, currentAgent, rememberCurrentAgent } from './config-sections';
+import { RefreshCacheButtonComponent } from './refresh-cache-button.component';
 
 
 /** `provider / model`, skipping whichever part is unset. The preset is shown separately. */
@@ -29,23 +30,22 @@ const STATUS_ORDER: Record<AgentConfigResponse['status'], number> = { live: 0, l
 @Component({
   selector: 'app-config-agents',
   standalone: true,
-  imports: [ConfigNavComponent, LucideAngularModule, RouterLink, ThreePanelLayoutComponent, TwangButtonComponent, TwangTableComponent],
+  imports: [LucideAngularModule, RouterLink, ThreePanelLayoutComponent, TwangButtonComponent, TwangTableComponent, RefreshCacheButtonComponent],
   template: `
     <app-three-panel-layout
-      leftTitle="Config"
+      [showLeft]="false"
       [rightTitle]="selected()?.name ?? 'Details'"
       [storageKey]="layoutKey"
       [rightWidth]="rightWidth"
       panelMinHeight="min-h-[70vh]"
     >
-      <app-config-nav left />
 
       <div middle class="flex flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
         <div class="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
           <span class="text-sm font-semibold text-primary-600">Agents</span>
           <span class="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700">{{ agents().length }}</span>
-          <twang-button class="ml-auto" variant="primary" size="sm" icon="plus" label="New agent" routerLink="new" />
           <twang-button
+            class="ml-auto"
             variant="default"
             size="sm"
             icon="refresh-cw"
@@ -66,6 +66,7 @@ const STATUS_ORDER: Record<AgentConfigResponse['status'], number> = { live: 0, l
               [loading]="loading()"
               [fillContainerWidth]="true"
               [onRowClick]="onRowClick"
+              [onRowDoubleClick]="onRowDoubleClick"
               [rowClass]="rowClass"
               initialSortKey="execution"
               initialSortDir="asc"
@@ -76,17 +77,6 @@ const STATUS_ORDER: Record<AgentConfigResponse['status'], number> = { live: 0, l
         </div>
       </div>
 
-      @if (selected(); as a) {
-        <twang-button
-          right-action
-          variant="default"
-          size="sm"
-          icon="square-pen"
-          ariaLabel="Edit agent"
-          title="Edit agent"
-          [routerLink]="[a.id, 'edit']"
-        />
-      }
       <div right class="flex flex-col gap-4 p-4 text-sm">
         @if (selected(); as a) {
           <section class="flex flex-col gap-2 border-b border-border pb-4">
@@ -155,11 +145,26 @@ const STATUS_ORDER: Record<AgentConfigResponse['status'], number> = { live: 0, l
         }
       </div>
     </app-three-panel-layout>
+
+    <!-- Rendered in the admin header (right side) via PageBreadcrumbs.actions. Absolute links: the
+         template is stamped out in the shell, not under this page. -->
+    <ng-template #headerActions>
+      <app-refresh-cache-button (refreshed)="load()" />
+      @if (selected(); as a) {
+        <twang-button variant="default" size="sm" icon="flask-conical" label="Test agent" [routerLink]="['/admin', 'config', 'agents', a.id, 'test']" />
+        <twang-button variant="default" size="sm" icon="square-pen" label="Edit agent" [routerLink]="['/admin', 'config', 'agents', a.id, 'edit']" />
+      }
+      <twang-button variant="primary" size="sm" icon="plus" label="New agent" [routerLink]="['/admin', 'config', 'agents', 'new']" />
+    </ng-template>
   `,
 })
 export class ConfigAgentsComponent {
   private readonly configService = inject(AdminConfigService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly router = inject(Router);
+
+  /** New agent / Edit, shown on the right of the admin header while this page is open. */
+  private readonly headerActions = viewChild<TemplateRef<unknown>>('headerActions');
 
   protected readonly layoutKey = CONFIG_LAYOUT_KEY;
   protected readonly rightWidth = ADMIN_RIGHT_WIDTH;
@@ -195,6 +200,8 @@ export class ConfigAgentsComponent {
     ({ live: 'text-green-700', draft: 'text-amber-700', live_with_draft: 'text-primary-700' })[this.versionInfo().get(a.id)?.status ?? 'live'];
 
   protected readonly onRowClick = (row: AgentConfig) => this.selectedId.set(row.id);
+  /** Double-click = Edit agent. */
+  protected readonly onRowDoubleClick = (row: AgentConfig) => this.router.navigate(['/admin', 'config', 'agents', row.id, 'edit']);
   protected readonly rowClass = (row: AgentConfig) =>
     [row.id === this.selectedId() ? 'bg-primary-50' : '', row.enabled ? '' : 'opacity-60'].join(' ');
 
@@ -221,6 +228,14 @@ export class ConfigAgentsComponent {
   ];
 
   constructor() {
+    effect(() => rememberCurrentAgent(this.selectedId()));
+    const breadcrumbs = inject(PageBreadcrumbs);
+    effect(() => breadcrumbs.actions.set(this.headerActions() ?? null));
+    // Only drop our actions (not the crumbs): the next page may already have set its own.
+    this.destroyRef.onDestroy(() => {
+      if (breadcrumbs.actions() === this.headerActions()) breadcrumbs.actions.set(null);
+    });
+
     this.load();
   }
 
@@ -237,9 +252,14 @@ export class ConfigAgentsComponent {
         next: responses => {
           this.responses.set(responses);
           const agents = this.agents();
-          // Keep the current selection if it's still there; otherwise select the top row in the
-          // table's default order (execution A–Z; the sort is stable, so ties keep server order).
+          // Keep the current selection if it's still there; else reopen the remembered agent; else
+          // select the top row in the table's default order (execution A–Z; stable sort).
           if (this.selected()) return;
+          const remembered = currentAgent();
+          if (remembered && agents.some(a => a.id === remembered)) {
+            this.selectedId.set(remembered);
+            return;
+          }
           const first = [...agents].sort((a, b) =>
             this.executionLabel(a.execution).localeCompare(this.executionLabel(b.execution)),
           )[0];

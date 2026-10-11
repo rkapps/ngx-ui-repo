@@ -16,8 +16,15 @@ import { MessageRendererComponent } from '../message-renderer/message-renderer.c
       [class]="status() ? 'max-h-32' : 'max-h-0'"
     >
       <div class="flex items-start gap-3 border-b border-border bg-primary-50/70 px-6 py-4">
-        <lucide-icon name="loader-circle" [size]="15" class="mt-0.5 shrink-0 animate-spin text-primary-600" />
-        <div class="flex-1 whitespace-pre-line text-sm text-primary-700">{{ status() }}</div>
+        @if (statusBusy()) {
+          <lucide-icon name="loader-circle" [size]="15" class="mt-0.5 shrink-0 animate-spin text-primary-600" />
+        } @else {
+          <lucide-icon name="circle-check" [size]="15" class="mt-0.5 shrink-0 text-primary-600" />
+        }
+        <!-- flex-col-reverse: scrolls from the bottom, so the newest of several status lines shows. -->
+        <div class="flex max-h-24 flex-1 flex-col-reverse overflow-y-auto">
+          <div class="whitespace-pre-line text-sm text-primary-700">{{ status() }}</div>
+        </div>
       </div>
     </div>
 
@@ -70,6 +77,8 @@ export class ChatMessagesComponent implements AfterViewInit, OnDestroy {
   readonly messages = input<ChatMessage[]>([]);
   readonly loading = input(false);
   readonly status = input('');
+  /** Spinner beside the status while true; a check mark once the work is done (status kept on screen). */
+  readonly statusBusy = input(true);
   readonly errorMessage = input<string | null>(null);
   /** Scroll to the latest message the first time messages appear (e.g. on mount with existing history). */
   readonly autoScrollOnLoad = input(true);

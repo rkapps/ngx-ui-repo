@@ -1,4 +1,4 @@
-import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, signal, type TemplateRef, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { LucideAngularModule } from 'lucide-angular';
 import {
@@ -10,9 +10,12 @@ import {
 import { finalize } from 'rxjs';
 import { AdminConfigService, type ModelConfig, type ProviderConfig } from '../../services/admin-config.service';
 import { ADMIN_RIGHT_WIDTH, ADMIN_TABLE_HEIGHT } from '../admin-page/admin-layout';
+import { PageBreadcrumbs } from '../breadcrumbs/page-breadcrumbs';
 import { ThreePanelLayoutComponent } from '../three-panel-layout/three-panel-layout.component';
-import { ConfigNavComponent } from './config-nav.component';
 import { CONFIG_LAYOUT_KEY } from './config-sections';
+import { RefreshCacheButtonComponent } from './refresh-cache-button.component';
+
+type StatusView = 'enabled' | 'disabled';
 
 /** One tree row: a provider (`model` null) or one of its models. */
 interface ProviderRow {
@@ -33,23 +36,30 @@ const cost = (v: number) => (v ? `$${v}` : '—');
 @Component({
   selector: 'app-config-providers',
   standalone: true,
-  imports: [ConfigNavComponent, LucideAngularModule, ThreePanelLayoutComponent, TwangButtonComponent, TwangTreeTableComponent],
+  imports: [LucideAngularModule, RefreshCacheButtonComponent, ThreePanelLayoutComponent, TwangButtonComponent, TwangTreeTableComponent],
   template: `
     <app-three-panel-layout
-      leftTitle="Config"
+      [showLeft]="false"
       [rightTitle]="selected()?.provider?.llm ?? 'Details'"
       [storageKey]="layoutKey"
       [rightWidth]="rightWidth"
       panelMinHeight="min-h-[70vh]"
     >
-      <app-config-nav left />
 
       <div middle class="flex flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
         <div class="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
           <span class="text-sm font-semibold text-primary-600">Providers</span>
-          <span class="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700">{{ providers().length }}</span>
+          <span class="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700">{{ visibleProviders().length }}</span>
           <twang-button
             class="ml-auto"
+            variant="default"
+            size="sm"
+            [icon]="statusView() === 'enabled' ? 'toggle-right' : 'toggle-left'"
+            [ariaLabel]="statusView() === 'enabled' ? 'Showing enabled — show disabled' : 'Showing disabled — show enabled'"
+            [title]="statusView() === 'enabled' ? 'Showing enabled — click to show disabled' : 'Showing disabled — click to show enabled'"
+            (buttonClick)="setStatusView(statusView() === 'enabled' ? 'disabled' : 'enabled')"
+          />
+          <twang-button
             variant="default"
             size="sm"
             icon="refresh-cw"
@@ -129,11 +139,19 @@ const cost = (v: number) => (v ? `$${v}` : '—');
         }
       </div>
     </app-three-panel-layout>
+
+    <!-- Rendered in the admin header (right side) via PageBreadcrumbs.actions. -->
+    <ng-template #headerActions>
+      <app-refresh-cache-button (refreshed)="load()" />
+    </ng-template>
   `,
 })
 export class ConfigProvidersComponent {
   private readonly configService = inject(AdminConfigService);
   private readonly destroyRef = inject(DestroyRef);
+
+  /** Refresh cache, shown on the right of the admin header while this page is open. */
+  private readonly headerActions = viewChild<TemplateRef<unknown>>('headerActions');
 
   protected readonly layoutKey = CONFIG_LAYOUT_KEY;
   protected readonly rightWidth = ADMIN_RIGHT_WIDTH;
@@ -142,19 +160,38 @@ export class ConfigProvidersComponent {
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
 
+  /** Enabled view (default) or Disabled view. */
+  protected readonly statusView = signal<StatusView>('enabled');
+
+  /**
+   * Providers (and models) for the current view. Enabled: enabled providers with their enabled
+   * models. Disabled: disabled providers (all their models) plus enabled providers that have
+   * disabled models (just those).
+   */
+  protected readonly visibleProviders = computed(() => {
+    const enabledView = this.statusView() === 'enabled';
+    return this.providers()
+      .map(p => ({
+        ...p,
+        models: enabledView ? (p.enabled ? p.models.filter(m => m.enabled) : []) : p.enabled ? p.models.filter(m => !m.enabled) : p.models,
+      }))
+      .filter(p => (enabledView ? p.enabled : !p.enabled || p.models.length > 0));
+  });
+
   protected readonly nodes = computed<TwangTreeTableNode<ProviderRow>[]>(() =>
-    this.providers().map(provider => ({
-      id: providerNodeId(provider),
-      label: provider.llm,
-      depth: 0,
-      summary: { provider, model: null },
-      children: provider.models.map(model => ({
+    this.visibleProviders().map(provider => {
+      const children = provider.models.map(model => ({
         id: modelNodeId(provider, model),
         label: model.id,
         depth: 1,
         data: { provider, model },
-      })),
-    })),
+      }));
+      const row = { provider, model: null };
+      // A provider with nothing to show under it is a leaf, not an (empty) group.
+      return children.length
+        ? { id: providerNodeId(provider), label: provider.llm, depth: 0, summary: row, children }
+        : { id: providerNodeId(provider), label: provider.llm, depth: 0, data: row, children: [] };
+    }),
   );
 
   /** Tree row highlighted in the table — a provider or a model. */
@@ -196,7 +233,7 @@ export class ConfigProvidersComponent {
       minWidth: '240px',
       value: r => r.model?.id ?? r.provider.llm,
       splitCell: r => ({
-        primary: r.model?.id ?? '',
+        primary: r.model?.id ?? r.provider.llm, // provider rows can be leaves when no models are shown
         secondary: [r.model?.id === r.provider.default_model ? 'default' : '', r.model?.enabled === false ? 'disabled' : '']
           .filter(Boolean)
           .join(' · '),
@@ -219,7 +256,23 @@ export class ConfigProvidersComponent {
   ];
 
   constructor() {
+    const breadcrumbs = inject(PageBreadcrumbs);
+    effect(() => breadcrumbs.actions.set(this.headerActions() ?? null));
+    // Only drop our actions (not the crumbs): the next page may already have set its own.
+    this.destroyRef.onDestroy(() => {
+      if (breadcrumbs.actions() === this.headerActions()) breadcrumbs.actions.set(null);
+    });
+
     this.load();
+  }
+
+  /** Switch view; keep the selection if it's still shown, otherwise select the first provider shown. */
+  protected setStatusView(view: StatusView): void {
+    this.statusView.set(view);
+    const ids = new Set(this.nodes().flatMap(n => [n.id, ...(n.children ?? []).map(c => c.id)]));
+    if (this.selectedNodeId() && ids.has(this.selectedNodeId()!)) return;
+    const first = [...this.visibleProviders()].sort((a, b) => a.llm.localeCompare(b.llm))[0];
+    this.selectedNodeId.set(first ? providerNodeId(first) : null);
   }
 
   protected onNodeSelected(node: TwangTreeTableNode<ProviderRow>): void {
@@ -241,7 +294,7 @@ export class ConfigProvidersComponent {
           // Keep the current selection if it's still there; otherwise select the first provider
           // in the tree's default order (name A–Z).
           if (this.selected()) return;
-          const first = [...providers].sort((a, b) => a.llm.localeCompare(b.llm))[0];
+          const first = [...this.visibleProviders()].sort((a, b) => a.llm.localeCompare(b.llm))[0];
           this.selectedNodeId.set(first ? providerNodeId(first) : null);
         },
         error: err => {

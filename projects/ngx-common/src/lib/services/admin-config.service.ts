@@ -1,7 +1,11 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
+import { AuthService } from '../auth/auth.service';
+import { postEventStream } from '../http/event-stream';
+import type { TurnResponse } from '../models/turn-execution';
 import { API_BASE_URL } from './api-url.token';
+import type { CompletionChunkResponse } from './conversation.service';
 import type { Origin } from '../models/origin';
 import type { ConversationStrategy, HistoryMode } from './conversation.service';
 
@@ -104,6 +108,28 @@ export interface AgentConfigResponse {
   draft_version: number | null;
 }
 
+/**
+ * `POST /admin/agents/test` body (the backend's `AgentRunConfigRequest`): run `agent_id` with the
+ * given provider/model and `configsm` holding the config of every agent in the run (the test
+ * agent and its sub-agents — each the chosen draft or the live config), continuing from `prev_response_id` for
+ * multi-turn tests. Nothing is saved.
+ */
+export interface AgentTestRequest {
+  agent_id: string;
+  llm: string;
+  model: string;
+  /** Preset override; null keeps the agent's own (or the server default). */
+  preset: Preset | null;
+  prompt: string;
+  prev_response_id: string | null;
+  configsm: Record<string, AgentConfig>;
+}
+
+/** A test-run stream chunk: the chat chunk format; the final chunk also carries the full execution. */
+export interface AgentTestChunk extends CompletionChunkResponse {
+  execution?: TurnResponse | null;
+}
+
 /** Serde's default enum names (no rename on the backend). */
 export type VersionStatus = 'Draft' | 'Promoted';
 
@@ -131,11 +157,17 @@ export interface ToolDefinition {
   parameters: unknown;
 }
 
+/** Result of a cache refresh. `mcp_failures`: MCP servers that failed to rebuild, if the backend reports them. */
+export interface RefreshCacheResponse {
+  mcp_failures?: { server: string; error: string }[];
+}
+
 /** Read-only admin view of server configuration; admin-only on the backend. */
 @Injectable({ providedIn: 'root' })
 export class AdminConfigService {
   private readonly http = inject(HttpClient);
   private readonly base = inject(API_BASE_URL);
+  private readonly auth = inject(AuthService);
 
   /** Every agent — live ones and draft-only ones — with its version status. */
   getAgents(): Observable<AgentConfigResponse[]> {
@@ -158,6 +190,21 @@ export class AdminConfigService {
     return this.http.get<AgentConfigVersion[]>(`${this.base}/admin/agents/${encodeURIComponent(agentId)}/versions`);
   }
 
+  /** Test run — `POST /admin/agents/test`, streamed like a chat turn; nothing is saved. Unsubscribe to stop. */
+  testAgent(request: AgentTestRequest): Observable<AgentTestChunk> {
+    return postEventStream<AgentTestChunk>(`${this.base}/admin/agents/test`, request, () => this.auth.getIdToken());
+  }
+
+  /** Makes a draft the live version (the backend validates it first). */
+  promoteAgentDraft(agentId: string, version: number): Observable<AgentConfigVersion> {
+    return this.http.post<AgentConfigVersion>(`${this.base}/admin/agents/${encodeURIComponent(agentId)}/versions/${version}/promote`, null);
+  }
+
+  /** Discards a draft (drafts only); for a never-promoted agent this removes the agent. */
+  discardAgentDraft(agentId: string, version: number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/admin/agents/${encodeURIComponent(agentId)}/versions/${version}`);
+  }
+
   /** Saves a draft's config (409 if the version isn't a draft any more). */
   saveAgentDraft(agentId: string, version: number, config: AgentConfig, note: string | null = null): Observable<void> {
     return this.http.put<void>(`${this.base}/admin/agents/${encodeURIComponent(agentId)}/versions/${version}`, { config, note });
@@ -175,5 +222,10 @@ export class AdminConfigService {
 
   getProviders(): Observable<ProviderConfig[]> {
     return this.http.get<ProviderConfig[]>(`${this.base}/admin/providers`);
+  }
+
+  /** Force the backend to refresh its in-memory config cache from storage. Empty/204 response = success. */
+  refreshCache(): Observable<RefreshCacheResponse | null> {
+    return this.http.post<RefreshCacheResponse | null>(`${this.base}/admin/config/refresh`, null);
   }
 }

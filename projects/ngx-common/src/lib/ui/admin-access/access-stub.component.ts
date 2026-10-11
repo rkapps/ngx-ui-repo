@@ -5,7 +5,6 @@ import { LucideAngularModule } from 'lucide-angular';
 import { map } from 'rxjs';
 import { ThreePanelLayoutComponent } from '../three-panel-layout/three-panel-layout.component';
 import { ADMIN_RIGHT_WIDTH } from '../admin-page/admin-layout';
-import { AccessNavComponent } from './access-nav.component';
 import { ACCESS_LAYOUT_KEY, ACCESS_SECTIONS } from './access-sections';
 
 /**
@@ -16,16 +15,15 @@ import { ACCESS_LAYOUT_KEY, ACCESS_SECTIONS } from './access-sections';
 @Component({
   selector: 'app-access-stub',
   standalone: true,
-  imports: [AccessNavComponent, LucideAngularModule, ThreePanelLayoutComponent],
+  imports: [LucideAngularModule, ThreePanelLayoutComponent],
   template: `
     <app-three-panel-layout
-      leftTitle="Access"
+      [showLeft]="false"
       rightTitle="Details"
       [storageKey]="layoutKey"
       [rightWidth]="rightWidth"
       panelMinHeight="min-h-[70vh]"
     >
-      <app-access-nav left />
 
       <div middle class="flex flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
         <div class="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">

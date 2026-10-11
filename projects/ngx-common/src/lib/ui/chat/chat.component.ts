@@ -19,6 +19,7 @@ import { ChatPromptComponent } from './chat-prompt.component';
         [messages]="messages()"
         [loading]="loading()"
         [status]="status()"
+        [statusBusy]="statusBusy()"
         [errorMessage]="errorMessage()"
         [autoScrollOnLoad]="autoScrollOnLoad()"
         [fillViewport]="fillViewport()"
@@ -42,6 +43,8 @@ export class ChatComponent {
   readonly messages = input<ChatMessage[]>([]);
   readonly loading = input(false);
   readonly status = input('');
+  /** See `ngx-chat-messages`: spinner while true, a check mark once done. */
+  readonly statusBusy = input(true);
   readonly errorMessage = input<string | null>(null);
   readonly autoScrollOnLoad = input(true);
   readonly clearTrigger = input<number>(0);

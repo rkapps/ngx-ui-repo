@@ -79,19 +79,89 @@ export type TurnExecution =
   | { Dynamic: { decisions: DecisionResponse[]; synthesizer: TurnResponse | null } };
 
 /**
- * Parses agent `content` that is JSON — bare, or wrapped in a ```json fence as LLMs often
- * return it. `undefined` when it isn't JSON (render it as text instead).
+ * Parses agent `content` that is JSON — bare, in a ```json fence, surrounded by prose, or encoded
+ * as a JSON string (double-encoded). `undefined` when no object/array parses (render it as text, or
+ * try `formatLooseJson`).
  */
 export function parseJsonContent(text: string | null | undefined): unknown {
   if (!text) return undefined;
-  const fenced = text.trim().match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
-  const body = (fenced ? fenced[1] : text).trim();
-  if (!body.startsWith('{') && !body.startsWith('[')) return undefined;
+  const trimmed = text.trim();
+  const candidates: string[] = [];
+  // A ```json fence anywhere in the text (models often wrap it in prose).
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (fenced) candidates.push(fenced[1]);
+  candidates.push(trimmed);
+  // The outermost {...} or [...], ignoring text before/after it.
+  const open = trimmed.search(/[{[]/);
+  if (open >= 0) {
+    const close = trimmed.lastIndexOf(trimmed[open] === '{' ? '}' : ']');
+    if (close > open) candidates.push(trimmed.slice(open, close + 1));
+  }
+  for (const candidate of candidates) {
+    const value = parseJsonObject(candidate.trim());
+    if (value !== undefined) return value;
+  }
+  return undefined;
+}
+
+/** Parses an object/array, unwrapping JSON that was encoded as a JSON string (once or twice). */
+function parseJsonObject(body: string): unknown {
+  if (!/^[{["]/.test(body)) return undefined;
   try {
-    return JSON.parse(body);
+    let value: unknown = JSON.parse(body);
+    for (let i = 0; i < 2 && typeof value === 'string'; i++) {
+      const inner = value.trim();
+      if (!/^[{[]/.test(inner)) return undefined;
+      value = JSON.parse(inner);
+    }
+    return typeof value === 'object' && value !== null ? value : undefined;
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Best-effort indentation for JSON that does not parse (typically truncated output): breaks after
+ * `{`, `[` and `,` and indents by nesting depth, leaving string contents untouched. Returns
+ * undefined for text that does not look like JSON.
+ */
+export function formatLooseJson(text: string | null | undefined): string | undefined {
+  if (!text) return undefined;
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*(?:```)?$/);
+  const body = (fenced ? fenced[1] : trimmed).trim();
+  if (!/^[{[]/.test(body)) return undefined;
+  const pad = (depth: number) => '\n' + '  '.repeat(Math.max(depth, 0));
+  let out = '';
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (const ch of body) {
+    if (inString) {
+      out += ch;
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (/\s/.test(ch)) continue;
+    if (ch === '"') {
+      inString = true;
+      out += ch;
+    } else if (ch === '{' || ch === '[') {
+      out += ch + pad(++depth);
+    } else if (ch === '}' || ch === ']') {
+      out += pad(--depth) + ch;
+    } else if (ch === ',') {
+      out += ch + pad(depth);
+    } else if (ch === ':') {
+      out += ': ';
+    } else {
+      out += ch;
+    }
+  }
+  // Empty containers: "{\n  }" -> "{}".
+  return out.replace(/([{[])\s+([}\]])/g, '$1$2');
 }
 
 // ── Tree (for `twang-tree-table`) ───────────────────────────────────────────────────────────

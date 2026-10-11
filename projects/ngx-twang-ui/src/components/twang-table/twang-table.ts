@@ -117,6 +117,9 @@ export class TwangTableComponent<T extends object> implements OnChanges {
   @Input() scrollPanelMinHeight = '';
   /** When set, row clicks invoke this handler (ignored for clicks on `button` / `a`). */
   @Input() onRowClick?: (row: T, event: Event) => void;
+  /** When set, double-clicking a row invokes this (also ignored for `button` / `a`). The two
+   * single clicks still fire `onRowClick` first, so selection happens before this runs. */
+  @Input() onRowDoubleClick?: (row: T, event: Event) => void;
   /** Extra classes per body row (e.g. selection border). */
   @Input() rowClass?: string | ((row: T) => string);
   /** Layout mode: 'scroll' (default) — internal scroll with max-height; 'paginated' — page controls;
@@ -292,6 +295,13 @@ export class TwangTableComponent<T extends object> implements OnChanges {
       if (extra?.trim()) parts.push(...extra.trim().split(/\s+/).filter(Boolean));
     }
     return parts.join(' ');
+  }
+
+  protected handleRowDoubleClick(row: T, event: Event): void {
+    if (!this.onRowDoubleClick) return;
+    const el = event.target as HTMLElement | null;
+    if (el?.closest('button, a')) return;
+    this.onRowDoubleClick(row, event);
   }
 
   protected handleRowClick(row: T, event: Event): void {

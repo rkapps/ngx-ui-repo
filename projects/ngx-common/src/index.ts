@@ -24,6 +24,8 @@ export {
   type ExecutionType,
   type ToolDefinition,
   type AgentConfigVersion,
+  type AgentTestChunk,
+  type AgentTestRequest,
   type AgentConfigResponse,
   type AgentStatus,
   type VersionStatus,
@@ -85,3 +87,4 @@ export { ADMIN_ROUTES } from './lib/ui/admin-page/admin.routes';
 export { PageBreadcrumbs, type PageCrumb } from './lib/ui/breadcrumbs/page-breadcrumbs';
 export { BreadcrumbBarComponent } from './lib/ui/breadcrumbs/breadcrumb-bar.component';
 export { LOGS_ROUTES, USER_LOGS_ROUTE } from './lib/ui/logs/logs.routes';
+export { AgentTestSessions, type AgentTestSession, type TestVersionChoice } from './lib/services/agent-test-sessions';

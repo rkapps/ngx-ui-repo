@@ -1,11 +1,11 @@
-import { Component, computed, DestroyRef, effect, inject, signal } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, signal, type TemplateRef, viewChild } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { DatePipe, DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { TwangButtonComponent, TwangDropdownComponent, type TwangDropdownOption, TwangInputComponent } from 'ngx-twang-ui';
-import { map, type Observable } from 'rxjs';
+import { forkJoin, map, type Observable, of, switchMap } from 'rxjs';
 import {
   type AgentConfig,
   type AgentConfigResponse,
@@ -27,6 +27,7 @@ import { UserService } from '../../services/user.service';
 import { ADMIN_RIGHT_WIDTH } from '../admin-page/admin-layout';
 import { PageBreadcrumbs } from '../breadcrumbs/page-breadcrumbs';
 import { MarkdownPipe } from '../chat/markdown.pipe';
+import { rememberCurrentAgent } from './config-sections';
 import { JsonViewComponent } from '../logs/json-view.component';
 import { ThreePanelLayoutComponent } from '../three-panel-layout/three-panel-layout.component';
 
@@ -108,22 +109,23 @@ function errorText(err: unknown, fallback: string): string {
 const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?.type === 'deterministic' ? 'deterministic' : 'dynamic');
 
 /**
- * Admin > Config > Agents > New / Edit. One layout for both: the left panel is a section nav
- * (pipelines list their stages, or available agents/follow-up, under "Pipeline"), the middle shows
- * one section at a time with previous/next at the bottom, and the right is version history.
+ * Admin > Config > Agents > New / Edit. One layout for both: the middle shows one section at a time
+ * under a row of section tabs, with previous/next at the bottom (the Pipeline tab holds the stage
+ * list and the selected stage, or a dynamic pipeline's available agents); the right is version history.
  *
- * New: Create agent → `POST /admin/agents` (v1 draft), then continues in edit mode. Edit: opens the
- * agent's draft (`POST …/versions`, created if needed); Save draft → `PUT …/versions/{v}`. Edits change a local draft;
+ * New: Create agent → `POST /admin/agents` (v1 draft), then continues in edit mode. Edit: opening
+ * creates nothing — it edits the existing draft, or a copy of the live config; the first Save creates
+ * the draft (`POST …/versions`) and every Save writes it (`PUT …/versions/{v}`). Edits change a local draft;
  * Save creates a new version (create mode: the agent and its version 1).
  *
- * Built so far: General (incl. LLM; type only while creating), Description (markdown), System prompt, Tools (registry + MCP),
+ * Built so far: General (identity, markdown description, LLM; type only while creating), System prompt, Tools (registry + MCP),
  * Pipeline (mode, stages, sub-agents from live pipeline agents, available/follow-up). The remaining sections
  * are placeholders/read-only until they're built out, and Save isn't wired to the backend yet.
  */
 @Component({
   selector: 'app-agent-editor',
   standalone: true,
-  imports: [DatePipe, DecimalPipe, NgTemplateOutlet, FormsModule, JsonViewComponent, LucideAngularModule, MarkdownPipe, ThreePanelLayoutComponent, TwangButtonComponent, TwangDropdownComponent, TwangInputComponent],
+  imports: [DatePipe, DecimalPipe, NgTemplateOutlet, RouterLink, FormsModule, JsonViewComponent, LucideAngularModule, MarkdownPipe, ThreePanelLayoutComponent, TwangButtonComponent, TwangDropdownComponent, TwangInputComponent],
   template: `
     @if (loading()) {
       <div class="flex min-h-[50vh] items-center justify-center gap-2 rounded-lg border border-border bg-white p-8 text-sm text-text-muted">
@@ -135,34 +137,12 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
       </div>
     } @else {
       <app-three-panel-layout
-        leftTitle="Sections"
+        [showLeft]="false"
         rightTitle="Versions"
         [rightWidth]="rightWidth"
         storageKey="admin.config.agent-editor.layout"
         panelMinHeight="min-h-[70vh]"
       >
-        <!-- Left: section nav (pipelines nest their stages) -->
-        <nav left class="flex flex-col gap-0.5" aria-label="Agent sections">
-          @for (item of nav(); track item.id) {
-            <button
-              type="button"
-              class="flex items-center gap-2 rounded-md py-1.5 pr-3 text-left text-sm transition-colors hover:bg-surface-muted"
-              [class.pl-3]="item.depth === 0"
-              [class.pl-8]="item.depth === 1"
-              [class.font-medium]="item.depth === 0"
-              [class.text-text-muted]="current() !== item.id"
-              [class.bg-primary-50]="current() === item.id"
-              [class.!text-primary-700]="current() === item.id"
-              (click)="goTo(item.id)"
-            >
-              <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
-              @if (item.tag) {
-                <span class="shrink-0 text-[10px] uppercase text-text-muted">{{ item.tag }}</span>
-              }
-            </button>
-          }
-        </nav>
-
         <!-- Middle: one section at a time (fixed height, so editors get the room), with
              previous/next at the bottom. flex-none: flex-1 would size to content here. -->
         <div middle class="flex h-[70vh] flex-none flex-col gap-3">
@@ -189,15 +169,47 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
                 (buttonClick)="save()"
               />
             </div>
+          } @else if (saveError()) {
+            <div class="flex shrink-0 items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+              <lucide-icon name="circle-alert" [size]="16" />
+              <span class="flex-1">{{ saveError() }}</span>
+              <twang-button variant="default" size="xs" icon="x" ariaLabel="Dismiss" (buttonClick)="saveError.set(null)" />
+            </div>
           }
 
-          <!-- General (incl. LLM) -->
+          @if (viewing(); as v) {
+            <div class="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-surface-muted px-4 py-2 text-sm">
+              <lucide-icon name="eye" [size]="16" class="text-text-muted" />
+              <span class="flex-1">
+                Viewing <span class="font-semibold">v{{ v.version }}</span>{{ v.version === liveVersion() ? ' (live)' : '' }} — read-only.
+              </span>
+              <twang-button variant="default" size="sm" icon="arrow-left" label="Back to editing" (buttonClick)="backToEditing()" />
+            </div>
+          }
+
+          <!-- Section tabs -->
+          <div class="flex shrink-0 gap-1 overflow-x-auto rounded-lg border border-border bg-white p-1" role="tablist" aria-label="Agent sections">
+            @for (item of nav(); track item.id) {
+              <button
+                type="button"
+                role="tab"
+                class="shrink-0 rounded-md px-3 py-1.5 text-sm transition-colors"
+                [class]="current() === item.id ? 'bg-primary-50 font-medium text-primary-700' : 'text-text-muted hover:bg-surface-muted hover:text-text'"
+                [attr.aria-selected]="current() === item.id"
+                (click)="goTo(item.id)"
+              >{{ item.label }}</button>
+            }
+          </div>
+
+          <!-- Disabled as a whole while a promoted version is on screen (read-only). -->
+          <fieldset class="m-0 flex min-h-0 min-w-0 flex-1 flex-col border-0 p-0" [disabled]="readOnly()">
+          <!-- General: identity + LLM stacked (⅓) | description, full column height (⅔) -->
           @if (current() === 'sec-general') {
             <section id="sec-general" class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
               <h2 class="shrink-0 border-b border-border px-4 py-3 text-sm font-semibold text-primary-600">General</h2>
-              <!-- Two columns: ID, name, type, flags stacked (⅔) | LLM (⅓) -->
-              <div class="grid min-h-0 flex-1 content-start gap-x-8 gap-y-5 overflow-y-auto p-4 md:grid-cols-3">
-                <div class="flex flex-col gap-4 md:col-span-2">
+              <div class="grid min-h-0 flex-1 gap-x-8 gap-y-5 overflow-y-auto p-4 md:grid-cols-3">
+                <!-- Left: identity, then LLM -->
+                <div class="flex flex-col gap-4">
                   <div class="flex flex-col gap-1.5">
                     <label class="text-xs font-medium text-text-muted">ID</label>
                     @if (isNew()) {
@@ -234,72 +246,68 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
                     <input type="checkbox" class="accent-primary-600" [checked]="draft().standalone" (change)="patch({ standalone: !draft().standalone })" />
                     Standalone (public)
                   </label>
+
+                  <!-- LLM -->
+                  <div class="mt-1 flex flex-col gap-4 border-t border-border pt-4">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">LLM</span>
+                    <div class="flex flex-col gap-1.5">
+                      <label class="text-xs font-medium text-text-muted">Provider</label>
+                      <twang-dropdown size="sm" [options]="providerOptions()" [value]="llm().llm ?? ''" (valueChange)="setProvider($event)" />
+                    </div>
+                    <div class="flex flex-col gap-1.5">
+                      <label class="text-xs font-medium text-text-muted">Model</label>
+                      <twang-dropdown
+                        size="sm"
+                        [options]="modelOptions()"
+                        [value]="llm().model ?? ''"
+                        [disabled]="!llm().llm"
+                        (valueChange)="setLlm({ model: $event || null })"
+                      />
+                    </div>
+                    <div class="flex flex-col gap-1.5">
+                      <label class="text-xs font-medium text-text-muted">Preset</label>
+                      <twang-dropdown size="sm" [options]="presetOptions" [value]="llm().preset ?? ''" (valueChange)="setLlm({ preset: $any($event) || null })" />
+                    </div>
+                    <p class="text-xs text-text-muted">
+                      Unset fields fall back to the caller's choice, then the server default.
+                      @if (providersError()) {
+                        <span class="text-red-600">{{ providersError() }}</span>
+                      }
+                    </p>
+                  </div>
                 </div>
 
-                <!-- LLM -->
-                <div class="flex flex-col gap-4 md:border-l md:border-border md:pl-8">
-                  <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">LLM</span>
-                  <div class="flex flex-col gap-1.5">
-                    <label class="text-xs font-medium text-text-muted">Provider</label>
-                    <twang-dropdown size="sm" [options]="providerOptions()" [value]="llm().llm ?? ''" (valueChange)="setProvider($event)" />
+                <!-- Right: description (markdown: what the agent does, with examples), full height -->
+                <div class="flex min-h-72 flex-col gap-1.5 md:col-span-2">
+                  <div class="flex items-center gap-2">
+                    <label class="text-xs font-medium text-text-muted">Description</label>
+                    <span class="rounded bg-surface-muted px-1.5 py-0.5 text-[10px] uppercase text-text-muted">markdown</span>
+                    <span class="ml-auto inline-flex rounded-lg border border-border p-0.5 text-xs font-normal" role="tablist">
+                      @for (tab of descriptionTabs; track tab) {
+                        <button
+                          type="button"
+                          role="tab"
+                          class="rounded-md px-2.5 py-1 capitalize transition-colors"
+                          [class]="descriptionTab() === tab ? 'bg-primary-50 font-medium text-primary-700' : 'text-text-muted hover:text-text'"
+                          [attr.aria-selected]="descriptionTab() === tab"
+                          (click)="descriptionTab.set(tab)"
+                        >{{ tab }}</button>
+                      }
+                    </span>
                   </div>
-                  <div class="flex flex-col gap-1.5">
-                    <label class="text-xs font-medium text-text-muted">Model</label>
-                    <twang-dropdown
-                      size="sm"
-                      [options]="modelOptions()"
-                      [value]="llm().model ?? ''"
-                      [disabled]="!llm().llm"
-                      (valueChange)="setLlm({ model: $event || null })"
-                    />
-                  </div>
-                  <div class="flex flex-col gap-1.5">
-                    <label class="text-xs font-medium text-text-muted">Preset</label>
-                    <twang-dropdown size="sm" [options]="presetOptions" [value]="llm().preset ?? ''" (valueChange)="setLlm({ preset: $any($event) || null })" />
-                  </div>
-                  <p class="text-xs text-text-muted">
-                    Unset fields fall back to the caller's choice, then the server default.
-                    @if (providersError()) {
-                      <span class="text-red-600">{{ providersError() }}</span>
-                    }
-                  </p>
-                </div>
-              </div>
-            </section>
-          }
-
-          <!-- Description (markdown: what the agent does, with examples) -->
-          @if (current() === 'sec-description') {
-            <section id="sec-description" class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
-              <h2 class="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2 text-sm font-semibold text-primary-600">
-                Description
-                <span class="rounded bg-surface-muted px-1.5 py-0.5 text-[10px] font-normal uppercase text-text-muted">markdown</span>
-                <span class="ml-auto inline-flex rounded-lg border border-border p-0.5 text-xs font-normal" role="tablist">
-                  @for (tab of descriptionTabs; track tab) {
-                    <button
-                      type="button"
-                      role="tab"
-                      class="rounded-md px-2.5 py-1 capitalize transition-colors"
-                      [class]="descriptionTab() === tab ? 'bg-primary-50 font-medium text-primary-700' : 'text-text-muted hover:text-text'"
-                      [attr.aria-selected]="descriptionTab() === tab"
-                      (click)="descriptionTab.set(tab)"
-                    >{{ tab }}</button>
+                  @if (descriptionTab() === 'write') {
+                    <textarea
+                      class="w-full flex-1 resize-none rounded-lg border border-border bg-white px-3 py-2 font-mono text-xs leading-relaxed text-text placeholder:text-text-muted outline-none transition-shadow focus:border-primary-400 focus:ring-2 focus:ring-primary-400/20"
+                      placeholder="What this agent does, when to use it, and example prompts — markdown supported"
+                      [value]="draft().description"
+                      (input)="patch({ description: $any($event.target).value })"
+                    ></textarea>
+                  } @else if (draft().description.trim()) {
+                    <div class="prose prose-sm max-w-none flex-1 overflow-y-auto rounded-lg border border-border px-4 py-3" [innerHTML]="draft().description | markdown"></div>
+                  } @else {
+                    <p class="flex-1 rounded-lg border border-dashed border-border px-4 py-3 text-sm text-text-muted">Nothing to preview yet.</p>
                   }
-                </span>
-              </h2>
-              <div class="flex min-h-0 flex-1 flex-col p-4">
-                @if (descriptionTab() === 'write') {
-                  <textarea
-                    class="min-h-48 w-full flex-1 resize-none rounded-lg border border-border bg-white px-3 py-2 font-mono text-xs leading-relaxed text-text placeholder:text-text-muted outline-none transition-shadow focus:border-primary-400 focus:ring-2 focus:ring-primary-400/20"
-                    placeholder="What this agent does, when to use it, and example prompts — markdown supported"
-                    [value]="draft().description"
-                    (input)="patch({ description: $any($event.target).value })"
-                  ></textarea>
-                } @else if (draft().description.trim()) {
-                  <div class="prose prose-sm min-h-48 max-w-none flex-1 overflow-y-auto rounded-lg border border-border px-4 py-3" [innerHTML]="draft().description | markdown"></div>
-                } @else {
-                  <p class="min-h-48 flex-1 rounded-lg border border-dashed border-border px-4 py-3 text-sm text-text-muted">Nothing to preview yet.</p>
-                }
+                </div>
               </div>
             </section>
           }
@@ -326,7 +334,7 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
           }
 
           @if (isPipeline()) {
-            <!-- Pipeline: mode, stage list, persisted keys -->
+            <!-- Pipeline: settings + stage list (top), selected stage / available agents (bottom) -->
             @if (current() === 'sec-pipeline') {
               <section id="sec-pipeline" class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
                 <h2 class="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2 text-sm font-semibold text-primary-600">
@@ -344,7 +352,8 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
                     }
                   </span>
                 </h2>
-                <div class="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-4 text-sm">
+
+                <div class="flex max-h-[45%] shrink-0 flex-col gap-4 overflow-y-auto border-b border-border p-4 text-sm">
                   @if (mode() === 'deterministic') {
                     <div class="flex flex-col gap-2">
                       <div class="flex items-center gap-2">
@@ -354,11 +363,13 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
                       </div>
                       <ol class="flex flex-col rounded-lg border border-border">
                         @for (stage of pipeline()!.stages; track $index; let i = $index; let first = $first; let last = $last) {
-                          <li class="flex items-center gap-2 border-b border-border px-3 py-2 last:border-b-0">
+                          <li
+                            class="flex cursor-pointer items-center gap-2 border-b border-border px-3 py-1.5 last:border-b-0 hover:bg-surface-muted"
+                            [class.bg-primary-50]="i === stageIndex()"
+                            (click)="selectedStage.set(i)"
+                          >
                             <span class="w-5 shrink-0 text-right tabular-nums text-text-muted">{{ i + 1 }}.</span>
-                            <button type="button" class="min-w-0 flex-1 truncate text-left font-medium hover:text-primary-600" (click)="goTo('sec-stage-' + i)">
-                              {{ stage.name || 'Untitled' }}
-                            </button>
+                            <span class="min-w-0 flex-1 truncate font-medium" [class.text-primary-700]="i === stageIndex()">{{ stage.name || 'Untitled' }}</span>
                             @if (last) {
                               <span class="rounded bg-green-50 px-1.5 py-0.5 text-[10px] uppercase text-green-700">synthesizer</span>
                             }
@@ -366,24 +377,29 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
                               <span class="rounded bg-surface-muted px-1.5 py-0.5 text-[10px] uppercase text-text-muted">parallel</span>
                             }
                             <span class="shrink-0 text-xs text-text-muted">{{ stage.sub_agents.length }} agent{{ stage.sub_agents.length === 1 ? '' : 's' }}</span>
-                            <twang-button variant="default" size="xs" icon="chevron-up" ariaLabel="Move stage up" [disabled]="first" (buttonClick)="moveStage(i, -1)" />
-                            <twang-button variant="default" size="xs" icon="chevron-down" ariaLabel="Move stage down" [disabled]="last" (buttonClick)="moveStage(i, 1)" />
-                            <twang-button variant="default" size="xs" icon="trash-2" ariaLabel="Remove stage" (buttonClick)="removeStage(i)" />
+                            <span class="flex shrink-0 gap-1" (click)="$event.stopPropagation()">
+                              <twang-button variant="default" size="xs" icon="chevron-up" ariaLabel="Move stage up" [disabled]="first" (buttonClick)="moveStage(i, -1)" />
+                              <twang-button variant="default" size="xs" icon="chevron-down" ariaLabel="Move stage down" [disabled]="last" (buttonClick)="moveStage(i, 1)" />
+                              <twang-button variant="default" size="xs" icon="trash-2" ariaLabel="Remove stage" (buttonClick)="removeStage(i)" />
+                            </span>
                           </li>
                         } @empty {
-                          <li class="px-3 py-2 text-text-muted">No stages yet — add one, then pick its sub-agents.</li>
+                          <li class="px-3 py-2 text-text-muted">No stages yet — add one, then pick its sub-agents below.</li>
                         }
                       </ol>
                     </div>
                   } @else {
-                    <p class="text-text-muted">
-                      A dynamic pipeline's orchestrator (this agent, using its system prompt) picks from the
-                      <button type="button" class="text-primary-600 hover:underline" (click)="goTo('sec-available')">available agents</button>
-                      each turn, and can hand follow-up turns to a
-                      <button type="button" class="text-primary-600 hover:underline" (click)="goTo('sec-followup')">follow-up agent</button>.
-                    </p>
+                    <div class="flex max-w-md flex-col gap-1.5">
+                      <label class="text-xs font-medium text-text-muted">Follow-up agent</label>
+                      <twang-dropdown
+                        size="sm"
+                        [options]="followupOptions()"
+                        [value]="pipeline()!.followup_agent ?? ''"
+                        (valueChange)="updatePipeline({ followup_agent: $event || null })"
+                      />
+                      <span class="text-xs text-text-muted">Handles follow-up turns after the pipeline completes.</span>
+                    </div>
                   }
-
                   <div class="flex max-w-xl flex-col gap-1.5">
                     <label class="text-xs font-medium text-text-muted">Persisted blackboard keys</label>
                     <twang-input
@@ -392,58 +408,30 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
                       [ngModel]="persistedKeysText()"
                       (ngModelChange)="setPersistedKeys($event)"
                     />
-                    <span class="text-xs text-text-muted">Blackboard entries kept across stages.</span>
                   </div>
                 </div>
-              </section>
-            }
 
-            @if (mode() === 'deterministic') {
-              @for (stage of pipeline()!.stages; track $index; let i = $index; let last = $last) {
-                @if (current() === 'sec-stage-' + i) {
-                  <section [id]="'sec-stage-' + i" class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
-                    <h2 class="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3 text-sm font-semibold text-primary-600">
-                      Stage {{ i + 1 }}
-                      @if (last) {
-                        <span class="rounded bg-green-50 px-1.5 py-0.5 text-[10px] uppercase text-green-700">synthesizer</span>
-                      }
-                    </h2>
-                    <div class="flex shrink-0 flex-wrap items-end gap-4 border-b border-border p-4">
-                      <div class="flex w-72 flex-col gap-1.5">
+                @if (mode() === 'deterministic') {
+                  @if (selectedStageConfig(); as stage) {
+                    <div class="flex shrink-0 flex-wrap items-end gap-4 border-b border-border px-4 py-3">
+                      <span class="pb-2 text-sm font-semibold text-primary-600">Stage {{ stageIndex() + 1 }}</span>
+                      <div class="flex w-64 flex-col gap-1.5">
                         <label class="text-xs font-medium text-text-muted">Name</label>
-                        <twang-input placeholder="e.g. fetch-data" [ngModel]="stage.name" (ngModelChange)="updateStage(i, { name: $event })" />
+                        <twang-input placeholder="e.g. fetch-data" [ngModel]="stage.name" (ngModelChange)="updateStage(stageIndex(), { name: $event })" />
                       </div>
                       <label class="flex cursor-pointer items-center gap-2 pb-2 text-sm" title="Run this stage's sub-agents concurrently instead of one after another">
-                        <input type="checkbox" class="accent-primary-600" [checked]="stage.parallel" (change)="updateStage(i, { parallel: !stage.parallel })" />
+                        <input type="checkbox" class="accent-primary-600" [checked]="stage.parallel" (change)="updateStage(stageIndex(), { parallel: !stage.parallel })" />
                         Run sub-agents in parallel
                       </label>
                     </div>
-                    <ng-container *ngTemplateOutlet="subAgentPicker; context: { $implicit: { kind: 'stage', index: i }, label: stage.parallel ? 'Sub-agents' : 'Sub-agents (run in order)' }" />
-                  </section>
-                }
-              }
-            } @else {
-              @if (current() === 'sec-available') {
-                <section id="sec-available" class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
-                  <h2 class="shrink-0 border-b border-border px-4 py-3 text-sm font-semibold text-primary-600">Available agents</h2>
-                  <ng-container *ngTemplateOutlet="subAgentPicker; context: { $implicit: { kind: 'available' }, label: 'Available to the orchestrator' }" />
-                </section>
-              }
-              @if (current() === 'sec-followup') {
-                <section id="sec-followup" class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
-                  <h2 class="shrink-0 border-b border-border px-4 py-3 text-sm font-semibold text-primary-600">Follow-up</h2>
-                  <div class="flex max-w-md flex-col gap-1.5 p-4">
-                    <label class="text-xs font-medium text-text-muted">Follow-up agent</label>
-                    <twang-dropdown
-                      size="sm"
-                      [options]="followupOptions()"
-                      [value]="pipeline()!.followup_agent ?? ''"
-                      (valueChange)="updatePipeline({ followup_agent: $event || null })"
+                    <ng-container
+                      *ngTemplateOutlet="subAgentPicker; context: { $implicit: { kind: 'stage', index: stageIndex() }, label: stage.parallel ? 'Sub-agents' : 'Sub-agents (run in order)' }"
                     />
-                    <span class="text-xs text-text-muted">Handles follow-up turns after the pipeline completes.</span>
-                  </div>
-                </section>
-              }
+                  }
+                } @else {
+                  <ng-container *ngTemplateOutlet="subAgentPicker; context: { $implicit: { kind: 'available' }, label: 'Available to the orchestrator' }" />
+                }
+              </section>
             }
           } @else {
             <!-- Tools (standard and pipeline agents) -->
@@ -522,6 +510,8 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
             </section>
           }
 
+          </fieldset>
+
           <!-- Step through sections -->
           <div class="flex shrink-0 items-center justify-end gap-2">
             <span class="mr-1 text-xs tabular-nums text-text-muted">{{ index() + 1 }} / {{ nav().length }}</span>
@@ -552,7 +542,13 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
             <p class="text-text-muted">Creating the agent saves it as version 1 (draft). It goes live once promoted.</p>
           } @else {
             @for (v of versionsNewestFirst(); track v.id) {
-              <div class="rounded-md border px-3 py-2" [class]="v.version === draftVersion()?.version ? 'border-primary-300 bg-primary-50' : 'border-border'">
+              <button
+                type="button"
+                class="w-full rounded-md border px-3 py-2 text-left transition-colors hover:border-primary-300"
+                [class]="isShown(v) ? 'border-primary-300 bg-primary-50' : 'border-border'"
+                [title]="v.status === 'Draft' ? 'Edit this draft' : 'View v' + v.version + ' (read-only)'"
+                (click)="openVersion(v)"
+              >
                 <div class="flex items-center gap-2">
                   <span class="font-semibold tabular-nums">v{{ v.version }}</span>
                   @if (v.status === 'Draft') {
@@ -560,15 +556,15 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
                   } @else if (v.version === liveVersion()) {
                     <span class="rounded bg-green-50 px-1.5 py-0.5 text-[10px] uppercase text-green-700">live</span>
                   }
-                  @if (v.version === draftVersion()?.version) {
-                    <span class="ml-auto text-[10px] uppercase text-primary-700">editing</span>
+                  @if (isShown(v)) {
+                    <span class="ml-auto text-[10px] uppercase text-primary-700">{{ v.status === 'Draft' ? 'editing' : 'viewing' }}</span>
                   }
                 </div>
                 <div class="mt-0.5 truncate text-xs text-text-muted">{{ v.created_by_email || v.created_by }} · {{ v.created_at | date: 'MMM d, HH:mm' }}</div>
                 @if (v.note) {
                   <div class="mt-1 text-xs">{{ v.note }}</div>
                 }
-              </div>
+              </button>
             } @empty {
               <p class="text-text-muted">No versions yet.</p>
             }
@@ -629,6 +625,48 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
         </div>
       </div>
     </ng-template>
+
+    <!-- Rendered on the right of the admin header via PageBreadcrumbs.actions. -->
+    <ng-template #headerActions>
+      @if (!isNew() && !confirmDiscard()) {
+        <twang-button
+          variant="default"
+          size="sm"
+          icon="flask-conical"
+          label="Test agent"
+          [title]="dirty() ? 'Tests use the saved draft — save first to include your changes' : 'Chat with this agent (draft or live)'"
+          [routerLink]="['/admin', 'config', 'agents', agentId(), 'edit', 'test']"
+        />
+      }
+      @if (draftVersion(); as d) {
+        @if (confirmDiscard()) {
+          <span class="text-xs text-text-muted">
+            {{ hasLive() ? 'Discard draft v' + d.version + '? Unsaved and saved draft changes are lost.' : 'Discard v' + d.version + '? This agent was never promoted, so it will be deleted.' }}
+          </span>
+          <twang-button variant="default" size="sm" label="Cancel" [disabled]="busy()" (buttonClick)="confirmDiscard.set(false)" />
+          <twang-button variant="destructive" size="sm" label="Discard" [loading]="busy()" [disabled]="busy()" (buttonClick)="discardDraft()" />
+        } @else {
+          <twang-button
+            variant="default"
+            size="sm"
+            icon="trash-2"
+            label="Discard draft"
+            [disabled]="busy() || readOnly()"
+            (buttonClick)="confirmDiscard.set(true)"
+          />
+          <twang-button
+            variant="primary"
+            size="sm"
+            icon="rocket"
+            label="Promote"
+            [title]="dirty() ? 'Save the draft first' : 'Make v' + d.version + ' the live version'"
+            [loading]="busy()"
+            [disabled]="busy() || dirty() || readOnly()"
+            (buttonClick)="promoteDraft()"
+          />
+        }
+      }
+    </ng-template>
   `,
 })
 export class AgentEditorComponent {
@@ -652,7 +690,7 @@ export class AgentEditorComponent {
   protected readonly originLabel = originLabel;
 
   /** Agent id from `:id`; null on the `new` route. */
-  private readonly agentId = toSignal(this.route.paramMap.pipe(map(p => p.get('id'))), { requireSync: true });
+  protected readonly agentId = toSignal(this.route.paramMap.pipe(map(p => p.get('id'))), { requireSync: true });
   protected readonly isNew = computed(() => !this.agentId());
 
   protected readonly loading = signal(false);
@@ -661,6 +699,8 @@ export class AgentEditorComponent {
   // ── Versions / saving ──
   /** The draft version being edited (edit mode). */
   protected readonly draftVersion = signal<AgentConfigVersion | null>(null);
+  /** Live version number of the agent being edited (null for never-versioned / draft-only agents). */
+  private readonly liveVersion$ = signal<number | null>(null);
   private readonly versions = signal<AgentConfigVersion[]>([]);
   protected readonly versionsNewestFirst = computed(() => [...this.versions()].sort((a, b) => b.version - a.version));
   /** The newest promoted version — what's live. */
@@ -675,7 +715,24 @@ export class AgentEditorComponent {
   /** Last saved state (blank for a new agent) and the working copy being edited. */
   private readonly original = signal<AgentConfig>(blankAgent());
   protected readonly draft = signal<AgentConfig>(blankAgent());
-  protected readonly dirty = computed(() => JSON.stringify(this.draft()) !== JSON.stringify(this.original()));
+  protected readonly dirty = computed(() => !this.viewing() && JSON.stringify(this.draft()) !== JSON.stringify(this.original()));
+
+  // ── Viewing a promoted version (read-only) ──
+  /** A promoted version opened from the versions panel; null while editing. */
+  protected readonly viewing = signal<AgentConfigVersion | null>(null);
+  /** The working copy, kept aside while a promoted version is on screen. */
+  private stashedDraft: AgentConfig | null = null;
+  /** True for promoted versions — only the draft (or the live copy you're editing) can change. */
+  protected readonly readOnly = computed(() => !!this.viewing());
+  /** Whether the agent has ever been promoted (so discarding its draft leaves it in place). */
+  protected readonly hasLive = computed(() => {
+    const id = this.agentId();
+    return this.agentList().some(a => a.config.id === id && a.status !== 'draft');
+  });
+  protected readonly confirmDiscard = signal(false);
+  protected readonly busy = signal(false);
+  /** Discard draft / Promote, shown on the right of the admin header. */
+  private readonly headerActions = viewChild<TemplateRef<unknown>>('headerActions');
 
   protected readonly isPipeline = computed(() => this.draft().execution === 'pipeline');
   protected readonly mode = computed(() => pipelineMode(this.draft().pipeline));
@@ -794,6 +851,11 @@ export class AgentEditorComponent {
     ),
   );
 
+  /** Stage shown below the stage list (clamped, since stages can be removed). */
+  protected readonly selectedStage = signal(0);
+  protected readonly stageIndex = computed(() => Math.min(this.selectedStage(), Math.max(0, (this.pipeline()?.stages.length ?? 1) - 1)));
+  protected readonly selectedStageConfig = computed(() => this.pipeline()?.stages[this.stageIndex()] ?? null);
+
   protected readonly persistedKeysText = computed(() => (this.pipeline()?.persisted_blackboard_keys ?? []).join(', '));
 
   protected readonly agentName = (id: string) => this.agentNames().get(id) || id;
@@ -803,36 +865,15 @@ export class AgentEditorComponent {
   /** Rough token estimate (~4 chars/token) — just a size hint. */
   protected readonly promptTokens = computed(() => Math.ceil(this.draft().system_prompt.length / 4));
 
-  /** Section nav; pipelines nest their stages (deterministic) or available/follow-up (dynamic). */
-  protected readonly nav = computed<NavItem[]>(() => {
-    const items: NavItem[] = [
-      { id: 'sec-general', label: 'General', depth: 0 },
-      { id: 'sec-description', label: 'Description', depth: 0 },
-      { id: 'sec-prompt', label: 'System prompt', depth: 0 },
-    ];
-    const pipeline = this.draft().pipeline;
-    if (this.isPipeline() && pipeline) {
-      const deterministic = this.mode() === 'deterministic';
-      items.push({ id: 'sec-pipeline', label: `Pipeline · ${deterministic ? 'Deterministic' : 'Dynamic'}`, depth: 0 });
-      if (deterministic) {
-        pipeline.stages.forEach((stage, i) =>
-          items.push({
-            id: `sec-stage-${i}`,
-            label: `${i + 1}. ${stage.name || 'Untitled'}`,
-            depth: 1,
-            tag: i === pipeline.stages.length - 1 ? 'synthesizer' : undefined,
-          }),
-        );
-      } else {
-        items.push({ id: 'sec-available', label: 'Available agents', depth: 1 });
-        items.push({ id: 'sec-followup', label: 'Follow-up', depth: 1 });
-      }
-    } else {
-      items.push({ id: 'sec-tools', label: 'Tools', depth: 0 });
-    }
-    items.push({ id: 'sec-response', label: 'Response format', depth: 0 });
-    return items;
-  });
+  /** Section tabs; pipelines edit their stages / available agents inside the Pipeline tab. */
+  protected readonly nav = computed<NavItem[]>(() => [
+    { id: 'sec-general', label: 'General', depth: 0 },
+    { id: 'sec-prompt', label: 'System prompt', depth: 0 },
+    this.isPipeline()
+      ? { id: 'sec-pipeline', label: `Pipeline · ${this.mode() === 'deterministic' ? 'Deterministic' : 'Dynamic'}`, depth: 0 }
+      : { id: 'sec-tools', label: 'Tools', depth: 0 },
+    { id: 'sec-response', label: 'Response format', depth: 0 },
+  ]);
 
   constructor() {
     const destroyRef = this.destroyRef;
@@ -865,29 +906,33 @@ export class AgentEditorComponent {
         },
       });
 
-    // Edit mode: open the agent's draft version (the backend creates one — and a v1 baseline for
-    // agents that predate versioning — if needed), then load the version list.
+    // Edit mode: nothing is created by opening the editor. Edit the agent's existing draft if it has
+    // one; otherwise edit a copy of its live config — the first Save creates the draft (see save()).
     const id = this.agentId();
     if (id) {
       this.loading.set(true);
-      this.configService
-        .openAgentDraft(id)
+      forkJoin({ agents: this.configService.getAgents(), versions: this.configService.getAgentVersions(id) })
         .pipe(takeUntilDestroyed(destroyRef))
         .subscribe({
-          next: version => {
-            // A pipeline always edits through `pipeline`; fill in an empty one if it's missing.
-            const config = version.config.execution === 'pipeline' && !version.config.pipeline
-              ? { ...version.config, pipeline: blankPipeline() }
-              : version.config;
-            this.draftVersion.set(version);
-            this.original.set(structuredClone(config));
-            this.draft.set(structuredClone(config));
+          next: ({ agents, versions }) => {
+            const agent = agents.find(a => a.config.id === id);
+            const draft = versions.find(v => v.status === 'Draft') ?? null;
+            if (!agent && !draft) {
+              this.loadError.set(`Agent "${id}" doesn't exist.`);
+              this.loading.set(false);
+              return;
+            }
+            this.agentList.set(agents);
+            this.agentsLoaded.set(true);
+            this.versions.set(versions);
+            this.draftVersion.set(draft);
+            this.liveVersion$.set(agent?.live_version ?? null);
+            this.edit(draft?.config ?? agent!.config);
             this.loading.set(false);
-            this.loadVersions();
           },
           error: err => {
-            console.error('Failed to open agent draft', err);
-            this.loadError.set(err?.status === 404 ? `Agent "${id}" doesn't exist.` : errorText(err, "Couldn't open the agent for editing."));
+            console.error('Failed to load agent', err);
+            this.loadError.set(errorText(err, "Couldn't load the agent."));
             this.loading.set(false);
           },
         });
@@ -896,21 +941,32 @@ export class AgentEditorComponent {
     effect(() => {
       const name = this.isNew() ? 'New agent' : this.original().name || this.agentId() || 'Agent';
       this.breadcrumbs.set([
-        { label: 'Agents', path: ['/admin', 'config', 'agents'] },
         { label: name },
-        ...(this.isNew() ? [] : [{ label: this.draftVersion() ? `Edit · v${this.draftVersion()!.version} draft` : 'Edit' }]),
+        ...(this.isNew()
+          ? []
+          : [
+              {
+                label: this.draftVersion()
+                  ? `Edit · v${this.draftVersion()!.version} draft`
+                  : this.liveVersion$() != null
+                    ? `Edit · from live v${this.liveVersion$()}`
+                    : 'Edit',
+              },
+            ]),
       ]);
     });
+    effect(() => this.breadcrumbs.actions.set(this.headerActions() ?? null));
+    rememberCurrentAgent(this.agentId());
     destroyRef.onDestroy(() => this.breadcrumbs.clear());
   }
 
   protected patch(changes: Partial<AgentConfig>): void {
-    this.draft.update(d => ({ ...d, ...changes }));
+    this.mutate(d => ({ ...d, ...changes }));
   }
 
   /** Merges into `llm_config`; all-unset collapses back to `null` (no override). */
   protected setLlm(changes: Partial<LlmConfig>): void {
-    this.draft.update(d => {
+    this.mutate(d => {
       const next: LlmConfig = { ...(d.llm_config ?? { llm: null, model: null, preset: null }), ...changes };
       return { ...d, llm_config: next.llm || next.model || next.preset ? next : null };
     });
@@ -926,7 +982,7 @@ export class AgentEditorComponent {
 
   protected toggleTool(source: ToolSource, name: string): void {
     const field = this.toolSources[source].field;
-    this.draft.update(d => ({
+    this.mutate(d => ({
       ...d,
       [field]: d[field].includes(name) ? d[field].filter(t => t !== name) : [...d[field], name],
     }));
@@ -950,7 +1006,7 @@ export class AgentEditorComponent {
   // ── Pipeline edits ──
 
   protected updatePipeline(changes: Partial<PipelineConfig>): void {
-    this.draft.update(d => ({ ...d, pipeline: { ...(d.pipeline ?? blankPipeline()), ...changes } }));
+    this.mutate(d => ({ ...d, pipeline: { ...(d.pipeline ?? blankPipeline()), ...changes } }));
   }
 
   /** Switching mode keeps both stages and available agents, so flipping back loses nothing. */
@@ -961,7 +1017,7 @@ export class AgentEditorComponent {
   protected addStage(): void {
     const stages = this.pipeline()?.stages ?? [];
     this.updatePipeline({ stages: [...stages, { name: `stage-${stages.length + 1}`, parallel: false, sub_agents: [] }] });
-    this.goTo(`sec-stage-${stages.length}`);
+    this.selectedStage.set(stages.length);
   }
 
   protected updateStage(index: number, changes: Partial<PipelineStage>): void {
@@ -970,11 +1026,14 @@ export class AgentEditorComponent {
 
   protected removeStage(index: number): void {
     this.updatePipeline({ stages: (this.pipeline()?.stages ?? []).filter((_, i) => i !== index) });
-    this.goTo('sec-pipeline'); // the removed stage's section is gone
+    if (this.selectedStage() >= index) this.selectedStage.update(i => Math.max(0, i - 1));
   }
 
+  /** The selection follows the moved stage. */
   protected moveStage(index: number, delta: number): void {
-    this.updatePipeline({ stages: moved(this.pipeline()?.stages ?? [], index, delta) });
+    const stages = this.pipeline()?.stages ?? [];
+    this.updatePipeline({ stages: moved(stages, index, delta) });
+    if (this.selectedStage() === index) this.selectedStage.set(Math.max(0, Math.min(stages.length - 1, index + delta)));
   }
 
   protected setPersistedKeys(text: string): void {
@@ -1010,11 +1069,18 @@ export class AgentEditorComponent {
 
   /** Create mode only: switching to/from a pipeline adds or drops the pipeline settings. */
   protected setExecution(execution: ExecutionType): void {
-    this.draft.update(d => ({
+    this.mutate(d => ({
       ...d,
       execution,
       pipeline: execution === 'pipeline' ? (d.pipeline ?? blankPipeline()) : null,
     }));
+  }
+
+  /** Starts editing `config` (normalised: a pipeline always edits through `pipeline`). */
+  private edit(config: AgentConfig): void {
+    const normalised = config.execution === 'pipeline' && !config.pipeline ? { ...config, pipeline: blankPipeline() } : config;
+    this.original.set(structuredClone(normalised));
+    this.draft.set(structuredClone(normalised));
   }
 
   protected save(): void {
@@ -1041,16 +1107,25 @@ export class AgentEditorComponent {
       return;
     }
 
-    const version = this.draftVersion();
-    if (!version) return done();
-    this.configService.saveAgentDraft(version.agent_id, version.version, config).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: () => {
-        this.original.set(structuredClone(config));
-        done();
-        this.loadVersions();
-      },
-      error: fail("Couldn't save the draft."),
-    });
+    // First save of this edit: create the draft now (the backend copies the live config, adding a v1
+    // baseline for agents that predate versioning), then save the edits into it.
+    const agentId = this.agentId()!;
+    const existing = this.draftVersion();
+    const target$ = existing ? of(existing) : this.configService.openAgentDraft(agentId);
+    target$
+      .pipe(
+        switchMap(version => this.configService.saveAgentDraft(agentId, version.version, config).pipe(map(() => version))),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: version => {
+          this.draftVersion.set(version);
+          this.original.set(structuredClone(config));
+          done();
+          this.loadVersions();
+        },
+        error: fail("Couldn't save the draft."),
+      });
   }
 
   private loadVersions(): void {
@@ -1059,6 +1134,79 @@ export class AgentEditorComponent {
     this.configService.getAgentVersions(id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: versions => this.versions.set(versions),
       error: err => console.error('Failed to load versions', err),
+    });
+  }
+
+  /** Every edit goes through here; ignored while a promoted version is on screen. */
+  private mutate(fn: (config: AgentConfig) => AgentConfig): void {
+    if (this.readOnly()) return;
+    this.draft.update(fn);
+  }
+
+  protected isShown(v: AgentConfigVersion): boolean {
+    const viewing = this.viewing();
+    return viewing ? viewing.version === v.version : v.version === this.draftVersion()?.version;
+  }
+
+  /** Draft → edit it; promoted → show it read-only (the working copy is kept aside). */
+  protected openVersion(v: AgentConfigVersion): void {
+    if (v.status === 'Draft') return this.backToEditing();
+    if (!this.viewing()) this.stashedDraft = this.draft();
+    this.viewing.set(v);
+    const config = v.config.execution === 'pipeline' && !v.config.pipeline ? { ...v.config, pipeline: blankPipeline() } : v.config;
+    this.draft.set(structuredClone(config));
+  }
+
+  protected backToEditing(): void {
+    if (!this.viewing()) return;
+    this.viewing.set(null);
+    if (this.stashedDraft) this.draft.set(this.stashedDraft);
+    this.stashedDraft = null;
+  }
+
+  protected discardDraft(): void {
+    const d = this.draftVersion();
+    if (!d) return;
+    this.busy.set(true);
+    this.configService.discardAgentDraft(d.agent_id, d.version).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.confirmDiscard.set(false);
+        if (!this.hasLive()) {
+          // A never-promoted agent is gone with its only draft.
+          this.router.navigate(['/admin', 'config', 'agents']);
+          return;
+        }
+        // Back to editing a copy of the live config; the next Save starts a fresh draft.
+        const live = this.agentList().find(a => a.config.id === d.agent_id)?.config;
+        this.draftVersion.set(null);
+        this.backToEditing();
+        if (live) this.edit(live);
+        this.loadVersions();
+      },
+      error: err => {
+        console.error('Failed to discard draft', err);
+        this.busy.set(false);
+        this.confirmDiscard.set(false);
+        this.saveError.set(errorText(err, "Couldn't discard the draft."));
+      },
+    });
+  }
+
+  protected promoteDraft(): void {
+    const d = this.draftVersion();
+    if (!d || this.dirty()) return;
+    this.busy.set(true);
+    this.configService.promoteAgentDraft(d.agent_id, d.version).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.router.navigate(['/admin', 'config', 'agents']);
+      },
+      error: err => {
+        console.error('Failed to promote', err);
+        this.busy.set(false);
+        this.saveError.set(errorText(err, "Couldn't promote the draft."));
+      },
     });
   }
 

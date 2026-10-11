@@ -11,6 +11,8 @@ import { TwangButtonComponent } from 'ngx-twang-ui';
 @Component({
   selector: 'app-three-panel-layout',
   standalone: true,
+  // With `fill`, the layout stretches to its flex-column parent's height (see `fill`).
+  host: { '[class]': "fill() ? 'flex min-h-0 flex-1 flex-col' : ''" },
   imports: [LucideAngularModule, TwangButtonComponent],
   template: `
     @if (showLeft() && !mobileShowLeft()) {
@@ -139,14 +141,19 @@ export class ThreePanelLayoutComponent implements OnInit {
    * unset for content-driven layouts (e.g. a tall chat thread should decide the page's height).
    */
   readonly panelMinHeight = input('');
+  /**
+   * Fill the parent's height (the parent must be a flex column, e.g. the admin body) instead of
+   * sizing to content: the row stretches, and the middle panel's content can grow into it (`flex-1`).
+   */
+  readonly fill = input(false);
 
   protected readonly rootClasses = computed(() =>
-    `flex w-full items-start gap-3 md:gap-4 lg:gap-6 xl:gap-8 ${this.background()}`
+    `flex w-full ${this.fill() ? 'min-h-0 flex-1 items-stretch' : 'items-start'} gap-3 md:gap-4 lg:gap-6 xl:gap-8 ${this.background()}`
   );
 
   /** No background/border here by design — each consumer decides how its middle content should look. */
   protected readonly middleClasses = computed(() =>
-    `${this.mobileShowLeft() ? 'hidden md:flex' : 'flex'} min-w-0 flex-1 flex-col ${this.panelMinHeight()}`
+    `${this.mobileShowLeft() ? 'hidden md:flex' : 'flex'} min-w-0 flex-1 flex-col ${this.fill() ? 'min-h-0' : ''} ${this.panelMinHeight()}`
   );
 
   protected readonly leftCollapsed = signal(false);

@@ -13,7 +13,6 @@ import { finalize } from 'rxjs';
 import { type RoleType, type UserResponse, UserService } from '../../services/user.service';
 import { ThreePanelLayoutComponent } from '../three-panel-layout/three-panel-layout.component';
 import { ADMIN_RIGHT_WIDTH } from '../admin-page/admin-layout';
-import { AccessNavComponent } from './access-nav.component';
 import { ACCESS_LAYOUT_KEY } from './access-sections';
 
 const ROLES: readonly RoleType[] = ['User', 'Admin', 'SuperAdmin'];
@@ -26,7 +25,6 @@ const ROLES: readonly RoleType[] = ['User', 'Admin', 'SuperAdmin'];
   selector: 'app-access-users',
   standalone: true,
   imports: [
-    AccessNavComponent,
     DatePipe,
     LucideAngularModule,
     ThreePanelLayoutComponent,
@@ -36,13 +34,12 @@ const ROLES: readonly RoleType[] = ['User', 'Admin', 'SuperAdmin'];
   ],
   template: `
     <app-three-panel-layout
-      leftTitle="Access"
+      [showLeft]="false"
       [rightTitle]="selected()?.email ?? 'Details'"
       [storageKey]="layoutKey"
       [rightWidth]="rightWidth"
       panelMinHeight="min-h-[70vh]"
     >
-      <app-access-nav left />
 
       <div middle class="flex flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
         <div class="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">

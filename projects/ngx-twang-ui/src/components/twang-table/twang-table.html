@@ -77,7 +77,7 @@
 
           <tbody>
             @for (row of displayedRows(); track bodyRowTrackId(row)) {
-              <tr [class]="getTrClass(row)" (click)="handleRowClick(row, $event)">
+              <tr [class]="getTrClass(row)" (click)="handleRowClick(row, $event)" (dblclick)="handleRowDoubleClick(row, $event)">
                 @for (col of columns; track col.id) {
                   <td
                     class="portfolio-table-cell border-b border-border {{ col.widthClass ?? '' }} {{ getCellClass(col, row) }} {{ col.sticky ? 'twang-table-sticky-first' : '' }}"
