@@ -229,6 +229,14 @@ export class AdminConfigService {
     return this.http.get<ProviderConfig[]>(`${this.base}/admin/providers`);
   }
 
+  /**
+   * Replace one provider config — its fields and its whole `models` list, so enabling/disabling and
+   * adding/editing/deleting models all go through here. Returns the saved config.
+   */
+  updateProvider(config: ProviderConfig): Observable<ProviderConfig> {
+    return this.http.put<ProviderConfig>(`${this.base}/admin/providers/${encodeURIComponent(config.id)}`, config);
+  }
+
   /** Force the backend to refresh its in-memory config cache from storage. Empty/204 response = success. */
   refreshCache(): Observable<RefreshCacheResponse | null> {
     return this.http.post<RefreshCacheResponse | null>(`${this.base}/admin/config/refresh`, null);

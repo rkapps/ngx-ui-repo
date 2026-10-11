@@ -1,8 +1,11 @@
-import { Component, computed, DestroyRef, effect, inject, signal, type TemplateRef, viewChild } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { Component, computed, DestroyRef, effect, inject, linkedSignal, signal, type TemplateRef, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { FormsModule } from '@angular/forms';
 import { LucideAngularModule } from 'lucide-angular';
 import {
   TwangButtonComponent,
+  TwangInputComponent,
   TwangTreeTableComponent,
   type TwangTreeTableColumn,
   type TwangTreeTableNode,
@@ -28,6 +31,54 @@ const modelNodeId = (p: ProviderConfig, m: ModelConfig) => `model:${p.id}:${m.id
 
 const cost = (v: number) => (v ? `$${v}` : '—');
 
+type CostKey = 'input_cost' | 'cached_read_cost' | 'cached_write_cost' | 'output_cost';
+/** `step`: spin-button increment — coarser for input/output prices, finer for the (smaller) cache prices. */
+const COST_FIELDS: { key: CostKey; label: string; step: string }[] = [
+  { key: 'input_cost', label: 'Input', step: '0.05' },
+  { key: 'cached_read_cost', label: 'Cache read', step: '0.01' },
+  { key: 'cached_write_cost', label: 'Cache write', step: '0.01' },
+  { key: 'output_cost', label: 'Output', step: '0.05' },
+];
+
+/** A model while it's edited: costs stay as typed text (so "0." or "1.50" survive), converted on save. */
+type ModelDraft = Omit<ModelConfig, CostKey> & Record<CostKey, string>;
+
+const blankModel = (): ModelDraft => ({ id: '', enabled: true, input_cost: '0', cached_read_cost: '0', cached_write_cost: '0', output_cost: '0' });
+const toDraft = (m: ModelConfig): ModelDraft => ({
+  ...m,
+  input_cost: String(m.input_cost),
+  cached_read_cost: String(m.cached_read_cost),
+  cached_write_cost: String(m.cached_write_cost),
+  output_cost: String(m.output_cost),
+});
+
+/** Non-negative decimal: "3", "0.5", ".5", "1." — blank counts as 0. */
+const DECIMAL = /^(\d+\.?\d*|\.\d+)$/;
+const parseCost = (text: string): number | null => {
+  const t = text.trim();
+  if (!t) return 0;
+  return DECIMAL.test(t) ? Number(t) : null;
+};
+
+/** The draft as a ModelConfig, or null while any cost isn't a valid decimal. */
+function fromDraft(d: ModelDraft): ModelConfig | null {
+  const input = parseCost(d.input_cost);
+  const cachedRead = parseCost(d.cached_read_cost);
+  const cachedWrite = parseCost(d.cached_write_cost);
+  const output = parseCost(d.output_cost);
+  if (input === null || cachedRead === null || cachedWrite === null || output === null) return null;
+  return { id: d.id, enabled: d.enabled, input_cost: input, cached_read_cost: cachedRead, cached_write_cost: cachedWrite, output_cost: output };
+}
+
+const sameModel = (a: ModelConfig, b: ModelConfig) =>
+  a.id === b.id && a.enabled === b.enabled && COST_FIELDS.every(c => a[c.key] === b[c.key]);
+
+/** Backend error text (axum returns plain strings), else a fallback. */
+function errorText(err: unknown, fallback: string): string {
+  const body = (err as { error?: unknown })?.error;
+  return typeof body === 'string' && body.trim() ? body : fallback;
+}
+
 /**
  * Admin > Config > Providers: read-only view of every LLM provider configuration. The middle
  * tree lists providers with their models (and costs) as children; selecting either shows the
@@ -36,7 +87,7 @@ const cost = (v: number) => (v ? `$${v}` : '—');
 @Component({
   selector: 'app-config-providers',
   standalone: true,
-  imports: [LucideAngularModule, RefreshCacheButtonComponent, ThreePanelLayoutComponent, TwangButtonComponent, TwangTreeTableComponent],
+  imports: [FormsModule, LucideAngularModule, NgTemplateOutlet, RefreshCacheButtonComponent, ThreePanelLayoutComponent, TwangButtonComponent, TwangInputComponent, TwangTreeTableComponent],
   template: `
     <app-three-panel-layout
       [showLeft]="false"
@@ -93,51 +144,154 @@ const cost = (v: number) => (v ? `$${v}` : '—');
         </div>
       </div>
 
+      <!-- Right: acts on the tree selection. Provider → enable/disable, add a model. Model → edit, delete.
+           Every change saves the whole provider (PUT /admin/providers/{id}). -->
       <div right class="flex flex-col gap-4 p-4 text-sm">
-        @if (selected(); as s) {
-          <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-            <dt class="text-xs text-text-muted">ID</dt>
-            <dd class="break-all font-mono text-xs">{{ s.provider.id }}</dd>
-            <dt class="text-xs text-text-muted">Status</dt>
-            <dd [class.text-red-600]="!s.provider.enabled">{{ s.provider.enabled ? 'Enabled' : 'Disabled' }}</dd>
-            <dt class="text-xs text-text-muted">Default model</dt>
-            <dd class="break-all">{{ s.provider.default_model || '—' }}</dd>
-            <dt class="text-xs text-text-muted">Models</dt>
-            <dd>{{ enabledCount(s.provider) }} of {{ s.provider.models.length }} enabled</dd>
-            <dt class="text-xs text-text-muted">API key env</dt>
-            <dd class="break-all font-mono text-xs">{{ s.provider.api_key_env ?? '—' }}</dd>
-            <dt class="text-xs text-text-muted">Base URL env</dt>
-            <dd class="break-all font-mono text-xs">{{ s.provider.base_url_env ?? '—' }}</dd>
-          </dl>
+        @if (saveError()) {
+          <div class="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+            <lucide-icon name="circle-alert" [size]="14" class="mt-0.5 shrink-0" />
+            <span class="min-w-0 flex-1 break-words">{{ saveError() }}</span>
+          </div>
+        }
 
-          @if (s.model; as m) {
-            <section class="flex flex-col gap-2 border-t border-border pt-4">
-              <span class="text-xs font-semibold uppercase tracking-wider text-primary-600">Selected model</span>
+        @if (selected(); as s) {
+          @if (modelForm(); as f) {
+            <!-- Selected model: edit in place -->
+            <section class="flex flex-col gap-3">
               <div class="flex items-center gap-2">
-                <span class="min-w-0 flex-1 break-all font-mono text-xs font-medium">{{ m.id }}</span>
-                @if (m.id === s.provider.default_model) {
+                <span class="min-w-0 flex-1 break-all font-mono text-xs font-medium">{{ f.id }}</span>
+                @if (f.id === s.provider.default_model) {
                   <span class="rounded bg-primary-50 px-1.5 py-0.5 text-[10px] uppercase text-primary-700">default</span>
                 }
-                @if (!m.enabled) {
-                  <span class="rounded bg-surface-muted px-1.5 py-0.5 text-[10px] uppercase text-text-muted">disabled</span>
+              </div>
+              <ng-container *ngTemplateOutlet="modelFields; context: { $implicit: f, patch: patchModel, defaultModel: f.id === s.provider.default_model }" />
+              <div class="flex items-center gap-2 border-t border-border pt-3">
+                @if (confirmDelete()) {
+                  <span class="flex-1 text-xs text-red-700">Delete this model?</span>
+                  <twang-button variant="default" size="sm" label="Cancel" [disabled]="saving()" (buttonClick)="confirmDelete.set(false)" />
+                  <twang-button variant="destructive" size="sm" icon="trash-2" label="Delete" [loading]="saving()" [disabled]="saving()" (buttonClick)="deleteModel(s.provider, f.id)" />
+                } @else {
+                  <twang-button
+                    variant="default"
+                    size="sm"
+                    icon="trash-2"
+                    ariaLabel="Delete model"
+                    [title]="f.id === s.provider.default_model ? 'The default model cannot be deleted' : 'Delete model'"
+                    [disabled]="saving() || f.id === s.provider.default_model"
+                    (buttonClick)="confirmDelete.set(true)"
+                  />
+                  <twang-button class="ml-auto" variant="default" size="sm" label="Reset" [disabled]="saving() || !modelDirty()" (buttonClick)="resetModel()" />
+                  <twang-button
+                    variant="primary"
+                    size="sm"
+                    label="Save"
+                    [loading]="saving()"
+                    [disabled]="saving() || !modelDirty() || !draftValid(f)"
+                    (buttonClick)="saveModel(s.provider)"
+                  />
                 }
               </div>
-              <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-                <dt class="text-xs text-text-muted">Input</dt>
-                <dd>{{ cost(m.input_cost) }}</dd>
-                <dt class="text-xs text-text-muted">Cache read</dt>
-                <dd>{{ cost(m.cached_read_cost) }}</dd>
-                <dt class="text-xs text-text-muted">Cache write</dt>
-                <dd>{{ cost(m.cached_write_cost) }}</dd>
-                <dt class="text-xs text-text-muted">Output</dt>
-                <dd>{{ cost(m.output_cost) }}</dd>
-              </dl>
             </section>
+          } @else {
+            <!-- Selected provider: enable/disable, add a model -->
+            <div class="flex items-center gap-2">
+              <twang-button
+                variant="default"
+                size="sm"
+                [icon]="s.provider.enabled ? 'toggle-right' : 'toggle-left'"
+                [label]="s.provider.enabled ? 'Enabled' : 'Disabled'"
+                [title]="s.provider.enabled ? 'Enabled — click to disable this provider' : 'Disabled — click to enable this provider'"
+                [loading]="saving()"
+                [disabled]="saving()"
+                (buttonClick)="toggleProvider(s.provider)"
+              />
+              @if (addingTo()?.id !== s.provider.id) {
+                <twang-button class="ml-auto" variant="primary" size="sm" icon="plus" label="Add model" [disabled]="saving()" (buttonClick)="startAdd(s.provider)" />
+              }
+            </div>
+            <!-- Same label width as the cost fields, so the two line up. -->
+            <dl class="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-2 border-t border-border pt-4">
+              <dt class="text-xs text-text-muted">ID</dt>
+              <dd class="break-all font-mono text-xs">{{ s.provider.id }}</dd>
+              <dt class="text-xs text-text-muted">Status</dt>
+              <dd [class.text-red-600]="!s.provider.enabled">{{ s.provider.enabled ? 'Enabled' : 'Disabled' }}</dd>
+              <dt class="text-xs text-text-muted">Default model</dt>
+              <dd class="break-all">{{ s.provider.default_model || '—' }}</dd>
+              <dt class="text-xs text-text-muted">Models</dt>
+              <dd>{{ enabledCount(s.provider) }} of {{ s.provider.models.length }} enabled</dd>
+              <dt class="text-xs text-text-muted">API key env</dt>
+              <dd class="break-all font-mono text-xs">{{ s.provider.api_key_env ?? '—' }}</dd>
+              <dt class="text-xs text-text-muted">Base URL env</dt>
+              <dd class="break-all font-mono text-xs">{{ s.provider.base_url_env ?? '—' }}</dd>
+            </dl>
+
+            <!-- New model: added below the provider's details (Add model opens it). -->
+            @if (addingTo()?.id === s.provider.id) {
+              <section class="flex flex-col gap-3 border-t border-border pt-4">
+                <span class="text-xs font-semibold uppercase tracking-wider text-primary-600">New model</span>
+                <div class="flex flex-col gap-1.5">
+                  <label class="text-xs font-medium text-text-muted">Model id</label>
+                  <twang-input placeholder="Model Id/Name" [mono]="true" [ngModel]="newModel().id" (ngModelChange)="patchNewModel({ id: $event.trim() })" />
+                  @if (newModelIdError(); as err) {
+                    <span class="text-xs text-red-600">{{ err }}</span>
+                  }
+                </div>
+                <ng-container *ngTemplateOutlet="modelFields; context: { $implicit: newModel(), patch: patchNewModel, defaultModel: false }" />
+                <div class="flex items-center justify-end gap-2 border-t border-border pt-3">
+                  <twang-button variant="default" size="sm" label="Cancel" [disabled]="saving()" (buttonClick)="cancelAdd()" />
+                  <twang-button
+                    variant="primary"
+                    size="sm"
+                    icon="plus"
+                    label="Add model"
+                    [loading]="saving()"
+                    [disabled]="saving() || !newModel().id || !!newModelIdError() || !draftValid(newModel())"
+                    (buttonClick)="addModel(s.provider)"
+                  />
+                </div>
+              </section>
+            }
           }
         } @else {
           <p class="text-text-muted">Select a provider to see its configuration.</p>
         }
       </div>
+
+      <!-- Enabled + the four costs, shared by the model editor and the new-model form. -->
+      <ng-template #modelFields let-m let-patch="patch" let-defaultModel="defaultModel">
+        <!-- Same toggle as the provider's; here it only changes the form (Save applies it). -->
+        <twang-button
+          class="self-start"
+          variant="default"
+          size="sm"
+          [icon]="m.enabled ? 'toggle-right' : 'toggle-left'"
+          [label]="m.enabled ? 'Enabled' : 'Disabled'"
+          [title]="defaultModel ? 'The default model must stay enabled' : m.enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'"
+          [disabled]="defaultModel"
+          (buttonClick)="patch({ enabled: !m.enabled })"
+        />
+        <section class="flex flex-col gap-2 border-t border-border pt-3">
+          <span class="text-xs font-semibold uppercase tracking-wider text-primary-600">Cost</span>
+          <div class="grid grid-cols-[7rem_1fr] items-center gap-x-3 gap-y-2">
+            @for (c of costFields; track c.key) {
+              <label class="text-xs text-text-muted">{{ c.label }}</label>
+              <!-- Spin buttons step per field (see COST_FIELDS) from 0. The value is kept as typed text ("0." survives) until save. -->
+              <twang-input
+                type="number"
+                [step]="c.step"
+                min="0"
+                placeholder="0"
+                [class]="costInvalid(m, c.key) ? '[&_input]:border-red-500' : ''"
+                [ngModel]="m[c.key]"
+                (ngModelChange)="patch(costPatch(c.key, $event))"
+              />
+            }
+          </div>
+          @if (!draftValid(m)) {
+            <span class="text-xs text-red-600">Costs must be non-negative decimal numbers, e.g. 3 or 0.75.</span>
+          }
+        </section>
+      </ng-template>
     </app-three-panel-layout>
 
     <!-- Rendered in the admin header (right side) via PageBreadcrumbs.actions. -->
@@ -209,6 +363,40 @@ export class ConfigProvidersComponent {
   });
 
   protected readonly treeHeight = ADMIN_TABLE_HEIGHT;
+
+  // ── Editing ──
+  protected readonly costFields = COST_FIELDS;
+  protected readonly saving = signal(false);
+  protected readonly saveError = signal<string | null>(null);
+  protected readonly confirmDelete = signal(false);
+
+  /** Edit copy of the selected model; resets whenever the selection (or its saved value) changes. */
+  protected readonly modelForm = linkedSignal<ModelDraft | null>(() => {
+    const model = this.selected()?.model;
+    return model ? toDraft(model) : null;
+  });
+  /** Changed from the saved model (an invalid cost counts as changed, so Reset is offered). */
+  protected readonly modelDirty = computed(() => {
+    const form = this.modelForm();
+    const saved = this.selected()?.model;
+    if (!form || !saved) return false;
+    const parsed = fromDraft(form);
+    return !parsed || !sameModel(parsed, saved);
+  });
+
+  /** Provider a model is being added to (its details show the new-model form below them). */
+  protected readonly addingTo = signal<ProviderConfig | null>(null);
+  protected readonly newModel = signal<ModelDraft>(blankModel());
+  protected readonly newModelIdError = computed(() => {
+    const id = this.newModel().id;
+    return id && this.addingTo()?.models.some(m => m.id === id) ? 'This provider already has a model with this id.' : null;
+  });
+
+  protected readonly costPatch = (key: CostKey, v: unknown): Partial<ModelDraft> => ({ [key]: String(v ?? '') });
+  protected readonly patchModel = (changes: Partial<ModelDraft>) => this.modelForm.update(f => (f ? { ...f, ...changes } : f));
+  protected readonly patchNewModel = (changes: Partial<ModelDraft>) => this.newModel.update(m => ({ ...m, ...changes }));
+  protected readonly costInvalid = (m: ModelDraft, key: CostKey) => parseCost(m[key]) === null;
+  protected readonly draftValid = (m: ModelDraft) => fromDraft(m) !== null;
   protected readonly cost = cost;
   protected readonly enabledCount = (p: ProviderConfig) => p.models.filter(m => m.enabled).length;
 
@@ -277,6 +465,80 @@ export class ConfigProvidersComponent {
 
   protected onNodeSelected(node: TwangTreeTableNode<ProviderRow>): void {
     this.selectedNodeId.set(node.id);
+    this.addingTo.set(null);
+    this.confirmDelete.set(false);
+    this.saveError.set(null);
+  }
+
+  protected toggleProvider(provider: ProviderConfig): void {
+    this.save({ ...provider, enabled: !provider.enabled }, providerNodeId(provider));
+  }
+
+  protected startAdd(provider: ProviderConfig): void {
+    this.newModel.set(blankModel());
+    this.saveError.set(null);
+    this.addingTo.set(provider);
+  }
+
+  protected cancelAdd(): void {
+    this.addingTo.set(null);
+    this.saveError.set(null);
+  }
+
+  protected addModel(provider: ProviderConfig): void {
+    const model = fromDraft(this.newModel());
+    if (!model) return;
+    this.save({ ...provider, models: [...provider.models, model] }, modelNodeId(provider, model));
+  }
+
+  protected resetModel(): void {
+    const model = this.selected()?.model;
+    this.modelForm.set(model ? toDraft(model) : null);
+  }
+
+  protected saveModel(provider: ProviderConfig): void {
+    const draft = this.modelForm();
+    const form = draft && fromDraft(draft);
+    if (!form) return;
+    this.save({ ...provider, models: provider.models.map(m => (m.id === form.id ? form : m)) }, modelNodeId(provider, form));
+  }
+
+  protected deleteModel(provider: ProviderConfig, modelId: string): void {
+    this.save({ ...provider, models: provider.models.filter(m => m.id !== modelId) }, providerNodeId(provider));
+  }
+
+  /** PUT the whole provider; on success swap it into the list and select `selectId`. */
+  private save(next: ProviderConfig, selectId: string): void {
+    this.saving.set(true);
+    this.saveError.set(null);
+    this.configService
+      .updateProvider(next)
+      .pipe(
+        finalize(() => this.saving.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: saved => {
+          const updated = saved ?? next; // tolerate an empty (204) response
+          this.providers.update(list => list.map(p => (p.id === updated.id ? updated : p)));
+          this.addingTo.set(null);
+          this.confirmDelete.set(false);
+          this.reveal(selectId);
+        },
+        error: err => {
+          console.error('Failed to save provider', err);
+          this.saveError.set(errorText(err, 'Failed to save provider.'));
+        },
+      });
+  }
+
+  /**
+   * Select a node. The Enabled/Disabled view is left alone: if the change moved the node out of it
+   * (e.g. just disabled), it drops out of the tree but stays in the right panel — `selected()`
+   * resolves against all providers — so it can be re-enabled straight away.
+   */
+  private reveal(nodeId: string): void {
+    this.selectedNodeId.set(nodeId);
   }
 
   protected load(): void {

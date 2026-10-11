@@ -31,6 +31,11 @@ export class TwangInputComponent implements ControlValueAccessor {
   readonly required = input<boolean>(false);
   readonly layout = input<'vertical' | 'horizontal'>('vertical');
   readonly mono = input<boolean>(false);
+  /** `inputmode` hint for on-screen keyboards (e.g. `decimal`, `numeric`); none when null. */
+  readonly inputmode = input<string | null>(null);
+  /** For `type="number"`: spin-button increment (e.g. `0.01`, or `any`) and lower bound. None when null. */
+  readonly step = input<string | number | null>(null);
+  readonly min = input<string | number | null>(null);
 
   protected readonly inputId = `twang-input-${++_nextId}`;
   protected readonly value = signal('');
