@@ -208,6 +208,13 @@
             "index": "projects/rustic-ai-ng-new/src/index.html",
             "browser": "projects/rustic-ai-ng-new/src/main.ts",
             "tsConfig": "projects/rustic-ai-ng-new/tsconfig.app.json",
+            "assets": [
+              {
+                "glob": "favicon.{svg,ico}",
+                "input": "projects/rustic-ai-ng-new/src",
+                "output": "/"
+              }
+            ],
             "styles": [
               "projects/rustic-ai-ng-new/src/styles.css"
             ],
