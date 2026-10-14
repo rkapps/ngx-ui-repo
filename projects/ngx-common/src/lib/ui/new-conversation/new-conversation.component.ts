@@ -12,7 +12,9 @@ import { MarkdownPipe } from '../chat/markdown.pipe';
   selector: 'app-new-conversation',
   standalone: true,
   imports: [LucideAngularModule, TwangButtonComponent, ConversationFormComponent, MarkdownPipe],
-  host: { class: 'flex h-full min-h-0' },
+  // tiled: the two panels as separate white cards with a gap, on the page background — at least 70vh
+  // tall (like other screens' panels), not filling the screen; the two stretch to the same height.
+  host: { '[class]': "tiled() ? 'flex gap-3 md:gap-4' : 'flex h-full min-h-0'" },
   template: `
     <!-- Left panel: agent list -->
     <div [class]="agentListClass()">
@@ -127,6 +129,10 @@ import { MarkdownPipe } from '../chat/markdown.pipe';
 })
 export class NewConversationComponent {
   readonly showAllFields = input(true);
+  /** The agent list and the form as separate white cards (tiles); bindable from route data. */
+  readonly tiled = input(false);
+  /** Where Cancel goes and where the new conversation opens (`<basePath>/<id>`); bindable from route data. */
+  readonly basePath = input('/agents');
   readonly showSystemPrompt = input(true);
 
   private readonly agentService = inject(AgentService);
@@ -151,15 +157,17 @@ export class NewConversationComponent {
 
   protected readonly mobileShowForm = signal(false);
 
-  protected readonly agentListClass = computed(() =>
-    this.mobileShowForm()
-      ? 'hidden md:flex md:w-72 xl:w-96 shrink-0 flex-col border-r border-border bg-white'
-      : 'flex w-full md:w-72 xl:w-96 shrink-0 flex-col border-r border-border bg-white'
-  );
+  protected readonly agentListClass = computed(() => {
+    const box = this.tiled() ? 'min-h-[70vh] overflow-hidden rounded-lg border border-border bg-white' : 'border-r border-border bg-white';
+    return this.mobileShowForm()
+      ? `hidden md:flex md:w-72 xl:w-96 shrink-0 flex-col ${box}`
+      : `flex w-full md:w-72 xl:w-96 shrink-0 flex-col ${box}`;
+  });
 
-  protected readonly formPanelClass = computed(() =>
-    this.mobileShowForm() ? 'flex flex-1 flex-col' : 'hidden md:flex flex-1 flex-col'
-  );
+  protected readonly formPanelClass = computed(() => {
+    const box = this.tiled() ? ' min-h-[70vh] min-w-0 overflow-hidden rounded-lg border border-border bg-white' : '';
+    return (this.mobileShowForm() ? 'flex flex-1 flex-col' : 'hidden md:flex flex-1 flex-col') + box;
+  });
 
   protected readonly canCreate = computed(() =>
     !!this.selectedAgent() && !!this.title().trim() && !!this.selectedLlmId() && !!this.selectedModel()
@@ -202,7 +210,7 @@ export class NewConversationComponent {
   }
 
   protected cancel(): void {
-    this.router.navigate(['/agents'], { state: { skipRestore: true } });
+    this.router.navigate([this.basePath()], { state: { skipRestore: true } });
   }
 
   protected create(): void {
@@ -231,7 +239,7 @@ export class NewConversationComponent {
     }).subscribe({
       next: conv => {
         this.creating.set(false);
-        this.router.navigate(['/agents', conv.id]);
+        this.router.navigate([this.basePath(), conv.id]);
       },
       error: () => {
         this.creating.set(false);

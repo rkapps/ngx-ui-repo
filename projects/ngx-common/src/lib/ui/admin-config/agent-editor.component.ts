@@ -685,7 +685,7 @@ export class AgentEditorComponent {
   protected readonly executionLabel = (e: ExecutionType) => EXECUTION_TYPE_LABELS[e] ?? e;
 
   // ── Origin: SuperAdmins choose system/client; everyone else gets client (new) or read-only ──
-  protected readonly isSuperAdmin = computed(() => this.userService.user()?.role === 'SuperAdmin');
+  protected readonly isSuperAdmin = this.userService.isSuperAdmin;
   protected readonly originOptions: TwangDropdownOption[] = (Object.keys(ORIGIN_LABELS) as Origin[]).map(value => ({
     value,
     label: ORIGIN_LABELS[value],

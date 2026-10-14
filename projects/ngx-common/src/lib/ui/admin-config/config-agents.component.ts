@@ -1,17 +1,32 @@
 import { Component, computed, DestroyRef, effect, inject, signal, type TemplateRef, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { TwangButtonComponent, TwangTableComponent, type TwangTableColumn } from 'ngx-twang-ui';
 import { finalize } from 'rxjs';
 import { originLabel } from '../../models/origin';
-import { type AgentConfig, type AgentConfigResponse, AdminConfigService, EXECUTION_TYPE_LABELS, type ExecutionType, type LlmConfig } from '../../services/admin-config.service';
+import {
+  type AgentConfig,
+  type AgentConfigResponse,
+  AdminConfigService,
+  type ConfigScope,
+  EXECUTION_TYPE_LABELS,
+  type ExecutionType,
+  type LlmConfig,
+} from '../../services/admin-config.service';
 import { ADMIN_RIGHT_WIDTH } from '../admin-page/admin-layout';
 import { PageBreadcrumbs } from '../breadcrumbs/page-breadcrumbs';
 import { ThreePanelLayoutComponent } from '../three-panel-layout/three-panel-layout.component';
+import { resolveAgentsFolder } from './agent-import';
 import { CONFIG_LAYOUT_KEY, currentAgent, rememberCurrentAgent } from './config-sections';
 import { RefreshCacheButtonComponent } from './refresh-cache-button.component';
 
+
+/** Backend error text (axum returns plain strings), else a fallback. */
+function errorText(err: unknown, fallback: string): string {
+  const body = (err as { error?: unknown })?.error;
+  return typeof body === 'string' && body.trim() ? body : fallback;
+}
 
 /** `provider / model`, skipping whichever part is unset. The preset is shown separately. */
 function llmLabel(c: LlmConfig | null | undefined): string {
@@ -56,6 +71,15 @@ const STATUS_ORDER: Record<AgentConfigResponse['status'], number> = { live: 0, l
             (buttonClick)="load()"
           />
         </div>
+        @if (importError()) {
+          <div class="flex shrink-0 items-start gap-2 border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">
+            <lucide-icon name="circle-alert" [size]="14" class="mt-0.5 shrink-0" />
+            <span class="min-w-0 flex-1 break-words">{{ importError() }}</span>
+            <button type="button" class="shrink-0 opacity-70 hover:opacity-100" aria-label="Dismiss" (click)="importError.set(null)">
+              <lucide-icon name="x" [size]="14" />
+            </button>
+          </div>
+        }
         <div class="flex min-h-0 flex-1 flex-col">
           @if (error()) {
             <div class="flex flex-1 items-center justify-center p-8 text-sm text-red-600">{{ error() }}</div>
@@ -153,12 +177,28 @@ const STATUS_ORDER: Record<AgentConfigResponse['status'], number> = { live: 0, l
     <!-- Rendered in the admin header (right side) via PageBreadcrumbs.actions. Absolute links: the
          template is stamped out in the shell, not under this page. -->
     <ng-template #headerActions>
-      <app-refresh-cache-button (refreshed)="load()" />
-      @if (selected(); as a) {
-        <twang-button variant="default" size="sm" icon="flask-conical" label="Test agent" [routerLink]="['/admin', 'config', 'agents', a.id, 'test']" />
-        <twang-button variant="default" size="sm" icon="square-pen" label="Edit agent" [routerLink]="['/admin', 'config', 'agents', a.id, 'edit']" />
+      @if (adminScope) {
+        <app-refresh-cache-button (refreshed)="load()" />
+        @if (selected(); as a) {
+          <twang-button variant="default" size="sm" icon="flask-conical" label="Test agent" [routerLink]="['/admin', 'config', 'agents', a.id, 'test']" />
+          <twang-button variant="default" size="sm" icon="square-pen" label="Edit agent" [routerLink]="['/admin', 'config', 'agents', a.id, 'edit']" />
+        }
+        <twang-button variant="primary" size="sm" icon="plus" label="New agent" [routerLink]="['/admin', 'config', 'agents', 'new']" />
+      } @else {
+        <!-- Platform: list + import only. Import takes the config folder: agents.json plus the
+             prompt/description/schema files it references, resolved like the backend's startup loader. -->
+        <input #importFolder type="file" webkitdirectory class="hidden" (change)="importFolderFrom(importFolder)" />
+        <twang-button
+          variant="primary"
+          size="sm"
+          icon="folder-open"
+          label="Import folder"
+          title="Import the agents config folder: agents.json plus the files it references"
+          [loading]="importing()"
+          [disabled]="importing()"
+          (buttonClick)="importFolder.click()"
+        />
       }
-      <twang-button variant="primary" size="sm" icon="plus" label="New agent" [routerLink]="['/admin', 'config', 'agents', 'new']" />
     </ng-template>
   `,
 })
@@ -166,8 +206,13 @@ export class ConfigAgentsComponent {
   private readonly configService = inject(AdminConfigService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly router = inject(Router);
+  /** Route `data.scope`: `admin` (default) — full editing; `platform` — list and import only. */
+  private readonly scope: ConfigScope = inject(ActivatedRoute).snapshot.data['scope'] ?? 'admin';
+  protected readonly adminScope = this.scope === 'admin';
+  protected readonly importing = signal(false);
+  protected readonly importError = signal<string | null>(null);
 
-  /** New agent / Edit, shown on the right of the admin header while this page is open. */
+  /** New agent / Edit (admin) or Import (platform), shown on the right of the page header while this page is open. */
   private readonly headerActions = viewChild<TemplateRef<unknown>>('headerActions');
 
   protected readonly layoutKey = CONFIG_LAYOUT_KEY;
@@ -204,8 +249,10 @@ export class ConfigAgentsComponent {
     ({ live: 'text-green-700', draft: 'text-amber-700', live_with_draft: 'text-primary-700' })[this.versionInfo().get(a.id)?.status ?? 'live'];
 
   protected readonly onRowClick = (row: AgentConfig) => this.selectedId.set(row.id);
-  /** Double-click = Edit agent. */
-  protected readonly onRowDoubleClick = (row: AgentConfig) => this.router.navigate(['/admin', 'config', 'agents', row.id, 'edit']);
+  /** Double-click = Edit agent (admin only). */
+  protected readonly onRowDoubleClick = this.adminScope
+    ? (row: AgentConfig) => this.router.navigate(['/admin', 'config', 'agents', row.id, 'edit'])
+    : undefined;
   protected readonly rowClass = (row: AgentConfig) =>
     [row.id === this.selectedId() ? 'bg-primary-50' : '', row.enabled ? '' : 'opacity-60'].join(' ');
 
@@ -247,7 +294,7 @@ export class ConfigAgentsComponent {
     this.loading.set(true);
     this.error.set(null);
     this.configService
-      .getAgents()
+      .getAgents(this.scope)
       .pipe(
         finalize(() => this.loading.set(false)),
         takeUntilDestroyed(this.destroyRef),
@@ -271,7 +318,49 @@ export class ConfigAgentsComponent {
         },
         error: err => {
           console.error('Failed to load agents', err);
-          this.error.set('Failed to load agents.');
+          this.error.set(errorText(err, 'Failed to load agents.'));
+        },
+      });
+  }
+
+  /** Platform: import a config folder (`POST /platform/agents/import`) — agents.json with its referenced files resolved — then reload. */
+  protected importFolderFrom(input: HTMLInputElement): void {
+    const files = [...(input.files ?? [])];
+    input.value = ''; // so choosing the same folder again still fires (change)
+    if (!files.length) return;
+    const folder = (files[0] as File & { webkitRelativePath?: string }).webkitRelativePath?.split('/')[0] || 'the folder';
+    this.importError.set(null);
+    this.importing.set(true);
+    resolveAgentsFolder(files).then(
+      result => {
+        this.importing.set(false);
+        this.sendImport(result, folder);
+      },
+      err => {
+        this.importing.set(false);
+        this.importError.set(`Couldn't read ${folder}: ${(err as Error)?.message ?? err}`);
+      },
+    );
+  }
+
+  /** Post parsed agents (or show the parse error), then reload. `source` names the file/folder in messages. */
+  private sendImport(parsed: AgentConfig[] | string, source: string): void {
+    if (typeof parsed === 'string') {
+      this.importError.set(`Couldn't import ${source}: ${parsed}`);
+      return;
+    }
+    this.importing.set(true);
+    this.configService
+      .importAgents(parsed)
+      .pipe(
+        finalize(() => this.importing.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: () => this.load(),
+        error: err => {
+          console.error('Failed to import agents', err);
+          this.importError.set(errorText(err, 'Failed to import agents.'));
         },
       });
   }

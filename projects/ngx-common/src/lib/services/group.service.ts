@@ -7,6 +7,8 @@ export interface Group {
   id: string;
   name: string;
   description: string;
+  /** The tenant's default group: it can't be updated or deleted. */
+  is_default?: boolean;
   created_at: string;
   updated_at: string;
 }

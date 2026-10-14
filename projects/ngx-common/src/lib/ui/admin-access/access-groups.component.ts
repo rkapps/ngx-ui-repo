@@ -1,5 +1,5 @@
 import { formatDate } from '@angular/common';
-import { Component, computed, DestroyRef, inject, LOCALE_ID, signal, type WritableSignal } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, LOCALE_ID, signal, type TemplateRef, viewChild, type WritableSignal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { LucideAngularModule } from 'lucide-angular';
@@ -9,14 +9,16 @@ import { type GroupWithCount, GroupService } from '../../services/group.service'
 import { type UserResponse, UserService } from '../../services/user.service';
 import { ThreePanelLayoutComponent } from '../three-panel-layout/three-panel-layout.component';
 import { ADMIN_RIGHT_WIDTH } from '../admin-page/admin-layout';
+import { PageBreadcrumbs } from '../breadcrumbs/page-breadcrumbs';
 import { ACCESS_LAYOUT_KEY } from './access-sections';
 
 type Mode = 'none' | 'create' | 'edit';
 
 /**
- * Admin > Access > User Groups: full CRUD over groups plus membership. The middle table lists
+ * Admin > Access > Groups: full CRUD over groups plus membership. The middle table lists
  * every group (the first is selected on load); the right panel creates a group or edits the
- * selected one (name, description, members), with delete in its header.
+ * selected one (description and members; the name is fixed once created), with delete in its header. New group sits in the
+ * page header.
  */
 @Component({
   selector: 'app-access-groups',
@@ -41,23 +43,21 @@ type Mode = 'none' | 'create' | 'edit';
       <!-- Middle: groups table -->
       <div middle class="flex flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
         <div class="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
-          <span class="text-sm font-semibold text-primary-600">User Groups</span>
+          <span class="text-sm font-semibold text-primary-600">Groups</span>
           <span class="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700">
             {{ groups().length }}
           </span>
-          <div class="ml-auto flex items-center gap-1">
-            <twang-button variant="primary" size="sm" icon="plus" label="New group" (buttonClick)="startCreate()" />
-            <twang-button
-              variant="default"
-              size="sm"
-              icon="refresh-cw"
-              ariaLabel="Refresh groups"
-              title="Refresh groups"
-              [loading]="loading()"
-              [disabled]="loading()"
-              (buttonClick)="loadGroups()"
-            />
-          </div>
+          <twang-button
+            class="ml-auto"
+            variant="default"
+            size="sm"
+            icon="refresh-cw"
+            ariaLabel="Refresh groups"
+            title="Refresh groups"
+            [loading]="loading()"
+            [disabled]="loading()"
+            (buttonClick)="loadGroups()"
+          />
         </div>
 
         <div class="flex min-h-0 flex-1 flex-col">
@@ -81,7 +81,7 @@ type Mode = 'none' | 'create' | 'edit';
       </div>
 
       <!-- Right: create / edit -->
-      @if (mode() === 'edit' && !confirmDelete()) {
+      @if (mode() === 'edit' && !isDefault() && !confirmDelete()) {
         <twang-button
           right-action
           variant="default"
@@ -120,17 +120,25 @@ type Mode = 'none' | 'create' | 'edit';
           <section class="flex flex-col gap-3">
             <div class="flex flex-col gap-1.5">
               <label class="text-xs font-medium text-text-muted">Name</label>
-              <twang-input placeholder="Group name" [ngModel]="name()" (ngModelChange)="name.set($event)" />
+              @if (mode() === 'create') {
+                <twang-input placeholder="Group name" [ngModel]="name()" (ngModelChange)="name.set($event)" />
+              } @else {
+                <span class="break-all">{{ name() }}</span>
+              }
             </div>
             <div class="flex flex-col gap-1.5">
               <label class="text-xs font-medium text-text-muted">Description</label>
-              <textarea
-                rows="3"
-                class="w-full resize-y rounded-lg border border-border bg-white px-3 py-2 text-sm text-text placeholder:text-text-muted outline-none transition-shadow focus:border-primary-400 focus:ring-2 focus:ring-primary-400/20"
-                placeholder="What this group is for"
-                [value]="description()"
-                (input)="description.set($any($event.target).value)"
-              ></textarea>
+              @if (isDefault()) {
+                <span class="break-words">{{ description() }}</span>
+              } @else {
+                <textarea
+                  rows="3"
+                  class="w-full resize-y rounded-lg border border-border bg-white px-3 py-2 text-sm text-text placeholder:text-text-muted outline-none transition-shadow focus:border-primary-400 focus:ring-2 focus:ring-primary-400/20"
+                  placeholder="What this group is for"
+                  [value]="description()"
+                  (input)="description.set($any($event.target).value)"
+                ></textarea>
+              }
             </div>
             <div class="flex justify-end gap-2">
               @if (mode() === 'create') {
@@ -140,16 +148,16 @@ type Mode = 'none' | 'create' | 'edit';
                   size="sm"
                   label="Create group"
                   [loading]="saving()"
-                  [disabled]="saving() || !name().trim()"
+                  [disabled]="saving() || !name().trim() || !description().trim()"
                   (buttonClick)="create()"
                 />
-              } @else {
+              } @else if (!isDefault()) {
                 <twang-button
                   variant="primary"
                   size="sm"
-                  label="Save details"
+                  label="Save description"
                   [loading]="saving()"
-                  [disabled]="saving() || !detailsDirty() || !name().trim()"
+                  [disabled]="saving() || !detailsDirty() || !description().trim()"
                   (buttonClick)="saveDetails()"
                 />
               }
@@ -175,43 +183,54 @@ type Mode = 'none' | 'create' | 'edit';
                 <ul class="flex max-h-72 flex-col overflow-y-auto rounded-lg border border-border">
                   @for (user of filteredUsers(); track user.uid) {
                     <li>
-                      <label class="flex cursor-pointer items-center gap-2 px-3 py-2 hover:bg-surface-muted">
-                        <input
-                          type="checkbox"
-                          class="accent-primary-600"
-                          [checked]="memberDraft().has(user.uid)"
-                          (change)="toggleMember(user.uid)"
-                        />
-                        <span class="min-w-0 flex-1 truncate">{{ user.email }}</span>
-                      </label>
+                      @if (isDefault()) {
+                        <div class="truncate px-3 py-2">{{ user.email }}</div>
+                      } @else {
+                        <label class="flex cursor-pointer items-center gap-2 px-3 py-2 hover:bg-surface-muted">
+                          <input
+                            type="checkbox"
+                            class="accent-primary-600"
+                            [checked]="memberDraft().has(user.uid)"
+                            (change)="toggleMember(user.uid)"
+                          />
+                          <span class="min-w-0 flex-1 truncate">{{ user.email }}</span>
+                        </label>
+                      }
                     </li>
                   } @empty {
-                    <li class="px-3 py-2 text-text-muted">No matching users.</li>
+                    <li class="px-3 py-2 text-text-muted">{{ isDefault() ? 'No matching members.' : 'No matching users.' }}</li>
                   }
                 </ul>
-                <div class="flex justify-end gap-2">
-                  <twang-button
-                    variant="default"
-                    size="sm"
-                    label="Reset"
-                    [disabled]="savingMembers() || !membersDirty()"
-                    (buttonClick)="resetMembers()"
-                  />
-                  <twang-button
-                    variant="primary"
-                    size="sm"
-                    label="Save members"
-                    [loading]="savingMembers()"
-                    [disabled]="savingMembers() || !membersDirty()"
-                    (buttonClick)="saveMembers()"
-                  />
-                </div>
+                @if (!isDefault()) {
+                  <div class="flex justify-end gap-2">
+                    <twang-button
+                      variant="default"
+                      size="sm"
+                      label="Reset"
+                      [disabled]="savingMembers() || !membersDirty()"
+                      (buttonClick)="resetMembers()"
+                    />
+                    <twang-button
+                      variant="primary"
+                      size="sm"
+                      label="Save members"
+                      [loading]="savingMembers()"
+                      [disabled]="savingMembers() || !membersDirty()"
+                      (buttonClick)="saveMembers()"
+                    />
+                  </div>
+                }
               }
             </section>
           }
         }
       </div>
     </app-three-panel-layout>
+
+    <!-- Rendered in the page header (right side) via PageBreadcrumbs.actions. -->
+    <ng-template #headerActions>
+      <twang-button variant="primary" size="sm" icon="plus" label="New group" [disabled]="mode() === 'create'" (buttonClick)="startCreate()" />
+    </ng-template>
   `,
 })
 export class AccessGroupsComponent {
@@ -219,6 +238,7 @@ export class AccessGroupsComponent {
   private readonly userService = inject(UserService);
   private readonly locale = inject(LOCALE_ID);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly headerActions = viewChild<TemplateRef<unknown>>('headerActions');
 
   protected readonly layoutKey = ACCESS_LAYOUT_KEY;
   protected readonly rightWidth = ADMIN_RIGHT_WIDTH;
@@ -251,9 +271,12 @@ export class AccessGroupsComponent {
     this.mode() === 'create' ? 'New group' : (this.selected()?.group.name ?? 'Details')
   );
 
+  /** The selected group is the tenant's default: no description or member edits, no delete. */
+  protected readonly isDefault = computed(() => this.mode() === 'edit' && !!this.selected()?.group.is_default);
+
   protected readonly detailsDirty = computed(() => {
     const g = this.selected()?.group;
-    return !!g && (this.name().trim() !== g.name || this.description().trim() !== g.description);
+    return !!g && this.description().trim() !== g.description;
   });
 
   protected readonly membersDirty = computed(() => {
@@ -265,12 +288,14 @@ export class AccessGroupsComponent {
   /**
    * Users matching the search box: saved members first, then everyone else, each by email.
    * Ordered by *saved* membership so rows don't jump around while boxes are being ticked.
+   * For the default group (membership is read-only) only its members are listed.
    */
   protected readonly filteredUsers = computed(() => {
     const q = this.memberFilter().trim().toLowerCase();
     const saved = this.savedMembers();
+    const membersOnly = this.isDefault();
     return this.users()
-      .filter(u => !q || u.email.toLowerCase().includes(q))
+      .filter(u => (!membersOnly || saved.has(u.uid)) && (!q || u.email.toLowerCase().includes(q)))
       .sort((a, b) => Number(saved.has(b.uid)) - Number(saved.has(a.uid)) || a.email.localeCompare(b.email));
   });
 
@@ -279,6 +304,7 @@ export class AccessGroupsComponent {
   protected readonly columns: TwangTableColumn<GroupWithCount>[] = [
     { id: 'name', header: 'Name', align: 'left', sortable: true, width: '200px', cellTruncate: true, value: g => g.group.name },
     { id: 'description', header: 'Description', align: 'left', fillRemaining: true, cellTruncate: true, value: g => g.group.description },
+    { id: 'is_default', header: 'Default', align: 'left', sortable: true, width: '130px', value: g => (g.group.is_default ? 'Yes' : ''), sortValue: g => Number(!!g.group.is_default) },
     { id: 'members', header: 'Members', align: 'right', sortable: true, width: '110px', value: g => g.member_count },
     { id: 'updated_at', header: 'Updated', align: 'left', sortable: true, width: '130px', value: g => g.group.updated_at, format: this.date },
   ];
@@ -287,6 +313,13 @@ export class AccessGroupsComponent {
   protected readonly rowClass = (row: GroupWithCount) => (row.group.id === this.selectedId() ? 'bg-primary-50' : '');
 
   constructor() {
+    const breadcrumbs = inject(PageBreadcrumbs);
+    effect(() => breadcrumbs.actions.set(this.headerActions() ?? null));
+    // Only drop our actions (not the crumbs): the next page may already have set its own.
+    this.destroyRef.onDestroy(() => {
+      if (breadcrumbs.actions() === this.headerActions()) breadcrumbs.actions.set(null);
+    });
+
     this.loadGroups();
     this.userService
       .getAllUsers()
@@ -367,17 +400,18 @@ export class AccessGroupsComponent {
 
   protected saveDetails(): void {
     const id = this.selectedId();
-    if (!id) return;
-    this.run(this.saving, this.groupService.updateGroup(id, this.formValue()), 'save the group', group => {
+    // Name is fixed once created; only the description is editable, and it can't be blank.
+    const description = this.description().trim();
+    if (!id || !description || this.isDefault()) return;
+    this.run(this.saving, this.groupService.updateGroup(id, { description }), 'save the description', group => {
       this.groups.update(gs => gs.map(g => (g.group.id === id ? { ...g, group } : g)));
-      this.name.set(group.name);
       this.description.set(group.description);
     });
   }
 
   protected remove(): void {
     const id = this.selectedId();
-    if (!id) return;
+    if (!id || this.isDefault()) return;
     this.run(this.deleting, this.groupService.deleteGroup(id), 'delete the group', () => {
       this.groups.update(gs => gs.filter(g => g.group.id !== id));
       this.selectFirst();
@@ -406,6 +440,7 @@ export class AccessGroupsComponent {
   }
 
   protected toggleMember(uid: string): void {
+    if (this.isDefault()) return;
     this.memberDraft.update(draft => {
       const next = new Set(draft);
       if (next.has(uid)) next.delete(uid);
@@ -420,7 +455,7 @@ export class AccessGroupsComponent {
 
   protected saveMembers(): void {
     const id = this.selectedId();
-    if (!id) return;
+    if (!id || this.isDefault()) return;
     const uids = [...this.memberDraft()];
     this.run(this.savingMembers, this.groupService.setMembers(id, uids), 'save members', () => {
       this.savedMembers.set(new Set(uids));

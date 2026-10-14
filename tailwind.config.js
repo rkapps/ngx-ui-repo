@@ -4,6 +4,7 @@ module.exports = {
     './projects/angular-starter/src/**/*.{html,ts}',
     './projects/bset-ai-ng/src/**/*.{html,ts}',
     './projects/rustic-ai-ng/src/**/*.{html,ts}',
+    './projects/rustic-ai-ng-new/src/**/*.{html,ts}',
     './projects/ngx-twang-ui/src/**/*.{html,ts}',
     './projects/ngx-common/src/**/*.{html,ts}',
   ],

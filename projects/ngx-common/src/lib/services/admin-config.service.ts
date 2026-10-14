@@ -5,6 +5,7 @@ import { AuthService } from '../auth/auth.service';
 import { postEventStream } from '../http/event-stream';
 import type { TurnResponse } from '../models/turn-execution';
 import { API_BASE_URL } from './api-url.token';
+import type { ChatTemplate } from './chat-template.service';
 import type { Origin } from '../models/origin';
 import type { ConversationStrategy, HistoryMode } from './conversation.service';
 
@@ -95,6 +96,21 @@ export interface ProviderConfig {
   default_model: string;
 }
 
+/** One MCP server (backend `MCPServerConfig`, an entry of `mcp_servers_config.json`). */
+export interface McpServerConfig {
+  id: string;
+  /** Logical server name, used to namespace its tool definitions (e.g. `weather`). */
+  name: string;
+  /** HTTP endpoint of the MCP server. */
+  url: string;
+  /** Name of the environment variable holding the server's Bearer token. */
+  api_key_env: string;
+  /** Header to send the token in; the backend's default when null. */
+  auth_header_name: string | null;
+  /** The only tools from this server exposed to agents. */
+  enabled_tools: string[];
+}
+
 /** Where an agent stands in the draft → promote flow (`snake_case` from the backend). */
 export type AgentStatus = 'live' | 'draft' | 'live_with_draft';
 
@@ -162,6 +178,9 @@ export interface ToolDefinition {
   parameters: unknown;
 }
 
+/** Which providers a page manages: the active tenant's (`/admin`) or the platform-wide ones (`/platform`). */
+export type ConfigScope = 'admin' | 'platform';
+
 /** Result of a cache refresh. `mcp_failures`: MCP servers that failed to rebuild, if the backend reports them. */
 export interface RefreshCacheResponse {
   mcp_failures?: { server: string; error: string }[];
@@ -174,9 +193,14 @@ export class AdminConfigService {
   private readonly base = inject(API_BASE_URL);
   private readonly auth = inject(AuthService);
 
-  /** Every agent — live ones and draft-only ones — with its version status. */
-  getAgents(): Observable<AgentConfigResponse[]> {
-    return this.http.get<AgentConfigResponse[]>(`${this.base}/admin/agents`);
+  /** Every agent — live ones and draft-only ones — with its version status (`GET /{scope}/agents`). */
+  getAgents(scope: ConfigScope = 'admin'): Observable<AgentConfigResponse[]> {
+    return this.http.get<AgentConfigResponse[]>(`${this.base}/${scope}/agents`);
+  }
+
+  /** Platform only: save these agent configs (`POST /platform/agents/import`). Empty response = success. */
+  importAgents(configs: AgentConfig[]): Observable<void> {
+    return this.http.post<void>(`${this.base}/platform/agents/import`, configs);
   }
 
   // ── Agent versions (draft → promote) ──
@@ -225,16 +249,41 @@ export class AdminConfigService {
     return this.http.get<ToolDefinition[]>(`${this.base}/admin/mcp_tools`);
   }
 
-  getProviders(): Observable<ProviderConfig[]> {
-    return this.http.get<ProviderConfig[]>(`${this.base}/admin/providers`);
+  getProviders(scope: ConfigScope = 'admin'): Observable<ProviderConfig[]> {
+    return this.http.get<ProviderConfig[]>(`${this.base}/${scope}/providers`);
   }
 
   /**
    * Replace one provider config — its fields and its whole `models` list, so enabling/disabling and
    * adding/editing/deleting models all go through here. Returns the saved config.
    */
-  updateProvider(config: ProviderConfig): Observable<ProviderConfig> {
-    return this.http.put<ProviderConfig>(`${this.base}/admin/providers/${encodeURIComponent(config.id)}`, config);
+  updateProvider(config: ProviderConfig, scope: ConfigScope = 'admin'): Observable<ProviderConfig> {
+    return this.http.put<ProviderConfig>(`${this.base}/${scope}/providers/${encodeURIComponent(config.id)}`, config);
+  }
+
+  /** Platform: every chat template (`GET /platform/chat_templates`). */
+  getChatTemplates(): Observable<ChatTemplate[]> {
+    return this.http.get<ChatTemplate[]>(`${this.base}/platform/chat_templates`);
+  }
+
+  /** Platform: save these chat templates (`POST /platform/chat_templates/import`). Empty response = success. */
+  importChatTemplates(templates: ChatTemplate[]): Observable<void> {
+    return this.http.post<void>(`${this.base}/platform/chat_templates/import`, templates);
+  }
+
+  /** Every MCP server config (`GET /{scope}/mcp_server_configs`). */
+  getMcpServerConfigs(scope: ConfigScope = 'platform'): Observable<McpServerConfig[]> {
+    return this.http.get<McpServerConfig[]>(`${this.base}/${scope}/mcp_server_configs`);
+  }
+
+  /** Platform: save these MCP server configs (`POST /platform/mcp_server_configs/import`). Empty response = success. */
+  importMcpServerConfigs(configs: McpServerConfig[]): Observable<void> {
+    return this.http.post<void>(`${this.base}/platform/mcp_server_configs/import`, configs);
+  }
+
+  /** Platform only: save these provider configs (`POST /platform/providers/import`). Empty response = success. */
+  importProviders(configs: ProviderConfig[]): Observable<void> {
+    return this.http.post<void>(`${this.base}/platform/providers/import`, configs);
   }
 
   /** Force the backend to refresh its in-memory config cache from storage. Empty/204 response = success. */

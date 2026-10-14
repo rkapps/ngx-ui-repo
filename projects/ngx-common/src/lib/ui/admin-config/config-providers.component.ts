@@ -2,6 +2,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { Component, computed, DestroyRef, effect, inject, linkedSignal, signal, type TemplateRef, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import {
   TwangButtonComponent,
@@ -11,7 +12,7 @@ import {
   type TwangTreeTableNode,
 } from 'ngx-twang-ui';
 import { finalize } from 'rxjs';
-import { AdminConfigService, type ModelConfig, type ProviderConfig } from '../../services/admin-config.service';
+import { AdminConfigService, type ConfigScope, type ModelConfig, type ProviderConfig } from '../../services/admin-config.service';
 import { ADMIN_RIGHT_WIDTH, ADMIN_TABLE_HEIGHT } from '../admin-page/admin-layout';
 import { PageBreadcrumbs } from '../breadcrumbs/page-breadcrumbs';
 import { ThreePanelLayoutComponent } from '../three-panel-layout/three-panel-layout.component';
@@ -79,10 +80,51 @@ function errorText(err: unknown, fallback: string): string {
   return typeof body === 'string' && body.trim() ? body : fallback;
 }
 
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+const isOptString = (v: unknown) => v === undefined || v === null || typeof v === 'string';
+
+/** An import file's provider configs ({ "llm_providers": [...] }, a JSON array, or a single provider), or an error message. */
+function parseProviders(text: string): ProviderConfig[] | string {
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return 'The file is not valid JSON.';
+  }
+  // The providers config file wraps the list: { "llm_providers": [...] }. A bare array, or a single
+  // provider object, also works.
+  const wrapped = isObject(json) && Array.isArray(json['llm_providers']) ? json['llm_providers'] : json;
+  const list = Array.isArray(wrapped) ? wrapped : [wrapped];
+  if (!list.length) return 'The file has no providers.';
+  for (const [i, p] of list.entries()) {
+    const where = `Provider ${i + 1}`;
+    if (!isObject(p)) return `${where} is not an object.`;
+    if (typeof p['id'] !== 'string' || !p['id']) return `${where} needs an "id".`;
+    if (typeof p['llm'] !== 'string') return `${where} (${p['id']}) needs an "llm".`;
+    if (typeof p['enabled'] !== 'boolean') return `${where} (${p['id']}) needs "enabled" (true/false).`;
+    if (typeof p['default_model'] !== 'string') return `${where} (${p['id']}) needs a "default_model".`;
+    if (!isOptString(p['api_key_env']) || !isOptString(p['base_url_env'])) return `${where} (${p['id']}): "api_key_env" / "base_url_env" must be strings or null.`;
+    if (!Array.isArray(p['models'])) return `${where} (${p['id']}) needs a "models" list.`;
+    for (const m of p['models'] as unknown[]) {
+      const ok =
+        isObject(m) &&
+        typeof m['id'] === 'string' &&
+        typeof m['enabled'] === 'boolean' &&
+        COST_FIELDS.every(c => typeof m[c.key] === 'number' && (m[c.key] as number) >= 0);
+      if (!ok) return `${where} (${p['id']}): every model needs "id", "enabled" and non-negative numeric costs.`;
+    }
+  }
+  return list as ProviderConfig[];
+}
+
 /**
- * Admin > Config > Providers: read-only view of every LLM provider configuration. The middle
- * tree lists providers with their models (and costs) as children; selecting either shows the
- * provider's settings in the right panel (the first provider is selected on load).
+ * Admin > Config > Providers (and Platform > Providers): every LLM provider configuration. The
+ * middle tree lists providers with their models (and costs) as children; selecting either shows the
+ * provider's settings in the right panel (the first provider is selected on load). The route's
+ * `data.scope` picks the API and what can change. `admin` (default): enable/disable providers and
+ * models. `platform`: the model catalog — add and delete models and set their costs, plus an Import
+ * (JSON file) button in the page header. Either way a change saves the whole provider
+ * (PUT /{scope}/providers/{id}).
  */
 @Component({
   selector: 'app-config-providers',
@@ -145,7 +187,7 @@ function errorText(err: unknown, fallback: string): string {
       </div>
 
       <!-- Right: acts on the tree selection. Provider → enable/disable, add a model. Model → edit, delete.
-           Every change saves the whole provider (PUT /admin/providers/{id}). -->
+           Every change saves the whole provider (PUT /{scope}/providers/{id}). -->
       <div right class="flex flex-col gap-4 p-4 text-sm">
         @if (saveError()) {
           <div class="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">
@@ -155,16 +197,19 @@ function errorText(err: unknown, fallback: string): string {
         }
 
         @if (selected(); as s) {
-          @if (modelForm(); as f) {
-            <!-- Selected model: edit in place -->
+          @if (platformScope && modelForm(); as f) {
+            <!-- Selected model (platform): costs edited in place, delete -->
             <section class="flex flex-col gap-3">
               <div class="flex items-center gap-2">
                 <span class="min-w-0 flex-1 break-all font-mono text-xs font-medium">{{ f.id }}</span>
                 @if (f.id === s.provider.default_model) {
                   <span class="rounded bg-primary-50 px-1.5 py-0.5 text-[10px] uppercase text-primary-700">default</span>
                 }
+                @if (!f.enabled) {
+                  <span class="rounded bg-surface-muted px-1.5 py-0.5 text-[10px] uppercase text-text-muted">disabled</span>
+                }
               </div>
-              <ng-container *ngTemplateOutlet="modelFields; context: { $implicit: f, patch: patchModel, defaultModel: f.id === s.provider.default_model }" />
+              <ng-container *ngTemplateOutlet="modelFields; context: { $implicit: f, patch: patchModel }" />
               <div class="flex items-center gap-2 border-t border-border pt-3">
                 @if (confirmDelete()) {
                   <span class="flex-1 text-xs text-red-700">Delete this model?</span>
@@ -192,9 +237,40 @@ function errorText(err: unknown, fallback: string): string {
                 }
               </div>
             </section>
+          } @else if (s.model; as m) {
+            <!-- Selected model (admin): enable/disable, saved straight away; costs are set by the platform -->
+            <section class="flex flex-col gap-3">
+              <div class="flex items-center gap-2">
+                <span class="min-w-0 flex-1 break-all font-mono text-xs font-medium">{{ m.id }}</span>
+                @if (m.id === s.provider.default_model) {
+                  <span class="rounded bg-primary-50 px-1.5 py-0.5 text-[10px] uppercase text-primary-700">default</span>
+                }
+              </div>
+              <twang-button
+                class="self-start"
+                variant="default"
+                size="sm"
+                [icon]="m.enabled ? 'toggle-right' : 'toggle-left'"
+                [label]="m.enabled ? 'Enabled' : 'Disabled'"
+                [title]="m.id === s.provider.default_model ? 'The default model must stay enabled' : m.enabled ? 'Enabled — click to disable this model' : 'Disabled — click to enable this model'"
+                [loading]="saving()"
+                [disabled]="saving() || m.id === s.provider.default_model"
+                (buttonClick)="toggleModel(s.provider, m)"
+              />
+              <section class="flex flex-col gap-2 border-t border-border pt-3">
+                <span class="text-xs font-semibold uppercase tracking-wider text-primary-600">Cost</span>
+                <dl class="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-2">
+                  @for (c of costFields; track c.key) {
+                    <dt class="text-xs text-text-muted">{{ c.label }}</dt>
+                    <dd>{{ cost(m[c.key]) }}</dd>
+                  }
+                </dl>
+              </section>
+            </section>
           } @else {
-            <!-- Selected provider: enable/disable, add a model -->
+            <!-- Selected provider: enable/disable (admin), add a model (platform) -->
             <div class="flex items-center gap-2">
+              @if (adminScope) {
               <twang-button
                 variant="default"
                 size="sm"
@@ -205,7 +281,8 @@ function errorText(err: unknown, fallback: string): string {
                 [disabled]="saving()"
                 (buttonClick)="toggleProvider(s.provider)"
               />
-              @if (addingTo()?.id !== s.provider.id) {
+              }
+              @if (platformScope && addingTo()?.id !== s.provider.id) {
                 <twang-button class="ml-auto" variant="primary" size="sm" icon="plus" label="Add model" [disabled]="saving()" (buttonClick)="startAdd(s.provider)" />
               }
             </div>
@@ -226,7 +303,7 @@ function errorText(err: unknown, fallback: string): string {
             </dl>
 
             <!-- New model: added below the provider's details (Add model opens it). -->
-            @if (addingTo()?.id === s.provider.id) {
+            @if (platformScope && addingTo()?.id === s.provider.id) {
               <section class="flex flex-col gap-3 border-t border-border pt-4">
                 <span class="text-xs font-semibold uppercase tracking-wider text-primary-600">New model</span>
                 <div class="flex flex-col gap-1.5">
@@ -236,7 +313,7 @@ function errorText(err: unknown, fallback: string): string {
                     <span class="text-xs text-red-600">{{ err }}</span>
                   }
                 </div>
-                <ng-container *ngTemplateOutlet="modelFields; context: { $implicit: newModel(), patch: patchNewModel, defaultModel: false }" />
+                <ng-container *ngTemplateOutlet="modelFields; context: { $implicit: newModel(), patch: patchNewModel }" />
                 <div class="flex items-center justify-end gap-2 border-t border-border pt-3">
                   <twang-button variant="default" size="sm" label="Cancel" [disabled]="saving()" (buttonClick)="cancelAdd()" />
                   <twang-button
@@ -257,19 +334,8 @@ function errorText(err: unknown, fallback: string): string {
         }
       </div>
 
-      <!-- Enabled + the four costs, shared by the model editor and the new-model form. -->
-      <ng-template #modelFields let-m let-patch="patch" let-defaultModel="defaultModel">
-        <!-- Same toggle as the provider's; here it only changes the form (Save applies it). -->
-        <twang-button
-          class="self-start"
-          variant="default"
-          size="sm"
-          [icon]="m.enabled ? 'toggle-right' : 'toggle-left'"
-          [label]="m.enabled ? 'Enabled' : 'Disabled'"
-          [title]="defaultModel ? 'The default model must stay enabled' : m.enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'"
-          [disabled]="defaultModel"
-          (buttonClick)="patch({ enabled: !m.enabled })"
-        />
+      <!-- The four cost inputs (platform), shared by the model editor and the new-model form. -->
+      <ng-template #modelFields let-m let-patch="patch">
         <section class="flex flex-col gap-2 border-t border-border pt-3">
           <span class="text-xs font-semibold uppercase tracking-wider text-primary-600">Cost</span>
           <div class="grid grid-cols-[7rem_1fr] items-center gap-x-3 gap-y-2">
@@ -296,13 +362,33 @@ function errorText(err: unknown, fallback: string): string {
 
     <!-- Rendered in the admin header (right side) via PageBreadcrumbs.actions. -->
     <ng-template #headerActions>
-      <app-refresh-cache-button (refreshed)="load()" />
+      @if (adminScope) {
+        <app-refresh-cache-button (refreshed)="load()" />
+      } @else {
+        <input #importFile type="file" accept=".json,application/json" class="hidden" (change)="importFrom(importFile)" />
+        <twang-button
+          variant="primary"
+          size="sm"
+          icon="upload"
+          label="Import"
+          title="Import providers from a JSON file: the providers config ({ &quot;llm_providers&quot;: [...] }), an array, or one provider"
+          [loading]="importing()"
+          [disabled]="importing()"
+          (buttonClick)="importFile.click()"
+        />
+      }
     </ng-template>
   `,
 })
 export class ConfigProvidersComponent {
   private readonly configService = inject(AdminConfigService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly scope: ConfigScope = inject(ActivatedRoute).snapshot.data['scope'] ?? 'admin';
+  /** Admin: enable/disable providers and models. */
+  protected readonly adminScope = this.scope === 'admin';
+  /** Platform: the model catalog — add/delete models, set costs; Import. */
+  protected readonly platformScope = this.scope === 'platform';
+  protected readonly importing = signal(false);
 
   /** Refresh cache, shown on the right of the admin header while this page is open. */
   private readonly headerActions = viewChild<TemplateRef<unknown>>('headerActions');
@@ -470,6 +556,14 @@ export class ConfigProvidersComponent {
     this.saveError.set(null);
   }
 
+  /** Admin: flip one model's enabled flag and save straight away. */
+  protected toggleModel(provider: ProviderConfig, model: ModelConfig): void {
+    this.save(
+      { ...provider, models: provider.models.map(m => (m.id === model.id ? { ...m, enabled: !m.enabled } : m)) },
+      modelNodeId(provider, model),
+    );
+  }
+
   protected toggleProvider(provider: ProviderConfig): void {
     this.save({ ...provider, enabled: !provider.enabled }, providerNodeId(provider));
   }
@@ -512,7 +606,7 @@ export class ConfigProvidersComponent {
     this.saving.set(true);
     this.saveError.set(null);
     this.configService
-      .updateProvider(next)
+      .updateProvider(next, this.scope)
       .pipe(
         finalize(() => this.saving.set(false)),
         takeUntilDestroyed(this.destroyRef),
@@ -541,11 +635,40 @@ export class ConfigProvidersComponent {
     this.selectedNodeId.set(nodeId);
   }
 
+  /** Import the chosen JSON file (`POST /platform/providers/import`), then reload. */
+  protected importFrom(input: HTMLInputElement): void {
+    const file = input.files?.[0];
+    input.value = ''; // so choosing the same file again still fires (change)
+    if (!file) return;
+    this.saveError.set(null);
+    file.text().then(text => {
+      const parsed = parseProviders(text);
+      if (typeof parsed === 'string') {
+        this.saveError.set(`Couldn't import ${file.name}: ${parsed}`);
+        return;
+      }
+      this.importing.set(true);
+      this.configService
+        .importProviders(parsed)
+        .pipe(
+          finalize(() => this.importing.set(false)),
+          takeUntilDestroyed(this.destroyRef),
+        )
+        .subscribe({
+          next: () => this.load(),
+          error: err => {
+            console.error('Failed to import providers', err);
+            this.saveError.set(errorText(err, 'Failed to import providers.'));
+          },
+        });
+    });
+  }
+
   protected load(): void {
     this.loading.set(true);
     this.error.set(null);
     this.configService
-      .getProviders()
+      .getProviders(this.scope)
       .pipe(
         finalize(() => this.loading.set(false)),
         takeUntilDestroyed(this.destroyRef),

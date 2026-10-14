@@ -1,7 +1,7 @@
 import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { first, map, of, switchMap } from 'rxjs';
-import { type RoleType, UserService } from '../services/user.service';
+import { type RoleType, userHasRole, UserService } from '../services/user.service';
 import { AuthService } from './auth.service';
 import { landingPage } from './landing-page';
 
@@ -40,7 +40,27 @@ export function roleGuard(...roles: RoleType[]): CanActivateFn {
       switchMap(() => auth.isLoggedIn() ? users.user$.pipe(first()) : of(null)),
       map(user => {
         if (!auth.isLoggedIn()) return router.createUrlTree(['/login']);
-        return user && roles.includes(user.role) ? true : router.createUrlTree(['/agents']);
+        return userHasRole(user, roles) ? true : router.createUrlTree(['/agents']);
+      }),
+    );
+  };
+}
+
+/**
+ * Like `roleGuard`, but users without one of `roles` go to `redirectTo` (an absolute path) instead
+ * of /agents. `'SuperAdmin'` matches the `is_super_admin` flag.
+ */
+export function roleRedirectGuard(roles: readonly RoleType[], redirectTo: string): CanActivateFn {
+  return () => {
+    const auth = inject(AuthService);
+    const users = inject(UserService);
+    const router = inject(Router);
+    return auth.ready$.pipe(
+      first(),
+      switchMap(() => (auth.isLoggedIn() ? users.user$.pipe(first()) : of(null))),
+      map(user => {
+        if (!auth.isLoggedIn()) return router.createUrlTree(['/login']);
+        return userHasRole(user, roles) ? true : router.parseUrl(redirectTo);
       }),
     );
   };

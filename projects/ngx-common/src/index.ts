@@ -14,12 +14,14 @@ export {
   AgentService,
   type Agent,
 } from './lib/services/agent.service';
-export { UserService, type User, type UserResponse, type RoleType } from './lib/services/user.service';
+export { UserService, userHasRole, type CurrentUser, type Membership, type User, type UserResponse, type RoleType } from './lib/services/user.service';
 export {
   AdminConfigService,
   type AgentConfig,
+  type McpServerConfig,
   type ProviderConfig,
   type ModelConfig,
+  type ConfigScope,
   type LlmConfig,
   type ExecutionType,
   type ToolDefinition,
@@ -33,6 +35,7 @@ export {
 export {
   TurnLogsService,
   AdminLogsService,
+  AnalyticsLogsService,
   UserLogsService,
   TURN_LOGS,
   type TurnLogsScope,
@@ -54,10 +57,10 @@ export { bsonDateInterceptor, normalizeBsonDates } from './lib/http/bson-date.in
 
 // Auth
 export { AuthService, type AuthUser } from './lib/auth/auth.service';
-export { authGuard, noAuthGuard, roleGuard } from './lib/auth/auth.guard';
+export { authGuard, noAuthGuard, roleGuard, roleRedirectGuard } from './lib/auth/auth.guard';
 export { authInterceptor, SKIP_AUTH } from './lib/auth/auth.interceptor';
 export { LOGIN_CONFIG, type LoginConfig } from './lib/auth/login.config';
-export { landingPage, lastPageRedirect } from './lib/auth/landing-page';
+export { landingPage, lastPageRedirect, saveLastPage } from './lib/auth/landing-page';
 
 // UI
 export { PageLayoutComponent } from './lib/ui/page-layout/page-layout.component';
@@ -81,9 +84,24 @@ export { AgentsPageComponent } from './lib/ui/agents-page/agents-page.component'
 export { ChatsPageComponent } from './lib/ui/chats-page/chats-page.component';
 export { NewChatComponent } from './lib/ui/new-chat/new-chat.component';
 export { TitleBarComponent } from './lib/ui/title-bar/title-bar.component';
+// App shell (sidebar + title bar + page header) — used by rustic-ai-ng-new; separate from TitleBarComponent.
+export { AppShellComponent } from './lib/ui/app-shell/app-shell.component';
+export { ShellSidebarComponent } from './lib/ui/app-shell/shell-sidebar.component';
+export { ShellTitleBarComponent } from './lib/ui/app-shell/shell-title-bar.component';
+export { activeShellNavChild, activeShellNavItem, activeShellNavPath, type ShellNavItem, shellNavTarget } from './lib/ui/app-shell/shell-nav';
+// Tenant admin (rustic-ai-ng-new)
+export { InviteService, type CreateInviteRequest, type Invite, type InviteStatus } from './lib/services/invite.service';
+export { InvitesPageComponent } from './lib/ui/tenant-admin/invites-page.component';
+export { AccessGroupsComponent } from './lib/ui/admin-access/access-groups.component';
+export { AccessUsersComponent } from './lib/ui/admin-access/access-users.component';
+export { ConfigProvidersComponent } from './lib/ui/admin-config/config-providers.component';
+export { ConfigAgentsComponent } from './lib/ui/admin-config/config-agents.component';
 export { LoginComponent } from './lib/ui/login/login.component';
 export { AdminPageComponent } from './lib/ui/admin-page/admin-page.component';
 export { ADMIN_ROUTES } from './lib/ui/admin-page/admin.routes';
+export { AGENT_CONFIG_ROUTES } from './lib/ui/admin-config/agent-config.routes';
+export { McpServersPageComponent } from './lib/ui/platform/mcp-servers-page.component';
+export { ChatTemplatesPageComponent } from './lib/ui/platform/chat-templates-page.component';
 export { PageBreadcrumbs, type PageCrumb } from './lib/ui/breadcrumbs/page-breadcrumbs';
 export { BreadcrumbBarComponent } from './lib/ui/breadcrumbs/breadcrumb-bar.component';
 export { LOGS_ROUTES, USER_LOGS_ROUTE } from './lib/ui/logs/logs.routes';

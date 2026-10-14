@@ -70,8 +70,13 @@ export abstract class TurnLogsService {
     return this.scope === 'admin' ? `${this.base}/admin/turns` : `${this.base}/turns`;
   }
 
+  /** Where the logs list is POSTed; a subclass can point it elsewhere (e.g. `/analytics/logs`). */
+  protected logsUrl(): string {
+    return `${this.prefix}/logs`;
+  }
+
   getTurnLogs(request: TurnLogRequest): Observable<TurnLog[]> {
-    return this.http.post<TurnLog[]>(`${this.prefix}/logs`, request).pipe(tap(logs => this.lastLogs.set(logs)));
+    return this.http.post<TurnLog[]>(this.logsUrl(), request).pipe(tap(logs => this.lastLogs.set(logs)));
   }
 
   getTurnDetail(turnId: string): Observable<TurnLogDetail> {
@@ -97,6 +102,23 @@ export class AdminLogsService extends TurnLogsService {
 export class UserLogsService extends TurnLogsService {
   constructor() {
     super('user');
+  }
+}
+
+/**
+ * The signed-in user's own turns for Analytics › Logs: the list from `/analytics/logs`, executions
+ * from `/turns/execution/{id}`. Otherwise the user scope (no User column).
+ */
+@Injectable({ providedIn: 'root' })
+export class AnalyticsLogsService extends TurnLogsService {
+  private readonly apiBase = inject(API_BASE_URL);
+
+  constructor() {
+    super('user');
+  }
+
+  protected override logsUrl(): string {
+    return `${this.apiBase}/analytics/logs`;
   }
 }
 
