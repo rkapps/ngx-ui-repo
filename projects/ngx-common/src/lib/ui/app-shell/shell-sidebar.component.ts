@@ -53,7 +53,7 @@ import { type ShellNavItem, shellNavTarget } from './shell-nav';
           <!-- Group: expands to its pages -->
           <button
             type="button"
-            class="flex items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-text-muted transition-colors hover:bg-surface-muted hover:text-text"
+            class="flex items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-gray-800 transition-colors hover:bg-surface-muted hover:text-gray-950"
             [class.!text-primary-700]="activeLink() === item.link"
             [attr.aria-expanded]="!closedGroups().has(item.link)"
             (click)="toggleGroup.emit(item.link)"
@@ -88,7 +88,7 @@ import { type ShellNavItem, shellNavTarget } from './shell-nav';
           <!-- Page, or a group in the icon-only sidebar (opens its first page) -->
           <a
             [routerLink]="target(item)"
-            class="flex items-center gap-3 rounded-md py-2 text-sm font-medium text-text-muted transition-colors hover:bg-surface-muted hover:text-text"
+            class="flex items-center gap-3 rounded-md py-2 text-sm font-medium text-gray-800 transition-colors hover:bg-surface-muted hover:text-gray-950"
             [class]="(narrow() ? 'justify-center px-2' : 'px-3') + (activeLink() === item.link ? ' bg-primary-50 !text-primary-700 font-semibold' : '')"
             [title]="narrow() ? item.label : ''"
             [attr.aria-label]="item.label"
@@ -109,7 +109,7 @@ import { type ShellNavItem, shellNavTarget } from './shell-nav';
         [routerLink]="page.link"
         routerLinkActive="bg-primary-50 !text-primary-700 font-semibold"
         [routerLinkActiveOptions]="{ exact: !!page.exact }"
-        class="flex items-center gap-3 rounded-md py-1.5 pr-3 text-sm text-text-muted transition-colors hover:bg-surface-muted hover:text-text"
+        class="flex items-center gap-3 rounded-md py-1.5 pr-3 text-sm text-gray-700 transition-colors hover:bg-surface-muted hover:text-gray-950"
         [class]="indent"
         (click)="closeDrawer.emit()"
       >
