@@ -162,6 +162,11 @@ export class ThreePanelLayoutComponent implements OnInit {
   protected readonly rightCollapsed = signal(false);
   protected readonly rightPinned = signal(false);
 
+  /** Open the right panel if it's collapsed — e.g. when a page puts a form there the user must see. */
+  expandRight(): void {
+    this.rightCollapsed.set(false);
+  }
+
   // Mobile-only: which panel is showing in place of the other, defaulting to the middle
   // content. Distinct from `leftPinned` (a desktop-oriented "always visible" toggle) — this
   // swaps middle out entirely instead of squeezing both into the same row. A `model` (not a

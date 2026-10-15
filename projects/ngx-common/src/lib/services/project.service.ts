@@ -28,6 +28,8 @@ export interface ProjectFile {
   id: string;
   project_id: string;
   name: string;
+  /** What the file is about; given at upload. Optional until the backend's response includes it. */
+  description?: string | null;
   /** Bytes. */
   size: number;
   status: ProjectFileStatus;
@@ -97,11 +99,12 @@ export class ProjectService {
   }
 
   /**
-   * Upload one file (`POST /projects/{id}/files`, multipart, field `file`). Returns the created
-   * file, or null when the backend answers with an empty body.
+   * Upload one file (`POST /projects/{id}/files`, multipart: `description` — required, up to 200
+   * characters — and `file`). Returns the created file, or null when the backend sends no body.
    */
-  uploadProjectFile(projectId: string, file: File): Observable<ProjectFile | null> {
+  uploadProjectFile(projectId: string, file: File, description: string): Observable<ProjectFile | null> {
     const form = new FormData();
+    form.append('description', description);
     form.append('file', file, file.name);
     return this.http.post<ProjectFile | null>(`${this.base}/projects/${encodeURIComponent(projectId)}/files`, form);
   }

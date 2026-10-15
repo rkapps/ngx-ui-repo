@@ -1,4 +1,4 @@
-import { Component, DestroyRef, effect, inject, input, signal, type TemplateRef, viewChild } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, input, signal, type TemplateRef, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { LucideAngularModule } from 'lucide-angular';
@@ -16,6 +16,9 @@ const FILE_STATUS_CLASS: Record<ProjectFileStatus, string> = {
   indexed: 'text-green-700',
   failed: 'text-red-700',
 };
+
+/** The backend trims file descriptions to this many characters. */
+const MAX_DESCRIPTION = 200;
 
 /** 1536 → "1.5 KB". */
 function formatSize(bytes: number): string {
@@ -51,7 +54,7 @@ function uploadErrorText(err: unknown): string {
   template: `
     <app-three-panel-layout
       [showLeft]="false"
-      rightTitle="Search"
+      [rightTitle]="pending().length ? 'Upload files' : 'Search'"
       storageKey="projects.files.layout"
       rightWidth="w-[32rem]"
       panelMinHeight="min-h-[70vh]"
@@ -75,18 +78,11 @@ function uploadErrorText(err: unknown): string {
             (buttonClick)="loadFiles()"
           />
         </div>
-        @if (uploading(); as u) {
-          <div class="shrink-0 border-b border-border bg-primary-50 px-4 py-2 text-xs text-primary-700">
-            Uploading {{ u.done + 1 }} of {{ u.total }}: {{ u.name }}…
+        @if (filesError()) {
+          <div class="flex shrink-0 items-start gap-2 border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">
+            <lucide-icon name="circle-alert" [size]="14" class="mt-0.5 shrink-0" />
+            <span class="min-w-0 flex-1 break-words">{{ filesError() }}</span>
           </div>
-        }
-        @for (message of [uploadError(), filesError()]; track $index) {
-          @if (message) {
-            <div class="flex shrink-0 items-start gap-2 border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">
-              <lucide-icon name="circle-alert" [size]="14" class="mt-0.5 shrink-0" />
-              <span class="min-w-0 flex-1 break-words">{{ message }}</span>
-            </div>
-          }
         }
         <div class="flex min-h-0 flex-1 flex-col">
           <twang-table
@@ -105,87 +101,149 @@ function uploadErrorText(err: unknown): string {
       <!-- Right: search over the project's indexed chunks (for testing). Exactly the panel's height:
            the query stays at the top and only the results scroll. -->
       <div right class="flex min-h-0 flex-1 flex-col text-sm">
-        <div class="flex shrink-0 flex-col gap-3 border-b border-border p-4">
-          <div class="flex flex-col gap-1.5">
-            <label class="text-xs font-medium text-text-muted">Query</label>
-            <twang-input placeholder="What are you looking for?" [ngModel]="query()" (ngModelChange)="query.set($event)" (keydown.enter)="search()" />
-          </div>
-          <div class="flex items-end gap-2">
-            <div class="flex w-24 flex-col gap-1.5">
-              <label class="text-xs font-medium text-text-muted">Top K</label>
-              <twang-input type="number" min="1" step="1" placeholder="5" [ngModel]="topK()" (ngModelChange)="topK.set('' + ($event ?? ''))" />
-            </div>
-            @if (searchResults(); as results) {
-              <span class="pb-2 text-xs text-text-muted">{{ results.length }} result{{ results.length === 1 ? '' : 's' }}</span>
-            }
-            <twang-button
-              class="ml-auto"
-              variant="primary"
-              size="sm"
-              icon="search"
-              label="Search"
-              [loading]="searching()"
-              [disabled]="searching() || !query().trim()"
-              (buttonClick)="search()"
-            />
-          </div>
-          @if (searchError()) {
-            <div class="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">
-              <lucide-icon name="circle-alert" [size]="14" class="mt-0.5 shrink-0" />
-              <span class="min-w-0 flex-1 break-words">{{ searchError() }}</span>
-            </div>
-          }
-        </div>
-
-        <div class="min-h-0 flex-1 overflow-y-auto p-4">
-          @if (searchResults(); as results) {
-            @if (results.length) {
-              <ol class="flex flex-col gap-2">
-                @for (r of results; track r.chunk_id; let i = $index) {
-                  @let open = expanded().has(r.chunk_id);
-                  <li class="overflow-hidden rounded-md border border-border">
+        @if (pending().length) {
+          <!-- Upload: a required description per chosen file, then upload them one at a time. -->
+          <div class="min-h-0 flex-1 overflow-y-auto p-4">
+            <ul class="flex flex-col gap-3">
+              @for (p of pending(); track p.key) {
+                <li class="flex flex-col gap-1.5 rounded-md border border-border p-2.5">
+                  <div class="flex items-center gap-2 text-xs">
+                    <lucide-icon name="file-text" [size]="14" class="shrink-0 text-text-muted" />
+                    <span class="min-w-0 flex-1 truncate font-medium" [title]="p.file.name">{{ p.file.name }}</span>
+                    <span class="shrink-0 text-text-muted">{{ formatSize(p.file.size) }}</span>
                     <button
                       type="button"
-                      class="flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs hover:bg-surface-muted"
-                      [class.bg-surface-muted]="open"
-                      [attr.aria-expanded]="open"
-                      (click)="toggleResult(r.chunk_id)"
+                      class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-muted hover:bg-surface-muted hover:text-text disabled:opacity-40"
+                      title="Remove"
+                      aria-label="Remove file"
+                      [disabled]="!!uploading()"
+                      (click)="removePending(p.key)"
                     >
-                      <lucide-icon name="chevron-right" [size]="14" class="shrink-0 text-text-muted transition-transform" [class.rotate-90]="open" />
-                      <span class="shrink-0 tabular-nums text-text-muted">{{ i + 1 }}.</span>
-                      <span class="min-w-0 flex-1 truncate">
-                        <span class="font-medium" [title]="r.file_name">{{ r.file_name }}</span>
-                        <span class="text-text-muted"> · p{{ r.page }} · #{{ r.seq }}</span>
-                      </span>
-                      <span class="shrink-0 rounded bg-primary-50 px-1.5 py-0.5 font-mono tabular-nums text-primary-700" title="Cosine similarity">
-                        {{ r.score.toFixed(3) }}
-                      </span>
+                      <lucide-icon name="x" [size]="14" />
                     </button>
-                    @if (open) {
-                      <p class="whitespace-pre-wrap border-t border-border px-2.5 py-2 text-xs leading-relaxed text-text">{{ r.text }}</p>
-                    }
-                  </li>
-                }
-              </ol>
-            } @else {
-              <p class="text-text-muted">No matches.</p>
+                  </div>
+                  <textarea
+                    rows="2"
+                    [attr.maxlength]="maxDescription"
+                    class="w-full resize-y rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text placeholder:text-text-muted focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                    placeholder="Describe this file (required)"
+                    [value]="p.description"
+                    [disabled]="!!uploading()"
+                    (input)="setDescription(p.key, $any($event.target).value)"
+                  ></textarea>
+                  <span class="self-end text-[10px] tabular-nums text-text-muted">{{ p.description.length }}/{{ maxDescription }}</span>
+                </li>
+              }
+            </ul>
+          </div>
+          <div class="flex shrink-0 flex-col gap-2 border-t border-border p-4">
+            @if (uploadError()) {
+              <div class="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+                <lucide-icon name="circle-alert" [size]="14" class="mt-0.5 shrink-0" />
+                <span class="min-w-0 flex-1 break-words">{{ uploadError() }}</span>
+              </div>
             }
-          } @else {
-            <p class="text-text-muted">Search the project's indexed chunks.</p>
-          }
-        </div>
+            <div class="flex items-center gap-2">
+              @if (uploading(); as u) {
+                <span class="min-w-0 flex-1 truncate text-xs text-text-muted">Uploading {{ u.done + 1 }} of {{ u.total }}: {{ u.name }}…</span>
+              } @else {
+                <span class="min-w-0 flex-1 text-xs text-text-muted">{{ pending().length }} file{{ pending().length === 1 ? '' : 's' }}</span>
+              }
+              <twang-button variant="default" size="sm" label="Cancel" [disabled]="!!uploading()" (buttonClick)="cancelUpload()" />
+              <twang-button
+                variant="primary"
+                size="sm"
+                icon="upload"
+                label="Upload"
+                [loading]="!!uploading()"
+                [disabled]="!!uploading() || !pendingReady()"
+                (buttonClick)="uploadPending()"
+              />
+            </div>
+          </div>
+        } @else {
+          <div class="flex shrink-0 flex-col gap-3 border-b border-border p-4">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs font-medium text-text-muted">Query</label>
+              <twang-input placeholder="What are you looking for?" [ngModel]="query()" (ngModelChange)="query.set($event)" (keydown.enter)="search()" />
+            </div>
+            <div class="flex items-end gap-2">
+              <div class="flex w-24 flex-col gap-1.5">
+                <label class="text-xs font-medium text-text-muted">Top K</label>
+                <twang-input type="number" min="1" step="1" placeholder="5" [ngModel]="topK()" (ngModelChange)="topK.set('' + ($event ?? ''))" />
+              </div>
+              @if (searchResults(); as results) {
+                <span class="pb-2 text-xs text-text-muted">{{ results.length }} result{{ results.length === 1 ? '' : 's' }}</span>
+              }
+              <twang-button
+                class="ml-auto"
+                variant="primary"
+                size="sm"
+                icon="search"
+                label="Search"
+                [loading]="searching()"
+                [disabled]="searching() || !query().trim()"
+                (buttonClick)="search()"
+              />
+            </div>
+            @if (searchError()) {
+              <div class="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+                <lucide-icon name="circle-alert" [size]="14" class="mt-0.5 shrink-0" />
+                <span class="min-w-0 flex-1 break-words">{{ searchError() }}</span>
+              </div>
+            }
+          </div>
+
+          <div class="min-h-0 flex-1 overflow-y-auto p-4">
+            @if (searchResults(); as results) {
+              @if (results.length) {
+                <ol class="flex flex-col gap-2">
+                  @for (r of results; track r.chunk_id; let i = $index) {
+                    @let open = expanded().has(r.chunk_id);
+                    <li class="overflow-hidden rounded-md border border-border">
+                      <button
+                        type="button"
+                        class="flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs hover:bg-surface-muted"
+                        [class.bg-surface-muted]="open"
+                        [attr.aria-expanded]="open"
+                        (click)="toggleResult(r.chunk_id)"
+                      >
+                        <lucide-icon name="chevron-right" [size]="14" class="shrink-0 text-text-muted transition-transform" [class.rotate-90]="open" />
+                        <span class="shrink-0 tabular-nums text-text-muted">{{ i + 1 }}.</span>
+                        <span class="min-w-0 flex-1 truncate">
+                          <span class="font-medium" [title]="r.file_name">{{ r.file_name }}</span>
+                          <span class="text-text-muted"> · p{{ r.page }} · #{{ r.seq }}</span>
+                        </span>
+                        <span class="shrink-0 rounded bg-primary-50 px-1.5 py-0.5 font-mono tabular-nums text-primary-700" title="Cosine similarity">
+                          {{ r.score.toFixed(3) }}
+                        </span>
+                      </button>
+                      @if (open) {
+                        <p class="whitespace-pre-wrap border-t border-border px-2.5 py-2 text-xs leading-relaxed text-text">{{ r.text }}</p>
+                      }
+                    </li>
+                  }
+                </ol>
+              } @else {
+                <p class="text-text-muted">No matches.</p>
+              }
+            } @else {
+              <p class="text-text-muted">Search the project's indexed chunks.</p>
+            }
+          </div>
+        }
       </div>
     </app-three-panel-layout>
 
     <!-- Rendered in the page header (right side) via PageBreadcrumbs.actions. -->
     <ng-template #headerActions>
-      <input #fileInput type="file" multiple accept=".pdf,application/pdf" class="hidden" (change)="upload(fileInput)" />
+      <input #fileInput type="file" multiple accept=".pdf,application/pdf" class="hidden" (change)="choose(fileInput)" />
       <twang-button
         variant="primary"
         size="sm"
         icon="upload"
         label="Upload"
-        title="Upload PDF files to this project"
+        title="Choose PDF files to upload — each needs a description"
         [loading]="!!uploading()"
         [disabled]="!!uploading()"
         (buttonClick)="fileInput.click()"
@@ -208,8 +266,15 @@ export class ProjectFilesPageComponent {
   protected readonly filesLoading = signal(false);
   /** Loading the list failed (cleared by the next successful load). */
   protected readonly filesError = signal<string | null>(null);
-  /** The last upload failed — kept until the next upload, so the reload after it doesn't clear it. */
+  /** The last upload failed — shown in the upload form until the next attempt. */
   protected readonly uploadError = signal<string | null>(null);
+  /** Files chosen for upload, each needing a description; while non-empty the right panel shows the upload form. */
+  protected readonly pending = signal<{ key: number; file: File; description: string }[]>([]);
+  protected readonly pendingReady = computed(() => this.pending().every(p => p.description.trim().length > 0));
+  protected readonly maxDescription = MAX_DESCRIPTION;
+  protected readonly formatSize = formatSize;
+  private nextKey = 0;
+  private readonly layout = viewChild(ThreePanelLayoutComponent);
   /** Upload in progress: which file of how many. */
   protected readonly uploading = signal<{ done: number; total: number; name: string } | null>(null);
   private filesSub?: Subscription;
@@ -225,7 +290,8 @@ export class ProjectFilesPageComponent {
   private searchSub?: Subscription;
 
   protected readonly columns: TwangTableColumn<ProjectFile>[] = [
-    { id: 'name', header: 'Name', align: 'left', sortable: true, fillRemaining: true, minWidth: '240px', cellTruncate: true, value: f => f.name },
+    { id: 'name', header: 'Name', align: 'left', sortable: true, width: '240px', cellTruncate: true, value: f => f.name },
+    { id: 'description', header: 'Description', align: 'left', sortable: false, fillRemaining: true, minWidth: '200px', cellTruncate: true, value: f => f.description ?? '' },
     { id: 'status', header: 'Status', align: 'left', sortable: true, width: '120px', value: f => f.status, cellClass: f => FILE_STATUS_CLASS[f.status] ?? '' },
     { id: 'chunks', header: 'Chunks', align: 'right', sortable: true, width: '100px', value: f => f.chunk_count },
     { id: 'size', header: 'Size', align: 'right', sortable: true, width: '100px', value: f => f.size, format: v => (v == null ? '' : formatSize(Number(v))) },
@@ -276,21 +342,51 @@ export class ProjectFilesPageComponent {
       });
   }
 
-  /** Upload the chosen files one after another (stopping at the first failure); reload the list if any went up. */
-  protected upload(input: HTMLInputElement): void {
+  /** Add the chosen files to the upload form (each needs a description) and make sure it's visible. */
+  protected choose(input: HTMLInputElement): void {
     const chosen = [...(input.files ?? [])];
     input.value = ''; // so choosing the same files again still fires (change)
     if (!chosen.length) return;
+    this.uploadError.set(null);
+    this.pending.update(list => [...list, ...chosen.map(file => ({ key: this.nextKey++, file, description: '' }))]);
+    this.layout()?.expandRight();
+  }
+
+  protected setDescription(key: number, description: string): void {
+    this.pending.update(list => list.map(p => (p.key === key ? { ...p, description } : p)));
+  }
+
+  protected removePending(key: number): void {
+    this.pending.update(list => list.filter(p => p.key !== key));
+  }
+
+  protected cancelUpload(): void {
+    this.pending.set([]);
+    this.uploadError.set(null);
+  }
+
+  /**
+   * Upload the form's files one after another, each with its description, stopping at the first
+   * failure. Uploaded files leave the form (the failed one and the rest stay, to fix and retry);
+   * the list reloads if any went up.
+   */
+  protected uploadPending(): void {
+    const batch = this.pending();
+    if (!batch.length || !this.pendingReady()) return;
     const id = this.id();
     this.uploadError.set(null);
     let uploaded = 0;
-    from(chosen)
+    from(batch)
       .pipe(
-        concatMap(file => {
-          this.uploading.set({ done: uploaded, total: chosen.length, name: file.name });
-          return this.projectService.uploadProjectFile(id, file);
+        concatMap(p => {
+          this.uploading.set({ done: uploaded, total: batch.length, name: p.file.name });
+          return this.projectService.uploadProjectFile(id, p.file, p.description.trim()).pipe(
+            tap(() => {
+              uploaded++;
+              this.removePending(p.key);
+            }),
+          );
         }),
-        tap(() => uploaded++),
         finalize(() => {
           this.uploading.set(null);
           // Only reload when something actually changed.
@@ -301,11 +397,12 @@ export class ProjectFilesPageComponent {
       .subscribe({
         error: err => {
           console.error('Failed to upload project file', err);
-          const name = chosen[uploaded]?.name ?? 'a file';
+          const name = batch[uploaded]?.file.name ?? 'a file';
           this.uploadError.set(`Couldn't upload ${name}: ${uploadErrorText(err)}`);
         },
       });
   }
+
 
   protected toggleResult(chunkId: string): void {
     const next = new Set(this.expanded());
