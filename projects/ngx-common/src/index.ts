@@ -91,6 +91,18 @@ export { ShellTitleBarComponent } from './lib/ui/app-shell/shell-title-bar.compo
 export { activeShellNavChild, activeShellNavItem, activeShellNavPath, type ShellNavItem, shellNavTarget } from './lib/ui/app-shell/shell-nav';
 // Tenant admin (rustic-ai-ng-new)
 export { InviteService, type CreateInviteRequest, type Invite, type InviteStatus } from './lib/services/invite.service';
+export {
+  ProjectService,
+  type Project,
+  type ProjectChunkConfig,
+  type ProjectCreateRequest,
+  type ProjectFile,
+  type ProjectFileStatus,
+  type ProjectSearchResult,
+  type ProjectUpdateRequest,
+} from './lib/services/project.service';
+export { ProjectsPageComponent } from './lib/ui/projects/projects-page.component';
+export { ProjectFilesPageComponent } from './lib/ui/projects/project-files-page.component';
 export { InvitesPageComponent } from './lib/ui/tenant-admin/invites-page.component';
 export { AccessGroupsComponent } from './lib/ui/admin-access/access-groups.component';
 export { AccessUsersComponent } from './lib/ui/admin-access/access-users.component';

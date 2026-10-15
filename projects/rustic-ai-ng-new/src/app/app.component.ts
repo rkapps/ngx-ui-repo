@@ -50,6 +50,7 @@ export class AppComponent {
       { label: 'Home', icon: 'house', link: '/home' },
       this.conversationsNav(),
       // divider: the border below Conversations (Conversations sets the one above it).
+      { label: 'Projects', icon: 'folder-open', link: '/projects', divider: true },
       {
         label: 'Analytics',
         icon: 'chart-bar',

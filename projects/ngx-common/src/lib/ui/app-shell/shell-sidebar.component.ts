@@ -71,13 +71,23 @@ import { type ShellNavItem, shellNavTarget } from './shell-nav';
           @if (!closedGroups().has(item.link)) {
             @for (child of item.children; track child.link) {
               @if (child.children?.length) {
-                <!-- Sub-group: a heading over its pages -->
-                <div class="flex items-center gap-2 pb-0.5 pl-9 pr-3 pt-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+                <!-- Sub-group: a collapsible heading over its pages (collapsed by default; always open
+                     while the current page is inside it, so the highlighted page isn't hidden). -->
+                @let subOpen = openSubGroups().has(child.link) || activeLinks().includes(child.link);
+                <button
+                  type="button"
+                  class="flex items-center gap-2 rounded-md pb-1 pl-9 pr-3 pt-2 text-left text-[11px] font-semibold uppercase tracking-wider text-text-muted transition-colors hover:text-text"
+                  [attr.aria-expanded]="subOpen"
+                  (click)="toggleSubGroup.emit(child.link)"
+                >
                   <lucide-icon [name]="child.icon" [size]="14" class="shrink-0" aria-hidden="true" />
-                  <span class="truncate">{{ child.label }}</span>
-                </div>
-                @for (page of child.children; track page.link) {
-                  <ng-container *ngTemplateOutlet="pageLink; context: { $implicit: page, indent: 'pl-14' }" />
+                  <span class="flex-1 truncate">{{ child.label }}</span>
+                  <lucide-icon name="chevron-right" [size]="12" class="shrink-0 transition-transform" [class.rotate-90]="subOpen" aria-hidden="true" />
+                </button>
+                @if (subOpen) {
+                  @for (page of child.children; track page.link) {
+                    <ng-container *ngTemplateOutlet="pageLink; context: { $implicit: page, indent: 'pl-14' }" />
+                  }
                 }
               } @else {
                 <ng-container *ngTemplateOutlet="pageLink; context: { $implicit: child, indent: 'pl-9' }" />
@@ -149,6 +159,11 @@ export class ShellSidebarComponent {
   /** Groups (by `link`) the user has closed; groups start open. */
   readonly closedGroups = input<ReadonlySet<string>>(new Set());
   readonly toggleGroup = output<string>();
+  /** Sub-groups (by `link`, e.g. Admin › Config) the user opened; sub-groups start collapsed. */
+  readonly openSubGroups = input<ReadonlySet<string>>(new Set());
+  readonly toggleSubGroup = output<string>();
+  /** Links of the nav path to the current page (Admin, Config, Agents) — keeps its sub-group open. */
+  readonly activeLinks = input<readonly string[]>([]);
 
   protected readonly loginConfig = inject(LOGIN_CONFIG);
   protected readonly narrow = () => this.collapsed() && !this.drawer();

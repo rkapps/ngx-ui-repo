@@ -43,6 +43,9 @@ import { ShellTitleBarComponent } from './shell-title-bar.component';
           [activeLink]="activeItem()?.link ?? null"
           [closedGroups]="closedGroups()"
           (toggleGroup)="toggleGroup($event)"
+          [openSubGroups]="openSubGroups()"
+          (toggleSubGroup)="toggleSubGroup($event)"
+          [activeLinks]="activeLinks()"
           [(collapsed)]="collapsed"
         />
         @if (drawerOpen()) {
@@ -53,6 +56,9 @@ import { ShellTitleBarComponent } from './shell-title-bar.component';
             [activeLink]="activeItem()?.link ?? null"
             [closedGroups]="closedGroups()"
             (toggleGroup)="toggleGroup($event)"
+          [openSubGroups]="openSubGroups()"
+          (toggleSubGroup)="toggleSubGroup($event)"
+          [activeLinks]="activeLinks()"
             [drawer]="true"
             (closeDrawer)="drawerOpen.set(false)"
           />
@@ -140,28 +146,44 @@ export class AppShellComponent {
     activeShellNavPath(this.navItems(), this.url()).map(item => ({ label: item.label, path: [shellNavTarget(item)] })),
   );
 
-  /** Sidebar groups the user closed; remembered per browser. */
-  private readonly groupsKey = `${this.loginConfig.appName ?? 'app'}.sidebar.closedGroups`;
-  protected readonly closedGroups = signal<ReadonlySet<string>>(this.readClosedGroups());
+  /** Links of the nav path to the current page, for the sidebar (keeps the current sub-group open). */
+  protected readonly activeLinks = computed(() => activeShellNavPath(this.navItems(), this.url()).map(item => item.link));
 
-  protected toggleGroup(link: string): void {
-    const next = new Set(this.closedGroups());
+  /** Sidebar sub-groups the user opened (they start collapsed); remembered per browser. */
+  private readonly subGroupsKey = `${this.loginConfig.appName ?? 'app'}.sidebar.openSubGroups`;
+  protected readonly openSubGroups = signal<ReadonlySet<string>>(this.readSet(this.subGroupsKey));
+
+  protected toggleSubGroup(link: string): void {
+    this.openSubGroups.set(this.toggled(this.openSubGroups(), link, this.subGroupsKey));
+  }
+
+  /** `set` with `link` added or removed, saved under `key`. */
+  private toggled(set: ReadonlySet<string>, link: string, key: string): Set<string> {
+    const next = new Set(set);
     if (next.has(link)) next.delete(link);
     else next.add(link);
-    this.closedGroups.set(next);
     try {
-      localStorage.setItem(this.groupsKey, JSON.stringify([...next]));
+      localStorage.setItem(key, JSON.stringify([...next]));
     } catch {
       // storage unavailable — just not remembered
     }
+    return next;
   }
 
-  private readClosedGroups(): Set<string> {
+  private readSet(key: string): Set<string> {
     try {
-      return new Set(JSON.parse(localStorage.getItem(this.groupsKey) ?? '[]'));
+      return new Set(JSON.parse(localStorage.getItem(key) ?? '[]'));
     } catch {
       return new Set();
     }
+  }
+
+  /** Sidebar groups the user closed; remembered per browser. */
+  private readonly groupsKey = `${this.loginConfig.appName ?? 'app'}.sidebar.closedGroups`;
+  protected readonly closedGroups = signal<ReadonlySet<string>>(this.readSet(this.groupsKey));
+
+  protected toggleGroup(link: string): void {
+    this.closedGroups.set(this.toggled(this.closedGroups(), link, this.groupsKey));
   }
 
   constructor() {

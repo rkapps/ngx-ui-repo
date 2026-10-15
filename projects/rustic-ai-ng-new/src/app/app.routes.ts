@@ -29,6 +29,15 @@ export const routes: Routes = [
     ],
   },
   {
+    path: 'projects',
+    canActivate: [authGuard],
+    children: [
+      { path: '', loadComponent: () => import('ngx-common').then(m => m.ProjectsPageComponent) },
+      // A project's files: table, upload, and search.
+      { path: ':id', loadComponent: () => import('ngx-common').then(m => m.ProjectFilesPageComponent) },
+    ],
+  },
+  {
     path: 'analytics',
     canActivate: [authGuard],
     children: [

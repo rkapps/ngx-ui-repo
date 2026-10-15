@@ -89,6 +89,8 @@ import {
   Plus,
   Upload,
   FolderOpen,
+  FileText,
+  Search,
 } from 'lucide-angular';
 import { LucideAngularModule } from 'lucide-angular';
 import { environment } from '../environments/environment';
@@ -179,6 +181,8 @@ const icons = {
   Plus,
   Upload,
   FolderOpen,
+  FileText,
+  Search,
 };
 
 export const appConfig: ApplicationConfig = {
