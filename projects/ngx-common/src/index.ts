@@ -84,12 +84,12 @@ export { AgentsPageComponent } from './lib/ui/agents-page/agents-page.component'
 export { ChatsPageComponent } from './lib/ui/chats-page/chats-page.component';
 export { NewChatComponent } from './lib/ui/new-chat/new-chat.component';
 export { TitleBarComponent } from './lib/ui/title-bar/title-bar.component';
-// App shell (sidebar + title bar + page header) — used by rustic-ai-ng-new; separate from TitleBarComponent.
+// App shell (sidebar + title bar + page header) — used by rustic-ai-ng; separate from TitleBarComponent.
 export { AppShellComponent } from './lib/ui/app-shell/app-shell.component';
 export { ShellSidebarComponent } from './lib/ui/app-shell/shell-sidebar.component';
 export { ShellTitleBarComponent } from './lib/ui/app-shell/shell-title-bar.component';
 export { activeShellNavChild, activeShellNavItem, activeShellNavPath, type ShellNavItem, shellNavTarget } from './lib/ui/app-shell/shell-nav';
-// Tenant admin (rustic-ai-ng-new)
+// Tenant admin (rustic-ai-ng)
 export { InviteService, type CreateInviteRequest, type Invite, type InviteStatus } from './lib/services/invite.service';
 export {
   ProjectService,

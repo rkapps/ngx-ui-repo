@@ -65,6 +65,8 @@ import {
   UserPlus,
   PanelLeftClose,
   PanelLeftOpen,
+  PanelRight,
+  PanelBottom,
   Pin,
   PinOff,
   Shield,
@@ -83,7 +85,12 @@ import {
   GitBranch,
   ScrollText,
   Server,
+  Plug,
   Plus,
+  Upload,
+  FolderOpen,
+  FileText,
+  Search,
 } from 'lucide-angular';
 import { LucideAngularModule } from 'lucide-angular';
 import { environment } from '../environments/environment';
@@ -150,6 +157,8 @@ const icons = {
   UserPlus,
   PanelLeftClose,
   PanelLeftOpen,
+  PanelRight,
+  PanelBottom,
   Pin,
   PinOff,
   Shield,
@@ -168,7 +177,12 @@ const icons = {
   GitBranch,
   ScrollText,
   Server,
+  Plug,
   Plus,
+  Upload,
+  FolderOpen,
+  FileText,
+  Search,
 };
 
 export const appConfig: ApplicationConfig = {

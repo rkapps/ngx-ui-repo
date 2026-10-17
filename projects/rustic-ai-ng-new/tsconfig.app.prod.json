@@ -1,9 +1,0 @@
-{
-  "extends": "./tsconfig.app.json",
-  "compilerOptions": {
-    "paths": {
-      "ngx-twang-ui": ["../../dist/ngx-twang-ui"],
-      "ngx-common": ["../ngx-common/src/index.ts"]
-    }
-  }
-}

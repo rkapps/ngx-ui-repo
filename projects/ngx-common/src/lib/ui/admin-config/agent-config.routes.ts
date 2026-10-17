@@ -4,7 +4,7 @@ import { AdminLogsService, TURN_LOGS } from '../../services/turn-logs.service';
 /**
  * Admin agent-config pages, to mount under `/admin/config` (the pages link to `/admin/config/agents/...`):
  * the Agents table, New / Edit (draft versions, promote, discard), and Test with its execution view.
- * Same pages as `ADMIN_ROUTES`' config section, for apps with their own shell (rustic-ai-ng-new).
+ * Same pages as `ADMIN_ROUTES`' config section, for apps with their own shell (rustic-ai-ng).
  */
 export const AGENT_CONFIG_ROUTES: Routes = [
   { path: 'agents', loadComponent: () => import('./config-agents.component').then(m => m.ConfigAgentsComponent) },

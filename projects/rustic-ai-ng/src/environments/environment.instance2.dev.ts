@@ -14,6 +14,6 @@ export const environment = {
     enableEmail: true,
     enableGoogle: false,
     enableRegistration: true,
-    redirectTo: '/agents',
+    redirectTo: '/home',
   },
 };
