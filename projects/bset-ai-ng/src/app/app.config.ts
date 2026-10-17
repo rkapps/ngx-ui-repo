@@ -1,7 +1,7 @@
 import { ApplicationConfig, importProvidersFrom } from '@angular/core';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
-import { API_BASE_URL, authInterceptor, bsonDateInterceptor, LOGIN_CONFIG } from 'ngx-common';
+import { API_BASE_URL, APP_FEATURES, authInterceptor, bsonDateInterceptor, LOGIN_CONFIG } from 'ngx-common';
 import { initializeApp, provideFirebaseApp } from '@angular/fire/app';
 import { getAuth, provideAuth } from '@angular/fire/auth';
 import {
@@ -77,6 +77,20 @@ import {
   ScrollText,
   Server,
   Plus,
+  Code,
+  GraduationCap,
+  Lightbulb,
+  Pencil,
+  Scale,
+  ArrowRight,
+  UserPlus,
+  PanelRight,
+  PanelBottom,
+  Plug,
+  Upload,
+  FolderOpen,
+  FileText,
+  Search,
 } from 'lucide-angular';
 import { LucideAngularModule } from 'lucide-angular';
 import { environment } from '../environments/environment';
@@ -155,6 +169,20 @@ const icons = {
   ScrollText,
   Server,
   Plus,
+  Code,
+  GraduationCap,
+  Lightbulb,
+  Pencil,
+  Scale,
+  ArrowRight,
+  UserPlus,
+  PanelRight,
+  PanelBottom,
+  Plug,
+  Upload,
+  FolderOpen,
+  FileText,
+  Search,
 };
 
 export const appConfig: ApplicationConfig = {
@@ -166,5 +194,7 @@ export const appConfig: ApplicationConfig = {
     importProvidersFrom(LucideAngularModule.pick(icons)),
     { provide: API_BASE_URL, useValue: environment.apiUrl },
     { provide: LOGIN_CONFIG, useValue: environment.loginConfig },
+    // No Projects in this app.
+    { provide: APP_FEATURES, useValue: { projects: false } },
   ],
 };

@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { AGENT_CONFIG_ROUTES, AnalyticsLogsService, authGuard, type ConfigScope, lastPageRedirect, LOGS_ROUTES, noAuthGuard, roleRedirectGuard, TURN_LOGS } from 'ngx-common';
+import { AGENT_CONFIG_ROUTES, AnalyticsLogsService, authGuard, featureGuard, type ConfigScope, lastPageRedirect, LOGS_ROUTES, noAuthGuard, roleRedirectGuard, TURN_LOGS } from 'ngx-common';
 
 const placeholder = () => import('./pages/placeholder/placeholder.component');
 
@@ -30,7 +30,8 @@ export const routes: Routes = [
   },
   {
     path: 'projects',
-    canActivate: [authGuard],
+    // Off unless the app enables it (APP_FEATURES); then users land on /home.
+    canActivate: [authGuard, featureGuard('projects')],
     children: [
       { path: '', loadComponent: () => import('ngx-common').then(m => m.ProjectsPageComponent) },
       // A project's files: table, upload, and search.

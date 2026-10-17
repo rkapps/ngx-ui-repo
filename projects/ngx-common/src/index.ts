@@ -58,6 +58,7 @@ export { bsonDateInterceptor, normalizeBsonDates } from './lib/http/bson-date.in
 // Auth
 export { AuthService, type AuthUser } from './lib/auth/auth.service';
 export { authGuard, noAuthGuard, roleGuard, roleRedirectGuard } from './lib/auth/auth.guard';
+export { APP_FEATURES, type AppFeatures, featureGuard } from './lib/config/app-features';
 export { authInterceptor, SKIP_AUTH } from './lib/auth/auth.interceptor';
 export { LOGIN_CONFIG, type LoginConfig } from './lib/auth/login.config';
 export { landingPage, lastPageRedirect, saveLastPage } from './lib/auth/landing-page';

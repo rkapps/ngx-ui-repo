@@ -1,6 +1,6 @@
 import { Component, computed, effect, inject } from '@angular/core';
 import { Title } from '@angular/platform-browser';
-import { AppShellComponent, ConversationService, LOGIN_CONFIG, type ShellNavItem, UserService } from 'ngx-common';
+import { APP_FEATURES, AppShellComponent, ConversationService, LOGIN_CONFIG, type ShellNavItem, UserService } from 'ngx-common';
 
 /** How many recent conversations the sidebar lists under Conversations. */
 const RECENT_CONVERSATIONS = 5;
@@ -21,6 +21,8 @@ export class AppComponent {
   // Eagerly constructed so the backend user is fetched from /auth/user on login.
   protected readonly userService = inject(UserService);
   private readonly conversationService = inject(ConversationService);
+  /** Optional areas this app has switched on (APP_FEATURES in app.config). */
+  private readonly features = inject(APP_FEATURES);
 
   /** Conversations group: New, the most recently updated ones, then All. Its icon (collapsed sidebar) opens All. */
   private readonly conversationsNav = computed<ShellNavItem>(() => {
@@ -50,7 +52,7 @@ export class AppComponent {
       { label: 'Home', icon: 'house', link: '/home' },
       this.conversationsNav(),
       // divider: the border below Conversations (Conversations sets the one above it).
-      { label: 'Projects', icon: 'folder-open', link: '/projects', divider: true },
+      ...(this.features.projects ? [{ label: 'Projects', icon: 'folder-open', link: '/projects', divider: true }] : []),
       {
         label: 'Analytics',
         icon: 'chart-bar',
