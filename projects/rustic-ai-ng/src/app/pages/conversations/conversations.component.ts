@@ -41,7 +41,7 @@ const formatWhen = (iso: string | number | null) => (iso ? formatDate(iso, 'MMM 
           [onRowClick]="open"
           initialSortKey="updated"
           initialSortDir="desc"
-          tableMinWidthClass="min-w-[880px]"
+          tableMinWidthClass="min-w-[1350px]"
           emptyMessage="No conversations yet — start one with New conversation."
         />
       }
@@ -68,9 +68,20 @@ export default class ConversationsComponent {
 
   protected readonly columns: TwangTableColumn<Conversation>[] = [
     { id: 'title', header: 'Title', align: 'left', sortable: true, fillRemaining: true, minWidth: '240px', cellTruncate: true, value: c => c.title || 'Untitled' },
-    { id: 'agent', header: 'Agent', align: 'left', sortable: true, width: '180px', cellTruncate: true, value: c => c.agent_id },
-    { id: 'model', header: 'LLM / Model', align: 'left', sortable: true, width: '220px', cellTruncate: true, value: c => [c.llm, c.model].filter(Boolean).join(' / ') },
+    { id: 'agent', header: 'Agent', align: 'left', sortable: true, width: '320px', cellTruncate: true, value: c => c.agent_id },
+    { id: 'llm', header: 'Provider', align: 'left', sortable: true, width: '130px', cellTruncate: true, value: c => c.llm },
+    { id: 'model', header: 'Model', align: 'left', sortable: true, width: '200px', cellTruncate: true, value: c => c.model },
+    { id: 'strategy', header: 'Strategy', align: 'left', sortable: true, width: '120px', cellTruncate: true, value: c => c.strategy },
     { id: 'updated', header: 'Updated', align: 'left', sortable: true, width: '170px', value: c => c.last_updated_at, format: v => formatWhen(v) },
+    {
+      id: 'tokens',
+      header: 'Tokens',
+      align: 'right',
+      sortable: true,
+      width: '110px',
+      value: c => c.usage?.total_tokens ?? null,
+      format: v => (v == null ? '—' : Number(v).toLocaleString('en-US')),
+    },
     { id: 'cost', header: 'Cost', align: 'right', sortable: true, width: '100px', value: c => c.total_tokens_cost, format: v => (v ? `$${Number(v).toFixed(4)}` : '—') },
   ];
 

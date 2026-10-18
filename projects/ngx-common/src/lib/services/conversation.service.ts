@@ -4,6 +4,7 @@ import { Observable, Subject, tap } from 'rxjs';
 import { normalizeBsonDates } from '../http/bson-date.interceptor';
 import { API_BASE_URL } from './api-url.token';
 import { AuthService } from '../auth/auth.service';
+import type { TokenUsage } from '../models/turn-execution';
 
 export type ConversationStrategy = 'stateful' | 'stateless';
 export type HistoryMode = 'full' | 'trimmed' | 'last_n' | 'none';
@@ -41,6 +42,8 @@ export interface Conversation {
   llm: string;
   model: string;
   total_tokens_cost: number;
+  /** Token counts accumulated over the conversation; null/absent until the first turn. */
+  usage?: TokenUsage | null;
   strategy: string;
   stream?: boolean;
   system_prompt?: string;
