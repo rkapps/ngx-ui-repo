@@ -34,16 +34,21 @@ const FIREBASE_ERRORS: Record<string, string> = {
           <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-600 text-xl font-bold text-white shadow-sm">
             {{ config.appName?.[0]?.toUpperCase() ?? 'A' }}
           </div>
-          <h1 class="text-xl font-bold text-text">
-            {{ registerMode() ? 'Create an account' : 'Sign in to ' + (config.appName ?? 'App') }}
-          </h1>
-          <p class="text-xs text-text-muted">
-            {{ registerMode() ? 'Fill in the details below to get started' : 'Enter your credentials to continue' }}
-          </p>
+          @if (auth.pendingVerification() !== null) {
+            <h1 class="text-xl font-bold text-text">Verify your email</h1>
+            <p class="text-xs text-text-muted">One more step before you can sign in</p>
+          } @else {
+            <h1 class="text-xl font-bold text-text">
+              {{ registerMode() ? 'Create an account' : 'Sign in to ' + (config.appName ?? 'App') }}
+            </h1>
+            <p class="text-xs text-text-muted">
+              {{ registerMode() ? 'Fill in the details below to get started' : 'Enter your credentials to continue' }}
+            </p>
+          }
         </div>
 
         <!-- Google sign-in -->
-        @if (config.enableGoogle !== false) {
+        @if (config.enableGoogle !== false && auth.pendingVerification() === null) {
           <div class="mb-5 flex flex-col gap-3">
             <twang-button variant="muted" size="md" [fluid]="true" [loading]="googleLoading()" (buttonClick)="signInWithGoogle()">
               <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -73,8 +78,24 @@ const FIREBASE_ERRORS: Record<string, string> = {
           </div>
         }
 
-        <!-- Email / password -->
-        @if (config.enableEmail !== false) {
+        <!-- Signed in but unverified: "check your email" until the link is clicked. -->
+        @if (auth.pendingVerification(); as pendingEmail) {
+          <div class="flex flex-col items-center gap-4 text-center">
+            <lucide-icon name="mail" [size]="32" class="text-primary-600" />
+            <p class="text-sm text-text">We sent a verification link to <strong>{{ pendingEmail }}</strong>.</p>
+            <p class="text-xs text-text-muted">Click the link in that email, then come back and continue.</p>
+            @if (verificationSent()) {
+              <p class="text-xs text-success-600">A new link is on its way.</p>
+            }
+            <twang-button variant="primary" size="md" icon="circle-check" label="I've verified my email"
+              [fluid]="true" [loading]="loading()" (buttonClick)="continueVerified()" />
+            <div class="flex flex-col items-center gap-1">
+              <button type="button" class="text-xs text-primary-600 underline" (click)="resendVerification()">Resend email</button>
+              <button type="button" class="text-xs text-text-muted underline" (click)="useDifferentAccount()">Use a different account</button>
+            </div>
+          </div>
+        } @else if (config.enableEmail !== false) {
+          <!-- Email / password -->
           @if (resetSent()) {
             <div class="flex flex-col items-center gap-3 text-center">
               <lucide-icon name="circle-check" [size]="32" class="text-success-600" />
@@ -129,7 +150,7 @@ const FIREBASE_ERRORS: Record<string, string> = {
   `,
 })
 export class LoginComponent {
-  private readonly auth = inject(AuthService);
+  protected readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   protected readonly config = inject(LOGIN_CONFIG);
 
@@ -142,6 +163,7 @@ export class LoginComponent {
   protected readonly forgotMode = signal(false);
   protected readonly registerMode = signal(false);
   protected readonly resetSent = signal(false);
+  protected readonly verificationSent = signal(false);
 
   protected async submit(): Promise<void> {
     this.error.set('');
@@ -151,8 +173,10 @@ export class LoginComponent {
     }
     this.loading.set(true);
     try {
-      await this.auth.login(this.email(), this.password());
-      this.router.navigateByUrl(landingPage(this.config, this.router));
+      // Unverified: the verification step shows instead and the email has been sent.
+      if (await this.auth.login(this.email(), this.password())) {
+        this.router.navigateByUrl(landingPage(this.config, this.router));
+      }
     } catch (err) {
       this.error.set(this._errorMessage(err));
     } finally {
@@ -172,8 +196,8 @@ export class LoginComponent {
     }
     this.loading.set(true);
     try {
+      // The new account starts unverified, so this lands on the verification step.
       await this.auth.register(this.email(), this.password());
-      this.router.navigateByUrl(landingPage(this.config, this.router));
     } catch (err) {
       this.error.set(this._errorMessage(err));
     } finally {
@@ -213,6 +237,41 @@ export class LoginComponent {
     } finally {
       this.googleLoading.set(false);
     }
+  }
+
+  protected async continueVerified(): Promise<void> {
+    this.error.set('');
+    this.loading.set(true);
+    try {
+      if (await this.auth.checkEmailVerified()) {
+        this.verificationSent.set(false);
+        this.router.navigateByUrl(landingPage(this.config, this.router));
+      } else {
+        this.error.set("Your email isn't verified yet. Click the link in the email, then try again.");
+      }
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  protected async resendVerification(): Promise<void> {
+    this.error.set('');
+    this.verificationSent.set(false);
+    try {
+      await this.auth.sendVerificationEmail();
+      this.verificationSent.set(true);
+    } catch (err) {
+      this.error.set(this._errorMessage(err));
+    }
+  }
+
+  protected async useDifferentAccount(): Promise<void> {
+    this.error.set('');
+    this.verificationSent.set(false);
+    this.password.set('');
+    this.confirmPassword.set('');
+    this.registerMode.set(false);
+    await this.auth.logout();
   }
 
   private _errorMessage(err: unknown): string {

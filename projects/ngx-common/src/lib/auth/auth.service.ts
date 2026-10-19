@@ -3,6 +3,7 @@ import {
   Auth,
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
+  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -28,6 +29,12 @@ export class AuthService {
   readonly ready = signal(false);
   readonly isLoggedIn = signal(false);
   readonly currentUser = signal<AuthUser | null>(null);
+  /**
+   * Email of a Firebase user who is signed in but hasn't verified their email yet, or null. Such a
+   * user is kept logged out (`isLoggedIn` false) so the backend never sees an unverified token; the
+   * login page shows the "check your email" step until `checkEmailVerified()` succeeds.
+   */
+  readonly pendingVerification = signal<string | null>(null);
 
   private _initialized = false;
   // Last successfully-issued ID token. A background refresh can reject (e.g. a transient
@@ -46,7 +53,10 @@ export class AuthService {
       }
     }, 8000);
 
-    this.firebaseAuth.onAuthStateChanged((user) => {
+    this.firebaseAuth.onAuthStateChanged(async (user) => {
+      // A restored session can predate the user clicking the verification link (e.g. the link
+      // opened this tab), so re-check an unverified user against Firebase before deciding.
+      if (user && !user.emailVerified) await this._refreshVerified(user);
       clearTimeout(unblock);
       // Always update on the first callback (initial session load) or when Firebase
       // confirms a user. After init, ignore null callbacks — those are background
@@ -54,8 +64,7 @@ export class AuthService {
       // Explicit sign-outs are handled synchronously in logout() before signOut() resolves.
       if (!this._initialized || user !== null) {
         this._initialized = true;
-        this.isLoggedIn.set(!!user);
-        this.currentUser.set(user ? this._mapUser(user) : null);
+        this._setUser(user);
       }
       this.ready.set(true);
       this._ready.next();
@@ -83,12 +92,43 @@ export class AuthService {
     return this.cachedToken;
   }
 
-  async login(email: string, password: string): Promise<void> {
-    await signInWithEmailAndPassword(this.firebaseAuth, email, password);
+  /**
+   * Signs in with email and password. Returns false when the email isn't verified yet: the user is
+   * then pending verification and a fresh verification email has been sent.
+   */
+  async login(email: string, password: string): Promise<boolean> {
+    const { user } = await signInWithEmailAndPassword(this.firebaseAuth, email, password);
+    this._setUser(user);
+    if (user.emailVerified) return true;
+    await this.sendVerificationEmail();
+    return false;
   }
 
+  /** Creates the account and sends its verification email; the user is pending verification. */
   async register(email: string, password: string): Promise<void> {
-    await createUserWithEmailAndPassword(this.firebaseAuth, email, password);
+    const { user } = await createUserWithEmailAndPassword(this.firebaseAuth, email, password);
+    this._setUser(user);
+    await this.sendVerificationEmail();
+  }
+
+  /** Sends (or re-sends) the verification email; its link returns the user to /login. */
+  async sendVerificationEmail(): Promise<void> {
+    const user = this.firebaseAuth.currentUser;
+    if (!user) return;
+    await sendEmailVerification(user, { url: `${location.origin}/login` });
+  }
+
+  /**
+   * Re-checks the pending user with Firebase after they clicked the link. When verified, forces a
+   * new ID token (the old one still says `email_verified: false`) and signs them in; returns
+   * whether they're verified.
+   */
+  async checkEmailVerified(): Promise<boolean> {
+    const user = this.firebaseAuth.currentUser;
+    if (!user) return false;
+    if (!user.emailVerified && !(await this._refreshVerified(user))) return false;
+    this._setUser(user);
+    return true;
   }
 
   async sendPasswordReset(email: string): Promise<void> {
@@ -106,9 +146,30 @@ export class AuthService {
     // as an intentional logout rather than a background token-refresh failure.
     this.isLoggedIn.set(false);
     this.currentUser.set(null);
+    this.pendingVerification.set(null);
     this._initialized = false;
     this.cachedToken = null;
     await signOut(this.firebaseAuth);
+  }
+
+  /** Signed in only once the email is verified; an unverified user is pending verification. */
+  private _setUser(user: User | null): void {
+    const verified = !!user?.emailVerified;
+    this.isLoggedIn.set(verified);
+    this.currentUser.set(verified ? this._mapUser(user!) : null);
+    this.pendingVerification.set(user && !verified ? user.email ?? '' : null);
+  }
+
+  /** Reloads the user from Firebase; if now verified, fetches a token that says so. */
+  private async _refreshVerified(user: User): Promise<boolean> {
+    try {
+      await user.reload();
+      if (!user.emailVerified) return false;
+      this.cachedToken = await user.getIdToken(true);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private _mapUser(user: User): AuthUser {
