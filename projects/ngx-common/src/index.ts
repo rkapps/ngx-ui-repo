@@ -8,6 +8,7 @@ export {
   type ConversationStrategy,
   type HistoryMode,
   type Turn,
+  type TurnExport,
   type CompletionChunkResponse,
 } from './lib/services/conversation.service';
 export {
@@ -54,6 +55,7 @@ export * from './lib/models/turn-execution';
 export { HttpLoadingService } from './lib/http/http-loading.service';
 export { httpLoadingInterceptor } from './lib/http/http-loading.interceptor';
 export { bsonDateInterceptor, normalizeBsonDates } from './lib/http/bson-date.interceptor';
+export { postEventStream, saveAttachment, type StreamAttachment, type StreamEvent } from './lib/http/event-stream';
 
 // Auth
 export { AuthService, type AuthUser } from './lib/auth/auth.service';

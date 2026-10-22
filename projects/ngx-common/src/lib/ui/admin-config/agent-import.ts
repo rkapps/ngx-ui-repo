@@ -45,8 +45,9 @@ function normalize(path: string): string {
  * way the backend's `load_agents_config` does at startup, with every path relative to the folder:
  * reads `agents.json` (at the folder root, else the shallowest one); `description` — a file's
  * contents if that file exists, else kept as written; `system_prompt` — must be a file, replaced by
- * its contents; `response_format_schema_path` — when set and the file exists, parsed into
- * `response_format_schema`. Returns an error message instead when something can't be resolved.
+ * its contents; a legacy `response_format_schema_path` — when set and the file exists, parsed into
+ * `response_format_schema` (the path itself is dropped; agents only carry the inline schema).
+ * Returns an error message instead when something can't be resolved.
  */
 export async function resolveAgentsFolder(files: readonly File[]): Promise<AgentConfig[] | string> {
   // webkitRelativePath is "<picked folder>/<path inside it>"; key files by the path inside it.
@@ -71,7 +72,8 @@ export async function resolveAgentsFolder(files: readonly File[]): Promise<Agent
 
   const resolved: AgentConfig[] = [];
   for (const agent of parsed) {
-    const next = { ...agent };
+    const { response_format_schema_path: schemaPath, ...rest } = agent as AgentConfig & { response_format_schema_path?: string };
+    const next: AgentConfig = rest;
 
     const description = await read(agent.description ?? '');
     if (description !== null) next.description = description;
@@ -82,13 +84,13 @@ export async function resolveAgentsFolder(files: readonly File[]): Promise<Agent
     }
     next.system_prompt = prompt;
 
-    if (agent.response_format_schema_path) {
-      const schema = await read(agent.response_format_schema_path);
+    if (schemaPath) {
+      const schema = await read(schemaPath);
       if (schema !== null) {
         try {
           next.response_format_schema = JSON.parse(schema);
         } catch {
-          return `Agent "${agent.id}": response format schema "${agent.response_format_schema_path}" is not valid JSON.`;
+          return `Agent "${agent.id}": response format schema "${schemaPath}" is not valid JSON.`;
         }
       }
     }

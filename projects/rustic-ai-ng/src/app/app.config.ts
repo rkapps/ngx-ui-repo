@@ -89,6 +89,7 @@ import {
   Plus,
   Upload,
   FolderOpen,
+  Download,
   FileText,
   Search,
 } from 'lucide-angular';
@@ -181,6 +182,7 @@ const icons = {
   Plus,
   Upload,
   FolderOpen,
+  Download,
   FileText,
   Search,
 };

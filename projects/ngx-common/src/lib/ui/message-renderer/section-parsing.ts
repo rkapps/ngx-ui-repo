@@ -43,7 +43,8 @@ export function extractCompleteSections(raw: string): string | null {
   if (!sections.length) return null;
 
   // Buffer the last group: hold back any trailing sections that share the same group
-  // name, since more sections with that group may still be streaming in.
+  // name, since more sections with that group may still be streaming in — unless that's every
+  // section so far (e.g. a report whose sections all share one group), which would show nothing.
   type WithGroup = { group?: string };
   const lastGroup = (sections[sections.length - 1] as WithGroup).group;
   if (lastGroup) {
@@ -51,8 +52,8 @@ export function extractCompleteSections(raw: string): string | null {
     while (groupStart > 0 && (sections[groupStart - 1] as WithGroup).group === lastGroup) {
       groupStart--;
     }
-    const display = sections.slice(0, groupStart);
-    return display.length ? JSON.stringify({ sections: display }) : null;
+    const display = groupStart > 0 ? sections.slice(0, groupStart) : sections;
+    return JSON.stringify({ sections: display });
   }
 
   return JSON.stringify({ sections });
@@ -84,6 +85,16 @@ export function extractSuggestedPrompts(content: string): string[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * What to show of a response that's still streaming in: text as it arrives; JSON only as its
+ * finished sections — never the raw JSON, so the keys before `sections` (title, description…)
+ * don't flash up first. JSON without sections shows once the response is complete.
+ */
+export function streamingDisplay(raw: string): string {
+  if (!looksLikeSectionsJson(raw)) return raw;
+  return extractCompleteSections(raw) ?? '';
 }
 
 /** True when `content` looks like a structured `{ "sections": [...] }` JSON payload (optionally markdown-fenced). */

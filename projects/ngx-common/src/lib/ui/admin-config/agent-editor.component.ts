@@ -1,4 +1,4 @@
-import { Component, computed, DestroyRef, effect, inject, signal, type TemplateRef, viewChild } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, linkedSignal, signal, type TemplateRef, viewChild } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { DatePipe, DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -90,13 +90,12 @@ function blankAgent(): AgentConfig {
     mcp_tools: [],
     conversation: null,
     pipeline: null,
-    response_format_schema_path: '',
     response_format_schema: null,
   };
 }
 
 function blankPipeline(): PipelineConfig {
-  return { type: 'deterministic', available_agents: [], stages: [], followup_agent: null, persisted_blackboard_keys: null };
+  return { type: 'deterministic', available_agents: [], stages: [] };
 }
 
 /** The backend's error message (handlers return plain-text bodies), else `fallback`. */
@@ -104,6 +103,19 @@ function errorText(err: unknown, fallback: string): string {
   const body = (err as { error?: unknown })?.error;
   return typeof body === 'string' && body.trim() ? body : fallback;
 }
+
+/** The schema in the Response format box: null when empty, undefined unless it's a JSON object. */
+function parseSchema(text: string): unknown {
+  if (!text.trim()) return null;
+  try {
+    const value: unknown = JSON.parse(text);
+    return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const sameJson = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
 /** The backend runs any `pipeline.type` other than "deterministic" as dynamic. */
 const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?.type === 'deterministic' ? 'deterministic' : 'dynamic');
@@ -155,6 +167,8 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
                   <span class="text-red-600">{{ saveError() }}</span>
                 } @else if (isNew() && !idValid()) {
                   Enter an ID (letters, numbers, - or _) to create the agent.
+                } @else if (schemaError()) {
+                  Fix the response format JSON to save.
                 } @else {
                   Unsaved changes
                 }
@@ -165,7 +179,7 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
                 size="sm"
                 [label]="isNew() ? 'Create agent' : 'Save draft'"
                 [loading]="saving()"
-                [disabled]="saving() || (isNew() && !idValid())"
+                [disabled]="saving() || (isNew() && !idValid()) || !!schemaError()"
                 (buttonClick)="save()"
               />
             </div>
@@ -222,43 +236,51 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
                     <label class="text-xs font-medium text-text-muted">Name</label>
                     <twang-input placeholder="Display name" [ngModel]="draft().name" (ngModelChange)="patch({ name: $event })" />
                   </div>
-                  <div class="flex flex-col gap-1.5">
-                    <label class="text-xs font-medium text-text-muted">Type</label>
-                    @if (isNew()) {
-                      <twang-dropdown size="sm" [options]="executionOptions" [value]="draft().execution" (valueChange)="setExecution($any($event))" />
-                    } @else {
-                      <span class="py-2 text-sm">{{ executionLabel(draft().execution) }}</span>
-                    }
+                  <!-- Type | Enabled + Standalone -->
+                  <div class="grid grid-cols-2 gap-4">
+                    <div class="flex min-w-0 flex-col gap-1.5">
+                      <label class="text-xs font-medium text-text-muted">Type</label>
+                      @if (isNew()) {
+                        <twang-dropdown [options]="executionOptions" [value]="draft().execution" (valueChange)="setExecution($any($event))" />
+                      } @else {
+                        <span class="py-2 text-sm">{{ executionLabel(draft().execution) }}</span>
+                      }
+                    </div>
+                    <div class="flex flex-col justify-end gap-2">
+                      <label class="flex cursor-pointer items-center gap-2 text-sm">
+                        <input type="checkbox" class="accent-primary-600" [checked]="draft().enabled" (change)="patch({ enabled: !draft().enabled })" />
+                        Enabled
+                      </label>
+                      <label class="flex cursor-pointer items-center gap-2 text-sm" title="Appears in the public catalog and can be started directly">
+                        <input type="checkbox" class="accent-primary-600" [checked]="draft().standalone" (change)="patch({ standalone: !draft().standalone })" />
+                        Standalone (public)
+                      </label>
+                    </div>
                   </div>
-                  <div class="flex flex-col gap-1.5">
-                    <label class="text-xs font-medium text-text-muted">Origin</label>
-                    @if (isSuperAdmin()) {
-                      <twang-dropdown size="sm" [options]="originOptions" [value]="draft().origin" (valueChange)="patch({ origin: $any($event) })" />
-                    } @else {
-                      <span class="py-2 text-sm" title="Only a SuperAdmin can change an agent's origin">{{ originLabel(draft().origin) }}</span>
-                    }
+                  <!-- Origin: same width as Type above -->
+                  <div class="grid grid-cols-2 gap-4">
+                    <div class="flex min-w-0 flex-col gap-1.5">
+                      <label class="text-xs font-medium text-text-muted">Origin</label>
+                      @if (isSuperAdmin()) {
+                        <twang-dropdown [options]="originOptions" [value]="draft().origin" (valueChange)="patch({ origin: $any($event) })" />
+                      } @else {
+                        <span class="py-2 text-sm" title="Only a SuperAdmin can change an agent's origin">{{ originLabel(draft().origin) }}</span>
+                      }
+                    </div>
                   </div>
-                  <label class="flex cursor-pointer items-center gap-2 text-sm">
-                    <input type="checkbox" class="accent-primary-600" [checked]="draft().enabled" (change)="patch({ enabled: !draft().enabled })" />
-                    Enabled
-                  </label>
-                  <label class="flex cursor-pointer items-center gap-2 text-sm" title="Appears in the public catalog and can be started directly">
-                    <input type="checkbox" class="accent-primary-600" [checked]="draft().standalone" (change)="patch({ standalone: !draft().standalone })" />
-                    Standalone (public)
-                  </label>
 
                   <!-- LLM -->
                   <div class="mt-1 flex flex-col gap-4 border-t border-border pt-4">
                     <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">LLM</span>
                     <div class="flex flex-col gap-1.5">
                       <label class="text-xs font-medium text-text-muted">Provider</label>
-                      <twang-dropdown size="sm" [options]="providerOptions()" [value]="llm().llm ?? ''" (valueChange)="setProvider($event)" />
+                      <twang-dropdown [options]="providerOptions()" [value]="llm().llm ?? ''" (valueChange)="setProvider($event)" />
                     </div>
                     <div class="flex flex-col gap-1.5">
                       <label class="text-xs font-medium text-text-muted">Model</label>
                       <twang-dropdown
-                        size="sm"
                         [options]="modelOptions()"
+                        [placeholder]="llm().llm ? 'Select a model' : 'Server default'"
                         [value]="llm().model ?? ''"
                         [disabled]="!llm().llm"
                         (valueChange)="setLlm({ model: $event || null })"
@@ -266,7 +288,7 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
                     </div>
                     <div class="flex flex-col gap-1.5">
                       <label class="text-xs font-medium text-text-muted">Preset</label>
-                      <twang-dropdown size="sm" [options]="presetOptions" [value]="llm().preset ?? ''" (valueChange)="setLlm({ preset: $any($event) || null })" />
+                      <twang-dropdown [options]="presetOptions" [value]="llm().preset ?? ''" (valueChange)="setLlm({ preset: $any($event) || null })" />
                     </div>
                     <p class="text-xs text-text-muted">
                       Unset fields fall back to the caller's choice, then the server default.
@@ -353,8 +375,8 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
                   </span>
                 </h2>
 
-                <div class="flex max-h-[45%] shrink-0 flex-col gap-4 overflow-y-auto border-b border-border p-4 text-sm">
-                  @if (mode() === 'deterministic') {
+                @if (mode() === 'deterministic') {
+                  <div class="flex max-h-[45%] shrink-0 flex-col gap-4 overflow-y-auto border-b border-border p-4 text-sm">
                     <div class="flex flex-col gap-2">
                       <div class="flex items-center gap-2">
                         <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Stages</span>
@@ -388,28 +410,8 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
                         }
                       </ol>
                     </div>
-                  } @else {
-                    <div class="flex max-w-md flex-col gap-1.5">
-                      <label class="text-xs font-medium text-text-muted">Follow-up agent</label>
-                      <twang-dropdown
-                        size="sm"
-                        [options]="followupOptions()"
-                        [value]="pipeline()!.followup_agent ?? ''"
-                        (valueChange)="updatePipeline({ followup_agent: $event || null })"
-                      />
-                      <span class="text-xs text-text-muted">Handles follow-up turns after the pipeline completes.</span>
-                    </div>
-                  }
-                  <div class="flex max-w-xl flex-col gap-1.5">
-                    <label class="text-xs font-medium text-text-muted">Persisted blackboard keys</label>
-                    <twang-input
-                      placeholder="Comma-separated, e.g. symbols, fiscal_context"
-                      [mono]="true"
-                      [ngModel]="persistedKeysText()"
-                      (ngModelChange)="setPersistedKeys($event)"
-                    />
                   </div>
-                </div>
+                }
 
                 @if (mode() === 'deterministic') {
                   @if (selectedStageConfig(); as stage) {
@@ -505,8 +507,23 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
           <!-- Response format -->
           @if (current() === 'sec-response') {
             <section id="sec-response" class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
-              <h2 class="shrink-0 border-b border-border px-4 py-3 text-sm font-semibold text-primary-600">Response format</h2>
-              <p class="p-4 text-sm text-text-muted">Schema path or inline JSON schema.</p>
+              <h2 class="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3 text-sm font-semibold text-primary-600">
+                Response format
+                <span class="ml-auto text-xs font-normal" [class]="schemaError() ? 'text-red-600' : 'text-text-muted'">
+                  {{ schemaError() ?? (draft().response_format_schema === null ? 'None — free-form text' : 'JSON schema') }}
+                </span>
+              </h2>
+              <div class="flex min-h-0 flex-1 flex-col p-4">
+                <textarea
+                  class="min-h-48 w-full flex-1 resize-none rounded-lg border bg-white px-3 py-2 font-mono text-xs leading-relaxed text-text placeholder:text-text-muted outline-none transition-shadow focus:ring-2"
+                  [class]="schemaError() ? 'border-red-400 focus:border-red-400 focus:ring-red-400/20' : 'border-border focus:border-primary-400 focus:ring-primary-400/20'"
+                  placeholder="Paste a JSON schema for the agent's response; leave empty for free-form text"
+                  spellcheck="false"
+                  [value]="schemaText()"
+                  (input)="setSchemaText($any($event.target).value)"
+                  (blur)="formatSchema()"
+                ></textarea>
+              </div>
             </section>
           }
 
@@ -575,14 +592,15 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
 
     <!-- Sub-agent picker: ordered selection (left) | live agents of any type (right). target = stage or available. -->
     <ng-template #subAgentPicker let-target let-label="label">
-      <div class="grid min-h-0 flex-1 md:grid-cols-2">
-        <div class="flex min-h-0 flex-col border-border md:border-r">
+      <!-- Selected (left) and all agents (right), as two cards -->
+      <div class="grid min-h-0 flex-1 gap-4 p-4 md:grid-cols-2">
+        <div class="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border">
           <div class="shrink-0 border-b border-border bg-gray-50 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
             {{ label }} · {{ refs(target).length }}
           </div>
           <ol class="min-h-0 flex-1 overflow-y-auto">
             @for (ref of refs(target); track ref.id; let j = $index; let first = $first; let last = $last) {
-              <li class="flex items-center gap-2 border-b border-border px-4 py-2">
+              <li class="flex items-center gap-2 border-b border-border px-4 py-2 last:border-b-0">
                 <span class="w-5 shrink-0 text-right text-xs tabular-nums text-text-muted">{{ j + 1 }}.</span>
                 <div class="min-w-0 flex-1">
                   <div class="truncate text-sm">{{ agentName(ref.id) }}</div>
@@ -600,13 +618,13 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
             }
           </ol>
         </div>
-        <div class="flex min-h-0 flex-col">
+        <div class="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border">
           <div class="shrink-0 border-b border-border bg-gray-50 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
             Agents
           </div>
           <ul class="min-h-0 flex-1 overflow-y-auto">
             @for (c of subAgentChoices(); track c.id) {
-              <li>
+              <li class="[&:last-child>label]:border-b-0">
                 <label class="flex cursor-pointer items-center gap-3 border-b border-border px-4 py-2 hover:bg-surface-muted">
                   <input type="checkbox" class="accent-primary-600" [checked]="hasRef(target, c.id)" (change)="toggleRef(target, c.id)" />
                   <div class="min-w-0 flex-1">
@@ -616,13 +634,16 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
                   @if (c.execution !== 'pipeline_agent') {
                     <span class="shrink-0 rounded bg-primary-50 px-1.5 py-0.5 text-[10px] uppercase text-primary-700">{{ executionLabel(c.execution) }}</span>
                   }
+                  @if (c.draftOnly) {
+                    <span class="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] uppercase text-amber-700" title="Not promoted yet — has no live version">draft</span>
+                  }
                   @if (!c.enabled) {
                     <span class="shrink-0 rounded bg-surface-muted px-1.5 py-0.5 text-[10px] uppercase text-text-muted">disabled</span>
                   }
                 </label>
               </li>
             } @empty {
-              <li class="px-4 py-3 text-sm text-text-muted">{{ agentsLoaded() ? 'No live agents yet — create and promote one first.' : 'Loading agents…' }}</li>
+              <li class="px-4 py-3 text-sm text-text-muted">{{ agentsLoaded() ? 'No other agents yet — create one first.' : 'Loading agents…' }}</li>
             }
           </ul>
         </div>
@@ -760,27 +781,31 @@ export class AgentEditorComponent {
     withCurrent(
       [
         SERVER_DEFAULT,
-        ...[...this.providers()]
-          .sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.llm.localeCompare(b.llm))
+        // Enabled providers only, plus the agent's current one if it has since been disabled.
+        ...this.providers()
+          .filter(p => p.enabled || p.id === this.llm().llm)
+          .sort((a, b) => a.llm.localeCompare(b.llm))
           .map(p => ({ value: p.id, label: p.enabled ? p.llm : `${p.llm} (disabled)` })),
       ],
       this.llm().llm,
     ),
   );
 
-  /** The selected provider's models: default first, then enabled, then disabled. */
+  /**
+   * The selected provider's enabled models, default (marked `*`) first — plus the agent's current
+   * model if it has since been disabled.
+   */
   protected readonly modelOptions = computed<TwangDropdownOption[]>(() => {
     const provider = this.providers().find(p => p.id === this.llm().llm);
     const rank = (id: string, enabled: boolean) => (id === provider?.default_model ? 0 : enabled ? 1 : 2);
-    const models = [...(provider?.models ?? [])].sort((a, b) => rank(a.id, a.enabled) - rank(b.id, b.enabled) || a.id.localeCompare(b.id));
+    const models = (provider?.models ?? [])
+      .filter(m => m.enabled || m.id === this.llm().model)
+      .sort((a, b) => rank(a.id, a.enabled) - rank(b.id, b.enabled) || a.id.localeCompare(b.id));
     return withCurrent(
-      [
-        { value: '', label: provider ? `Provider default (${provider.default_model})` : 'Server default' },
-        ...models.map(m => ({
-          value: m.id,
-          label: m.id + (m.id === provider?.default_model ? ' · default' : '') + (m.enabled ? '' : ' (disabled)'),
-        })),
-      ],
+      models.map(m => ({
+        value: m.id,
+        label: m.id + (m.id === provider?.default_model ? ' *' : '') + (m.enabled ? '' : ' (disabled)'),
+      })),
       this.llm().model,
     );
   });
@@ -837,45 +862,66 @@ export class AgentEditorComponent {
   private readonly agentList = signal<AgentConfigResponse[]>([]);
   protected readonly agentsLoaded = signal(false);
 
-  /** Sub-agent candidates: live agents of any type (promoted at least once), never this agent itself. */
+  /**
+   * Sub-agent candidates: agents of any type, never this agent itself. Draft-only ones (never
+   * promoted) can be picked — the Test page runs their draft — but are flagged until promoted.
+   */
   protected readonly subAgentChoices = computed(() =>
     this.agentList()
-      .filter(r => r.status !== 'draft' && r.config.id !== this.draft().id)
-      .map(r => ({ id: r.config.id, name: r.config.name, enabled: r.config.enabled, execution: r.config.execution }))
+      .filter(r => r.config.id !== this.draft().id)
+      .map(r => ({ id: r.config.id, name: r.config.name, enabled: r.config.enabled, execution: r.config.execution, draftOnly: r.status === 'draft' }))
       .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id)),
   );
-  private readonly choiceIds = computed(() => new Set(this.subAgentChoices().map(c => c.id)));
   private readonly agentNames = computed(() => new Map(this.agentList().map(r => [r.config.id, r.config.name])));
-
-  protected readonly followupOptions = computed<TwangDropdownOption[]>(() =>
-    withCurrent(
-      [{ value: '', label: 'None' }, ...this.subAgentChoices().map(c => ({ value: c.id, label: `${c.name || c.id} (${c.id})` }))],
-      this.pipeline()?.followup_agent,
-    ),
-  );
 
   /** Stage shown below the stage list (clamped, since stages can be removed). */
   protected readonly selectedStage = signal(0);
   protected readonly stageIndex = computed(() => Math.min(this.selectedStage(), Math.max(0, (this.pipeline()?.stages.length ?? 1) - 1)));
   protected readonly selectedStageConfig = computed(() => this.pipeline()?.stages[this.stageIndex()] ?? null);
 
-  protected readonly persistedKeysText = computed(() => (this.pipeline()?.persisted_blackboard_keys ?? []).join(', '));
-
   protected readonly agentName = (id: string) => this.agentNames().get(id) || id;
-  protected readonly isChoice = (id: string) => this.choiceIds().has(id);
   private readonly agentsById = computed(() => new Map(this.agentList().map(r => [r.config.id, r])));
 
-  /** Why a selected sub-agent isn't a valid choice: unknown id, itself, or draft-only. */
+  /** What's wrong with a selected sub-agent: unknown id, itself, or draft-only (a warning). */
   protected readonly refIssue = (id: string): { label: string; title: string; cls: string } | null => {
-    if (!this.agentsLoaded() || this.isChoice(id)) return null;
+    if (!this.agentsLoaded()) return null;
     const r = this.agentsById().get(id);
     if (!r) return { label: 'missing', title: 'No agent with this id', cls: 'bg-red-50 text-red-700' };
     if (r.config.id === this.draft().id) return { label: 'self', title: 'A pipeline cannot include itself', cls: 'bg-red-50 text-red-700' };
+    if (r.status !== 'draft') return null;
     return { label: 'draft only', title: 'Not promoted yet — has no live version', cls: 'bg-amber-50 text-amber-700' };
   };
 
     // ── System prompt ──
   /** Rough token estimate (~4 chars/token) — just a size hint. */
+  // ── Response format ──
+  /**
+   * The schema textarea's text. Follows the draft (load, discard, viewing a version) but keeps what
+   * was typed while it still parses to the same schema, so typing isn't reformatted under the cursor.
+   */
+  protected readonly schemaText = linkedSignal<unknown, string>({
+    source: () => this.draft().response_format_schema,
+    computation: (schema, prev) =>
+      prev && sameJson(parseSchema(prev.value), schema) ? prev.value : schema == null ? '' : JSON.stringify(schema, null, 2),
+  });
+  /** Why the text isn't a usable schema; while set, the draft keeps the last valid one and Save is off. */
+  protected readonly schemaError = computed(() => {
+    const parsed = parseSchema(this.schemaText());
+    return parsed === undefined ? 'Invalid JSON — must be an object' : null;
+  });
+
+  protected setSchemaText(text: string): void {
+    this.schemaText.set(text);
+    const schema = parseSchema(text);
+    if (schema !== undefined) this.patch({ response_format_schema: schema });
+  }
+
+  /** Pretty-prints valid JSON when leaving the box (pastes are often minified). */
+  protected formatSchema(): void {
+    const schema = parseSchema(this.schemaText());
+    if (schema !== undefined) this.schemaText.set(schema === null ? '' : JSON.stringify(schema, null, 2));
+  }
+
   protected readonly promptTokens = computed(() => Math.ceil(this.draft().system_prompt.length / 4));
 
   /** Section tabs; pipelines edit their stages / available agents inside the Pipeline tab. */
@@ -1047,11 +1093,6 @@ export class AgentEditorComponent {
     const stages = this.pipeline()?.stages ?? [];
     this.updatePipeline({ stages: moved(stages, index, delta) });
     if (this.selectedStage() === index) this.selectedStage.set(Math.max(0, Math.min(stages.length - 1, index + delta)));
-  }
-
-  protected setPersistedKeys(text: string): void {
-    const keys = text.split(',').map(k => k.trim()).filter(Boolean);
-    this.updatePipeline({ persisted_blackboard_keys: keys.length ? keys : null });
   }
 
   // Sub-agent references for a stage or the dynamic pipeline's available agents.

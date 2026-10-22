@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
-import { postEventStream } from '../http/event-stream';
+import { postEventStream, type StreamEvent } from '../http/event-stream';
 import type { TurnResponse } from '../models/turn-execution';
 import { API_BASE_URL } from './api-url.token';
 import type { ChatTemplate } from './chat-template.service';
@@ -43,8 +43,6 @@ export interface PipelineConfig {
   type: string;
   available_agents: AvailableAgent[];
   stages: PipelineStage[];
-  followup_agent: string | null;
-  persisted_blackboard_keys: string[] | null;
 }
 
 export interface AgentConversationConfig {
@@ -72,7 +70,6 @@ export interface AgentConfig {
   mcp_tools: string[];
   conversation: AgentConversationConfig | null;
   pipeline: PipelineConfig | null;
-  response_format_schema_path: string;
   response_format_schema: unknown | null;
 }
 
@@ -220,8 +217,8 @@ export class AdminConfigService {
   }
 
   /** Test run — `POST /admin/agents/test`, streamed like a chat turn; nothing is saved. Unsubscribe to stop. */
-  testAgent(request: AgentTestRequest): Observable<AgentTestChunk> {
-    return postEventStream<AgentTestChunk>(`${this.base}/admin/agents/test`, request, () => this.auth.getIdToken());
+  testAgent(request: AgentTestRequest): Observable<StreamEvent<AgentTestChunk>> {
+    return postEventStream<AgentTestChunk>(`${this.base}/admin/agents/test`, request, () => this.auth.getIdToken(), this.base);
   }
 
   /** Makes a draft the live version (the backend validates it first). */

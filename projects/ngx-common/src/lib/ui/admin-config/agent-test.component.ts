@@ -30,8 +30,8 @@ const PRESETS: Preset[] = ['fast', 'balanced', 'data', 'precise', 'thorough', 'l
 
 /**
  * Admin > Config > Agents > Test: chat with an agent — mostly its draft — without saving anything.
- * The right panel's Setup tab picks the LLM override, the agent (draft or live) and, for pipelines,
- * draft or live for each sub-agent; each run sends those as `POST /admin/agents/test` (drafts as
+ * The right panel's Setup tab picks the agent (draft or live), the LLM override and, for pipelines,
+ * draft or live for each sub-agent (all the way down nested pipelines); each run sends those as `POST /admin/agents/test` (drafts as
  * override configs, continuing from the previous response id). Nothing is saved on the server: the final chunk
  * carries the run's execution, kept with the conversation in the in-browser `AgentTestSessions`, and
  * View execution (header) opens the last run on the shared execution page.
@@ -100,38 +100,13 @@ const PRESETS: Preset[] = ['fast', 'balanced', 'data', 'precise', 'thorough', 'l
           />
         </div>
 
-        <!-- Right: setup — LLM override, agent (draft/live), sub-agents (draft/live) -->
+        <!-- Right: setup — agent (draft/live), LLM override, sub-agents (draft/live) -->
         <div right>
           <div class="flex flex-col gap-5 p-4 text-sm">
-            <!-- 1. LLM override -->
+            <!-- 1. Agent -->
             <section class="flex flex-col gap-3">
-              <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">LLM</span>
-              <div class="grid gap-3 sm:grid-cols-2">
-                <div class="flex flex-col gap-1.5">
-                  <label class="text-xs font-medium text-text-muted">Provider</label>
-                  <twang-dropdown size="sm" [options]="providerOptions()" [value]="llm().llm ?? ''" (valueChange)="setProvider($event)" />
-                </div>
-                <div class="flex flex-col gap-1.5">
-                  <label class="text-xs font-medium text-text-muted">Model</label>
-                  <twang-dropdown
-                    size="sm"
-                    [options]="modelOptions()"
-                    [value]="llm().model ?? ''"
-                    [disabled]="!llm().llm"
-                    (valueChange)="setLlm({ model: $event || null })"
-                  />
-                </div>
-                <div class="flex flex-col gap-1.5">
-                  <label class="text-xs font-medium text-text-muted">Preset</label>
-                  <twang-dropdown size="sm" [options]="presetOptions" [value]="llm().preset ?? ''" (valueChange)="setLlm({ preset: $any($event) || null })" />
-                </div>
-              </div>
-            </section>
-
-            <!-- 2. Agent -->
-            <section class="flex flex-col gap-3 border-t border-border pt-4">
               <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Agent</span>
-              <twang-dropdown size="sm" [options]="agentOptions()" [value]="agentId()" [disabled]="generating()" (valueChange)="selectAgent($event)" />
+              <twang-dropdown [options]="agentOptions()" [value]="agentId()" [disabled]="generating()" (valueChange)="selectAgent($event)" />
               @if (agent(); as a) {
                 @if (choicesFor(a.config.id).length > 1) {
                   <div class="flex">
@@ -141,12 +116,37 @@ const PRESETS: Preset[] = ['fast', 'balanced', 'data', 'precise', 'thorough', 'l
               }
             </section>
 
+            <!-- 2. LLM override -->
+            <section class="flex flex-col gap-3 border-t border-border pt-4">
+              <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">LLM</span>
+              <div class="flex flex-col gap-3">
+                <div class="flex flex-col gap-1.5">
+                  <label class="text-xs font-medium text-text-muted">Provider</label>
+                  <twang-dropdown [options]="providerOptions()" [value]="llm().llm ?? ''" (valueChange)="setProvider($event)" />
+                </div>
+                <div class="flex flex-col gap-1.5">
+                  <label class="text-xs font-medium text-text-muted">Model</label>
+                  <twang-dropdown
+                    [options]="modelOptions()"
+                    [value]="llm().model ?? ''"
+                    [disabled]="!llm().llm"
+                    (valueChange)="setLlm({ model: $event || null })"
+                  />
+                </div>
+                <div class="flex flex-col gap-1.5">
+                  <label class="text-xs font-medium text-text-muted">Preset</label>
+                  <twang-dropdown [options]="presetOptions" [value]="llm().preset ?? ''" (valueChange)="setLlm({ preset: $any($event) || null })" />
+                </div>
+              </div>
+            </section>
+
             <!-- 3. Sub-agents (pipelines) -->
             @if (subAgentIds().length) {
               <section class="flex flex-col gap-2 border-t border-border pt-4">
                 <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Sub-agents</span>
-                @for (id of subAgentIds(); track id) {
-                  <div class="flex items-center gap-2 rounded-md border border-border px-3 py-2">
+                @for (node of subAgentTree(); track node.id) {
+                  @let id = node.id;
+                  <div class="flex items-center gap-2 rounded-md border border-border px-3 py-2" [style.margin-left.rem]="node.depth">
                     <div class="min-w-0 flex-1">
                       <div class="truncate">{{ agentById(id)?.config?.name || id }}</div>
                       <div class="truncate font-mono text-[11px] text-text-muted">{{ id }}</div>
@@ -270,17 +270,34 @@ export class AgentTestComponent {
     return a.config; // live (for live agents `config` is the live one)
   }
 
-  /** Sub-agents of the agent under test (pipelines): stage sub-agents, available agents, follow-up. */
-  protected readonly subAgentIds = computed(() => {
+  /**
+   * Every agent below the one under test, depth-first: each pipeline's stage sub-agents and
+   * available agents, followed down through whichever config (draft or live) is chosen for it, so
+   * nested pipelines' agents are included too. `depth` 0 = a direct child. Each agent appears once
+   * (first place it's reached), which also stops cycles. A draft still loading is listed but not
+   * followed yet — this recomputes when it arrives.
+   */
+  protected readonly subAgentTree = computed(() => {
     this.drafts();
     this.choices();
-    const config = this.configFor(this.agentId());
-    const p = config?.execution === 'pipeline' ? config.pipeline : null;
-    if (!p) return [];
-    const ids = [...p.stages.flatMap(s => s.sub_agents.map(r => r.id)), ...p.available_agents.map(r => r.id)];
-    if (p.followup_agent) ids.push(p.followup_agent);
-    return [...new Set(ids)];
+    const root = this.agentId();
+    const seen = new Set([root]);
+    const out: { id: string; depth: number }[] = [];
+    const visit = (id: string, depth: number) => {
+      const p = this.configFor(id);
+      const pipeline = p?.execution === 'pipeline' ? p.pipeline : null;
+      if (!pipeline) return;
+      for (const child of [...pipeline.stages.flatMap(s => s.sub_agents.map(r => r.id)), ...pipeline.available_agents.map(r => r.id)]) {
+        if (seen.has(child)) continue;
+        seen.add(child);
+        out.push({ id: child, depth });
+        visit(child, depth + 1);
+      }
+    };
+    visit(root, 0);
+    return out;
   });
+  protected readonly subAgentIds = computed(() => this.subAgentTree().map(n => n.id));
 
   protected readonly draftSubCount = computed(() => this.subAgentIds().filter(id => this.choiceFor(id) === 'draft').length);
 
@@ -304,12 +321,14 @@ export class AgentTestComponent {
   ]);
   protected readonly modelOptions = computed<TwangDropdownOption[]>(() => {
     const provider = this.providers().find(p => p.id === this.llm().llm);
-    // No provider override → the agent's own model applies; with one, pick from its models
-    // (setProvider pre-selects the default, so there's no separate "default" entry).
+    // No provider override → the agent's own model applies; with one, pick from its enabled models,
+    // default (marked `*`) first (setProvider pre-selects it, so there's no separate "default" entry).
     if (!provider) return [{ value: '', label: "Agent's setting" }];
+    const isDefault = (id: string) => (id === provider.default_model ? 0 : 1);
     return provider.models
       .filter(m => m.enabled)
-      .map(m => ({ value: m.id, label: m.id === provider.default_model ? `${m.id} · default` : m.id }));
+      .sort((a, b) => isDefault(a.id) - isDefault(b.id) || a.id.localeCompare(b.id))
+      .map(m => ({ value: m.id, label: m.id === provider.default_model ? `${m.id} *` : m.id }));
   });
   /**
    * Provider and model a run will use (the request needs both): the override if set, else the tested
@@ -466,8 +485,7 @@ export class AgentTestComponent {
     this.status.set('');
     this.clearTrigger.update(n => n + 1);
 
-    // A previous stream may still be closing after its final chunk — drop it so its completion
-    // can't end this run.
+    // Defensive: never let an earlier stream's events or completion reach this run.
     this.run$?.unsubscribe();
     const patch = (changes: Partial<ChatMessage>) =>
       this.sessions.update(agentId, s => ({ ...s, messages: s.messages.map(m => (m.id === id ? { ...m, ...changes } : m)) }));
@@ -475,11 +493,21 @@ export class AgentTestComponent {
     this.run$ = this.configService
       .testAgent({ agent_id: agentId, llm: resolved.llm, model: resolved.model, preset: this.resolvedPreset(), prompt, prev_response_id: this.session().lastResponseId, configsm: configs })
       .subscribe({
-      next: chunk => {
+      next: event => {
+        // Errors, files and failed files stay on the message, so they're kept with the run.
+        if (event.type === 'error') {
+          this.sessions.update(agentId, s => ({
+            ...s,
+            messages: s.messages.map(m => (m.id === id ? { ...m, errors: [...(m.errors ?? []), event.message] } : m)),
+          }));
+          return;
+        }
+        if (event.type === 'attachment') return patch({ attachment: event.attachment });
+        if (event.type === 'attachment_failed') return patch({ attachmentFailed: event.reason });
+        const chunk = event.data;
         // Statuses accumulate as sent — the backend already formats them (line breaks included).
         if (chunk.status) this.status.update(prev => prev + chunk.status);
-        // The final chunk ends the run for the UI (spinner off), even if the stream lingers.
-        if (chunk.is_final) this.generating.set(false);
+        // The run (spinner) lasts until the stream ends, not the final chunk: the PDF follows it.
         if (chunk.content) {
           content += chunk.content;
           patch({ assistantContent: content });

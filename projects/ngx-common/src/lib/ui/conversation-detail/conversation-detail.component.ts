@@ -13,9 +13,12 @@ import type { ChatMessage } from '../chat/chat-message';
 import { UsageTableComponent } from '../usage-table/usage-table.component';
 import { ConversationFormComponent } from '../conversation-form/conversation-form.component';
 import { ConversationService, type Conversation, type ConversationStrategy, type HistoryMode, type Turn } from '../../services/conversation.service';
-import { extractCompleteSections, extractSuggestedPrompts, looksLikeSectionsJson } from '../message-renderer/section-parsing';
+import { extractSuggestedPrompts, streamingDisplay } from '../message-renderer/section-parsing';
 
 const SPLIT_KEY = 'conversation.splitLayout';
+
+/** What a streamed turn can carry besides its text. */
+type TurnExtras = Pick<ChatMessage, 'errors' | 'attachment' | 'attachmentFailed'>;
 
 /** The remembered split/unified choice, or null if the user hasn't picked one. */
 function readSplitPreference(): boolean | null {
@@ -321,6 +324,8 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
   protected readonly restorePrompt = signal('');
   private lastSentText = '';
   private readonly streamingTurn = signal<ChatMessage | null>(null);
+  /** Errors / files that arrived with a turn sent in this session, by turn id (turns don't carry them). */
+  private readonly turnExtras = signal<Record<string, TurnExtras>>({});
   private streamSub?: Subscription;
 
   protected readonly generating = computed(() => this.streamingTurn() !== null);
@@ -341,6 +346,8 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
       userContent: t.user_prompt,
       assistantContent: t.response_content,
       sequence: t.sequence,
+      attachment: this.conversationService.turnAttachment(t),
+      ...this.turnExtras()[t.id],
     }));
     const streaming = this.streamingTurn();
     return streaming ? [...base, streaming] : base;
@@ -351,6 +358,7 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
       const id = params['id'] as string;
       this.showUsage.set(false);
       this.turns.set([]);
+      this.turnExtras.set({});
       this.streamingTurn.set(null);
       this.streamError.set(null);
       this.loadingTurns.set(true);
@@ -466,6 +474,8 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
 
     const tempId = `stream-${Date.now()}`;
     let accumulated = '';
+    let displayContent = '';
+    const extras: TurnExtras = {};
     let statusAccumulated = '';
     let lastStatus = '';
 
@@ -477,21 +487,38 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
     this.streamingStatus.set('Assistant is responding');
     this.streamingTurn.set({ id: tempId, userContent: text, assistantContent: '', streaming: true });
 
+    const show = () => this.streamingTurn.set({ id: tempId, userContent: text, assistantContent: displayContent, streaming: true, ...extras });
+
     this.streamSub = this.conversationService.sendMessage(conv.id, text, conv.stream ?? true).subscribe({
-      next: (chunk) => {
+      next: (event) => {
+        // Errors don't end the stream; they, the PDF and a failed PDF show under the answer.
+        if (event.type === 'error') extras.errors = [...(extras.errors ?? []), event.message];
+        else if (event.type === 'attachment') extras.attachment = event.attachment;
+        else if (event.type === 'attachment_failed') extras.attachmentFailed = event.reason;
+        if (event.type !== 'message') return show();
+
+        const chunk = event.data;
         if (chunk.status && chunk.status !== lastStatus) {
           lastStatus = chunk.status;
           const sep = statusAccumulated && !statusAccumulated.endsWith('\n') ? ' ' : '';
           statusAccumulated += sep + chunk.status;
           this.streamingStatus.set(statusAccumulated);
         }
-        accumulated += chunk.content;
-        const isJson = !this.alwaysMarkdown() && looksLikeSectionsJson(accumulated);
-        const displayContent = isJson ? (extractCompleteSections(accumulated) ?? '') : accumulated;
-        this.streamingTurn.set({ id: tempId, userContent: text, assistantContent: displayContent, streaming: true });
+        accumulated += chunk.content ?? '';
+        displayContent = this.alwaysMarkdown() ? accumulated : streamingDisplay(accumulated);
+        show();
       },
       complete: () => {
         this.streamSub = undefined;
+        // Only errors and no answer: same as a failed request — the prompt comes back to retry.
+        if (!accumulated && extras.errors?.length) {
+          this.streamingStatus.set('');
+          this.streamingTurn.set(null);
+          this.restorePrompt.set(this.lastSentText);
+          this.streamError.set(extras.errors.join('\n'));
+          return;
+        }
+        this.turnExtras.update(x => ({ ...x, [tempId]: extras }));
         this.clearStatusAfterDelay();
         this.suggestedPrompts.set(extractSuggestedPrompts(accumulated));
         const newTurn: Turn = {
@@ -530,6 +557,8 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
 
     const conv = this.conversation();
     if (conv && streaming.assistantContent) {
+      const { errors, attachment, attachmentFailed } = streaming;
+      this.turnExtras.update(x => ({ ...x, [streaming.id]: { errors, attachment, attachmentFailed } }));
       const newTurn: Turn = {
         id: streaming.id,
         conversation_id: conv.id,

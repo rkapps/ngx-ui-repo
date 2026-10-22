@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, signal } from '@angular/core';
-import { Observable, Subject, tap } from 'rxjs';
-import { normalizeBsonDates } from '../http/bson-date.interceptor';
+import { map, Observable, Subject, tap } from 'rxjs';
+import { postEventStream, type StreamAttachment, type StreamEvent } from '../http/event-stream';
 import { API_BASE_URL } from './api-url.token';
 import { AuthService } from '../auth/auth.service';
 import type { TokenUsage } from '../models/turn-execution';
@@ -60,6 +60,18 @@ export interface Turn {
   response_content: string;
   created_at: string;
   total_tokens_cost: number;
+  /** Files made for the turn (e.g. its report PDF); absent when there are none. */
+  exports?: TurnExport[];
+}
+
+/** A file stored for a turn (backend `TurnExport`). */
+export interface TurnExport {
+  format: string;
+  file_id: string;
+  file_name: string;
+  mime: string;
+  size: number;
+  created_at: string;
 }
 
 export interface CompletionChunkResponse {
@@ -125,108 +137,32 @@ export class ConversationService {
     );
   }
 
-  sendMessage(conversationId: string, userPrompt: string, stream = true): Observable<CompletionChunkResponse> {
+  /** A turn's report PDF as a download (the same URL the turn stream's `attachment` event gives). */
+  turnAttachment(turn: Turn): StreamAttachment | undefined {
+    const pdf = turn.exports?.find(e => e.format === 'pdf');
+    if (!pdf) return undefined;
+    const url = `${this.base}/conversations/${turn.conversation_id}/turns/${turn.id}/report.pdf`;
+    return { file_name: pdf.file_name, mime: pdf.mime, size: pdf.size, url };
+  }
+
+  /**
+   * Sends a turn. Streaming: the turn's events as they arrive (see `postEventStream`); otherwise
+   * the one response as a single `message` event.
+   */
+  sendMessage(conversationId: string, userPrompt: string, stream = true): Observable<StreamEvent<CompletionChunkResponse>> {
     if (!stream) {
-      return new Observable(subscriber => {
-        const url = `${this.base}/conversations/${conversationId}/turns`;
-        this.http.post<CompletionChunkResponse>(url, { prompt: userPrompt }).subscribe({
-          next: chunk => { subscriber.next(chunk); subscriber.complete(); },
-          error: err => subscriber.error(err),
-        });
-      });
+      return this.http
+        .post<CompletionChunkResponse>(`${this.base}/conversations/${conversationId}/turns`, { prompt: userPrompt })
+        .pipe(map(data => ({ type: 'message' as const, data })));
     }
-
-    const controller = new AbortController();
-
-    return new Observable(subscriber => {
-      const doFetch = async (token: string) => {
-        let buffer = '';
-        try {
-          const response = await fetch(`${this.base}/conversations/${conversationId}/turns/stream`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-              'Accept': 'text/event-stream',
-            },
-            body: JSON.stringify({ prompt: userPrompt }),
-            signal: controller.signal,
-          });
-
-          if (!response.ok) {
-            const text = await response.text().catch(() => '');
-            let detail = text;
-            try { const j = JSON.parse(text); detail = j.message ?? j.detail ?? j.error ?? text; } catch { /* not JSON */ }
-            subscriber.error(new Error(detail || `HTTP ${response.status}`));
-            return;
-          }
-          if (!response.body) {
-            subscriber.error(new Error(`HTTP ${response.status}: no response body`));
-            return;
-          }
-
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder();
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() ?? '';
-
-            let eventType = '';
-            let eventData = '';
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (trimmed.startsWith('event:')) {
-                eventType = trimmed.slice(6).trim();
-              } else if (trimmed.startsWith('data:')) {
-                eventData = trimmed.slice(5).trim();
-              } else if (trimmed === '') {
-                // blank line — dispatch buffered event
-                if (eventData && eventData !== '[DONE]') {
-                  if (eventType === 'error') {
-                    subscriber.error(new Error(eventData));
-                    return;
-                  }
-                  try {
-                    // fetch bypasses HttpClient interceptors, so fix BSON dates here too (see bsonDateInterceptor).
-                    const chunk = normalizeBsonDates(JSON.parse(eventData)) as CompletionChunkResponse;
-                    subscriber.next(chunk);
-                    if (chunk.is_final) {
-                      subscriber.complete();
-                      return;
-                    }
-                  } catch {
-                    // partial line — wait for more data
-                  }
-                }
-                eventType = '';
-                eventData = '';
-              }
-            }
-          }
-
-          subscriber.complete();
-        } catch (err) {
-          if (controller.signal.aborted) {
-            subscriber.complete();
-            return;
-          }
-          subscriber.error(err);
-        }
-      };
-
-      // AuthService.getIdToken() falls back to the last known-good token when a live
-      // refresh fails (e.g. no network reaching Google after the tab sat idle), so this
-      // stays authenticated through a transient blip instead of failing outright.
-      this.auth.getIdToken()
-        .then(token => doFetch(token ?? ''))
-        .catch(err => subscriber.error(err));
-
-      return () => controller.abort();
-    });
+    // AuthService.getIdToken() falls back to the last known-good token when a live refresh fails
+    // (e.g. no network reaching Google after the tab sat idle), so this stays authenticated
+    // through a transient blip instead of failing outright.
+    return postEventStream<CompletionChunkResponse>(
+      `${this.base}/conversations/${conversationId}/turns/stream`,
+      { prompt: userPrompt },
+      () => this.auth.getIdToken(),
+      this.base,
+    );
   }
 }
