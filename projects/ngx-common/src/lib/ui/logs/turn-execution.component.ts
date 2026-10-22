@@ -1,5 +1,5 @@
 import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
-import { Component, computed, DestroyRef, effect, inject, signal } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, linkedSignal, signal } from '@angular/core';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
@@ -60,7 +60,8 @@ const seconds = (ms: number | null | undefined) => (ms == null ? '—' : (ms / 1
  * decisions, iterations, tool calls) in a scrolling `twang-tree-table`; the middle shows the
  * selected step as rows — properties beside token usage, then payloads (prompt/content, tool input/output
  * JSON, reasoning, child steps).
- * The selection lives in `?node=`, and the breadcrumb bar above the page shows the path to it.
+ * Clicking a step (in the tree or the child list) just switches the middle panel; it isn't routed,
+ * so the breadcrumbs stay at the turn.
  *
  * The turn is fetched by `:turnId` (so reloads and shared links work); when arriving from Logs,
  * the already-loaded row fills the breadcrumbs while the trace loads.
@@ -330,7 +331,8 @@ export class TurnExecutionComponent {
   protected readonly secondCollapsed = signal(false);
 
   private readonly turnId = toSignal(this.route.paramMap.pipe(map(p => p.get('turnId') ?? '')), { requireSync: true });
-  private readonly nodeParam = toSignal(this.route.queryParamMap.pipe(map(q => q.get('node'))), { initialValue: null });
+  /** Clicked step; null (the root) again whenever another turn loads. */
+  private readonly nodeId = linkedSignal<string, string | null>({ source: this.turnId, computation: () => null });
 
   /**
    * Agent test runs (route data `testRun`, under `/admin/config/agents/:id/test/execution`) aren't
@@ -375,11 +377,11 @@ export class TurnExecutionComponent {
     return tree ? [tree] : [];
   });
 
-  /** Selected node id from `?node=`, defaulting to the root (the whole turn). */
+  /** Selected node id, defaulting to the root (the whole turn). */
   protected readonly selectedId = computed(() => {
     const tree = this.tree();
     if (!tree) return null;
-    const id = this.nodeParam();
+    const id = this.nodeId();
     return id && findExecNode(tree, id) ? id : tree.id;
   });
 
@@ -429,35 +431,31 @@ export class TurnExecutionComponent {
   ];
 
   constructor() {
-    // Breadcrumbs after "Logs": the turn, then the path down to the selected step. Each crumb
-    // selects that step (the turn crumb selects the root).
+    // Breadcrumbs after "Logs": the turn (the selected step isn't part of them).
     effect(() => {
       const turn = this.turn();
       if (!turn) {
         this.breadcrumbs.set([{ label: 'Execution' }]);
         return;
       }
-      const base = [this.router.url.split(/[?#]/)[0]];
+      const url = this.router.url.split(/[?#]/)[0];
       // Test runs: the agent, (Edit,) Test — the Test crumb is this page's URL without "/execution".
       const fromEdit = !!this.route.snapshot.data['fromEdit'];
       const crumbs: PageCrumb[] = this.testAgentId
         ? [
             { label: this.testAgentId },
             ...(fromEdit ? [{ label: 'Edit', path: ['/admin', 'config', 'agents', this.testAgentId, 'edit'] }] : []),
-            { label: 'Test', path: [base[0].replace(/\/execution$/, '')] },
+            { label: 'Test', path: [url.replace(/\/execution$/, '')] },
           ]
         : [];
-      crumbs.push({ label: `${turn.title || 'Untitled conversation'} · #${turn.sequence}`, path: base });
-      for (const node of this.path().slice(1)) {
-        crumbs.push({ label: node.label, path: base, queryParams: { node: node.id } });
-      }
+      crumbs.push({ label: `${turn.title || 'Untitled conversation'} · #${turn.sequence}` });
       this.breadcrumbs.set(crumbs);
     });
     inject(DestroyRef).onDestroy(() => this.breadcrumbs.clear());
   }
 
   protected select(id: string): void {
-    this.router.navigate([], { relativeTo: this.route, queryParams: { node: id }, replaceUrl: true });
+    this.nodeId.set(id);
   }
 
   // Template helpers — narrow the row union for each @case.
