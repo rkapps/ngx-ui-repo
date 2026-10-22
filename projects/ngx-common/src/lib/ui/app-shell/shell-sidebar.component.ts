@@ -124,7 +124,14 @@ import { type ShellNavItem, shellNavTarget } from './shell-nav';
         (click)="closeDrawer.emit()"
       >
         <lucide-icon [name]="page.icon" [size]="16" class="shrink-0" aria-hidden="true" />
-        <span class="truncate">{{ page.label }}</span>
+        @if (page.sublabel) {
+          <span class="flex min-w-0 flex-col">
+            <span class="truncate">{{ page.label }}</span>
+            <span class="truncate text-[11px] font-normal text-text-muted">{{ page.sublabel }}</span>
+          </span>
+        } @else {
+          <span class="truncate">{{ page.label }}</span>
+        }
       </a>
     </ng-template>
 

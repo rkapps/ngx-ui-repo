@@ -29,7 +29,12 @@ export class AppComponent {
     const recent = [...this.conversationService.conversations()]
       .sort((a, b) => (b.last_updated_at ?? '').localeCompare(a.last_updated_at ?? ''))
       .slice(0, RECENT_CONVERSATIONS)
-      .map(c => ({ label: c.title || 'Untitled', icon: 'message-circle', link: `/conversations/${c.id}` }));
+      .map(c => ({
+        label: c.title || 'Untitled',
+        sublabel: [c.llm, c.model].filter(Boolean).join(' · ') || undefined,
+        icon: 'message-circle',
+        link: `/conversations/${c.id}`,
+      }));
     return {
       label: 'Conversations',
       icon: 'message-square',

@@ -6,6 +6,8 @@
  */
 export interface ShellNavItem {
   label: string;
+  /** Optional second line under the label, smaller and muted (e.g. a conversation's LLM and model). */
+  sublabel?: string;
   /** Lucide icon name (must be registered by the app). */
   icon: string;
   link: string;
