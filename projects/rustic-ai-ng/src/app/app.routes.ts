@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { AGENT_CONFIG_ROUTES, AnalyticsLogsService, authGuard, featureGuard, type ConfigScope, lastPageRedirect, LOGS_ROUTES, noAuthGuard, roleRedirectGuard, TURN_LOGS } from 'ngx-common';
+import { AdminLogsService, AGENT_CONFIG_ROUTES, AnalyticsLogsService, authGuard, featureGuard, type ConfigScope, lastPageRedirect, LOGS_ROUTES, noAuthGuard, roleRedirectGuard, TURN_LOGS } from 'ngx-common';
 
 const placeholder = () => import('./pages/placeholder/placeholder.component');
 
@@ -75,6 +75,14 @@ export const routes: Routes = [
         children: [
           { path: 'mcp-servers', loadComponent: () => import('ngx-common').then(m => m.McpServersPageComponent), data: { scope: 'admin' } },
           ...configChildren('admin'),
+        ],
+      },
+      {
+        path: 'analytics',
+        children: [
+          // Every user's turn logs (with a User column).
+          { path: 'logs', providers: [{ provide: TURN_LOGS, useExisting: AdminLogsService }], children: LOGS_ROUTES },
+          { path: '', redirectTo: 'logs', pathMatch: 'full' },
         ],
       },
       { path: '', redirectTo: 'access', pathMatch: 'full' },

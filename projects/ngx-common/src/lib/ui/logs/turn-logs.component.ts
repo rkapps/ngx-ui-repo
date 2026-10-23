@@ -3,7 +3,7 @@ import { Component, computed, DestroyRef, effect, inject, LOCALE_ID, signal, typ
 import { ActivatedRoute, Router } from '@angular/router';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { LucideAngularModule } from 'lucide-angular';
-import { TwangButtonComponent, TwangDatepickerComponent, TwangTableComponent, type TwangTableColumn } from 'ngx-twang-ui';
+import { TwangButtonComponent, TwangDatepickerComponent, TwangDropdownComponent, type TwangDropdownOption, TwangTableComponent, type TwangTableColumn, type TwangTableFooterCell } from 'ngx-twang-ui';
 import { catchError, map, of, startWith, switchMap } from 'rxjs';
 import { TURN_LOGS, type TurnLog, type TurnLogRequest } from '../../services/turn-logs.service';
 import { ADMIN_RIGHT_WIDTH, ADMIN_TABLE_HEIGHT } from '../admin-page/admin-layout';
@@ -37,6 +37,12 @@ function seconds(ms: number | null | undefined): string {
   return (ms / 1000).toFixed(1);
 }
 
+/** "All" plus each distinct non-empty value, sorted; keeps `current` listed even if no row has it. */
+function filterOptions(allLabel: string, values: string[], current: string): TwangDropdownOption[] {
+  const distinct = [...new Set([...values, current].filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  return [{ value: '', label: allLabel }, ...distinct.map(v => ({ value: v, label: v }))];
+}
+
 interface LoadState {
   loading: boolean;
   logs: TurnLog[];
@@ -53,7 +59,7 @@ interface LoadState {
 @Component({
   selector: 'app-turn-logs',
   standalone: true,
-  imports: [DatePipe, LucideAngularModule, ThreePanelLayoutComponent, TwangButtonComponent, TwangDatepickerComponent, TwangTableComponent],
+  imports: [DatePipe, LucideAngularModule, ThreePanelLayoutComponent, TwangButtonComponent, TwangDatepickerComponent, TwangDropdownComponent, TwangTableComponent],
   template: `
     <app-three-panel-layout
       [showLeft]="false"
@@ -72,7 +78,14 @@ interface LoadState {
           <div class="w-44">
             <twang-datepicker label="To" placeholder="End date" [value]="toDay() ?? ''" (valueChange)="toDay.set($event)" />
           </div>
-          <twang-button variant="default" size="sm" label="Last 7 days" (buttonClick)="resetRange()" />
+          <div class="w-48">
+            <twang-dropdown label="LLM" [options]="llmOptions()" [value]="llmFilter()" (valueChange)="llmFilter.set($event)" />
+          </div>
+          @if (scope === 'admin') {
+            <div class="w-64">
+              <twang-dropdown label="User" [options]="userOptions()" [value]="userFilter()" (valueChange)="userFilter.set($event)" />
+            </div>
+          }
           @if (rangeError()) {
             <span class="pb-2 text-xs text-red-600">{{ rangeError() }}</span>
           }
@@ -103,6 +116,7 @@ interface LoadState {
               <twang-table
                 [rows]="logs()"
                 [columns]="columns"
+                [footer]="footer()"
                 [loading]="loading()"
                 [fillContainerWidth]="true"
                 [onRowClick]="onRowClick"
@@ -215,7 +229,20 @@ export class TurnLogsComponent {
   // Starts from the last loaded rows so returning from an execution page shows them immediately.
   private readonly state = signal<LoadState>({ loading: true, logs: this.logsService.lastLogs(), error: null });
   protected readonly loading = computed(() => this.state().loading);
-  protected readonly logs = computed(() => this.state().logs);
+  /** Rows in the date range, before the LLM / user filters. */
+  private readonly rangeLogs = computed(() => this.state().logs);
+
+  protected readonly llmFilter = this.logsService.llmFilter;
+  protected readonly userFilter = this.logsService.userFilter;
+  protected readonly llmOptions = computed(() => filterOptions('All LLMs', this.rangeLogs().map(t => t.llm), this.llmFilter()));
+  protected readonly userOptions = computed(() => filterOptions('All users', this.rangeLogs().map(t => t.email), this.userFilter()));
+
+  /** What the table, totals and details show. */
+  protected readonly logs = computed(() => {
+    const llm = this.llmFilter();
+    const user = this.scope === 'admin' ? this.userFilter() : '';
+    return this.rangeLogs().filter(t => (!llm || t.llm === llm) && (!user || t.email === user));
+  });
   protected readonly error = computed(() => this.state().error);
   protected readonly totalCost = computed(() => this.logs().reduce((sum, t) => sum + (t.total_tokens_cost || 0), 0));
 
@@ -249,8 +276,8 @@ export class TurnLogsComponent {
     { id: 'email', header: 'User', align: 'left', sortable: true, width: '220px', cellTruncate: true, value: t => t.email },
     { id: 'title', header: 'Conversation', align: 'left', sortable: true, fillRemaining: true, minWidth: '200px', cellTruncate: true, value: t => t.title },
     { id: 'sequence', header: '#Turns', align: 'right', sortable: true, width: '110px', value: t => t.sequence },
-    { id: 'agent', header: 'Agent', align: 'left', sortable: true, width: '160px', cellTruncate: true, value: t => t.agent_id || 'Chat' },
-    { id: 'llm', header: 'LLM', align: 'left', sortable: true, width: '120px', cellTruncate: true, value: t => t.llm },
+    { id: 'agent', header: 'Agent', align: 'left', sortable: true, width: '300px', cellTruncate: true, value: t => t.agent_id || 'Chat' },
+    { id: 'llm', header: 'LLM', align: 'left', sortable: true, width: '220px', cellTruncate: true, value: t => t.llm },
     { id: 'model', header: 'Model', align: 'left', sortable: true, width: '180px', cellTruncate: true, value: t => t.model },
     { id: 'total', header: 'Total cost', align: 'right', sortable: true, width: '140px', value: t => t.total_tokens_cost, format: v => money(Number(v)) },
     {
@@ -266,7 +293,18 @@ export class TurnLogsComponent {
 
   // The user scope only ever sees its own turns, so drop the User column (and its width).
   protected readonly columns = this.scope === 'admin' ? this.allColumns : this.allColumns.filter(c => c.id !== 'email');
-  protected readonly tableMinWidthClass = this.scope === 'admin' ? 'min-w-[1400px]' : 'min-w-[1180px]';
+  protected readonly tableMinWidthClass = this.scope === 'admin' ? 'min-w-[1640px]' : 'min-w-[1420px]';
+
+  /** Totals row: one cell per column (widths match), with the row count first and the summed cost. */
+  protected readonly footer = computed<TwangTableFooterCell[] | null>(() => {
+    if (!this.logs().length) return null;
+    return this.columns.map((c, i) => ({
+      text: i === 0 ? `Total (${this.logs().length})` : c.id === 'total' ? money(this.totalCost()) : '',
+      align: c.align,
+      width: c.fillRemaining ? undefined : c.width,
+      minWidth: c.minWidth,
+    }));
+  });
 
   constructor() {
     const breadcrumbs = inject(PageBreadcrumbs);
@@ -303,7 +341,7 @@ export class TurnLogsComponent {
       });
   }
 
-  protected resetRange(): void {
+  private resetRange(): void {
     const today = new Date();
     const from = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (DEFAULT_RANGE_DAYS - 1));
     this.fromDay.set(isoDay(from));

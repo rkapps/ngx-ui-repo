@@ -59,6 +59,9 @@ export abstract class TurnLogsService {
   /** Logs filters as date-picker days (`YYYY-MM-DD`); empty = unbounded. Null until first set. */
   readonly fromDay = signal<string | null>(null);
   readonly toDay = signal<string | null>(null);
+  /** LLM / user (email) filters on the loaded rows; '' = all. */
+  readonly llmFilter = signal('');
+  readonly userFilter = signal('');
   /** `turn_id` of the selected row. */
   readonly selectedKey = signal<string | null>(null);
   /** Rows from the most recent successful load. */
@@ -89,11 +92,20 @@ export abstract class TurnLogsService {
   }
 }
 
-/** Every user's turns — `/admin/turns/...` (admin-only on the backend). */
+/**
+ * Every user's turns for Admin › Analytics › Logs (admin-only on the backend): the list from
+ * `/admin/analytics/logs`, executions from `/admin/turns/execution/{id}`.
+ */
 @Injectable({ providedIn: 'root' })
 export class AdminLogsService extends TurnLogsService {
+  private readonly apiBase = inject(API_BASE_URL);
+
   constructor() {
     super('admin');
+  }
+
+  protected override logsUrl(): string {
+    return `${this.apiBase}/admin/analytics/logs`;
   }
 }
 

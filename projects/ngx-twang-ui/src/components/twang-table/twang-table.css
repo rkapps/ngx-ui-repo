@@ -46,10 +46,11 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+/* Same size and padding as `.portfolio-table-cell`, so totals line up with the column values. */
 .portfolio-table-footer-cell {
-  padding: 0.5rem 1rem;
-  font-size: 0.75rem;
-  line-height: 1rem;
+  padding: 6px 1rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
   font-weight: 600;
   white-space: nowrap;
 }

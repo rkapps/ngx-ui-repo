@@ -89,6 +89,12 @@ export class AppComponent {
             link: '/admin/config',
             children: [...configPages('/admin/config'), { label: 'MCP Servers', icon: 'plug', link: '/admin/config/mcp-servers' }],
           },
+          {
+            label: 'Analytics',
+            icon: 'chart-bar',
+            link: '/admin/analytics',
+            children: [{ label: 'Logs', icon: 'scroll-text', link: '/admin/analytics/logs' }],
+          },
         ],
       });
     }
