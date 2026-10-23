@@ -94,6 +94,12 @@ function blankAgent(): AgentConfig {
   };
 }
 
+/** `current` with `changes` merged in; all-unset collapses back to `null` (no override). */
+function mergedLlm(current: LlmConfig | null, changes: Partial<LlmConfig>): LlmConfig | null {
+  const next: LlmConfig = { llm: null, model: null, preset: null, ...current, ...changes };
+  return next.llm || next.model || next.preset ? next : null;
+}
+
 function blankPipeline(): PipelineConfig {
   return { type: 'deterministic', available_agents: [], stages: [] };
 }
@@ -600,18 +606,69 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
           </div>
           <ol class="min-h-0 flex-1 overflow-y-auto">
             @for (ref of refs(target); track ref.id; let j = $index; let first = $first; let last = $last) {
-              <li class="flex items-center gap-2 border-b border-border px-4 py-2 last:border-b-0">
-                <span class="w-5 shrink-0 text-right text-xs tabular-nums text-text-muted">{{ j + 1 }}.</span>
-                <div class="min-w-0 flex-1">
-                  <div class="truncate text-sm">{{ agentName(ref.id) }}</div>
-                  <div class="truncate font-mono text-[11px] text-text-muted">{{ ref.id }}</div>
+              <li class="border-b border-border last:border-b-0">
+                <div class="flex items-center gap-2 px-4 py-2">
+                  <span class="w-5 shrink-0 text-right text-xs tabular-nums text-text-muted">{{ j + 1 }}.</span>
+                  <div class="min-w-0 flex-1">
+                    <div class="truncate text-sm">{{ agentName(ref.id) }}</div>
+                    <div class="truncate font-mono text-[11px] text-text-muted">{{ ref.id }}</div>
+                  </div>
+                  @if (refIssue(ref.id); as issue) {
+                    <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase" [class]="issue.cls" [title]="issue.title">{{ issue.label }}</span>
+                  }
+                  @if (ref.llm_config) {
+                    <span class="shrink-0 rounded bg-primary-50 px-1.5 py-0.5 text-[10px] uppercase text-primary-700" title="Overrides the sub-agent's LLM settings">llm</span>
+                  }
+                  @if (ref.relay_tool_output) {
+                    <span class="shrink-0 rounded bg-primary-50 px-1.5 py-0.5 text-[10px] uppercase text-primary-700" title="Returns tool output as-is">relay</span>
+                  }
+                  <twang-button
+                    [variant]="isRefOpen(target, ref.id) ? 'primary' : 'default'"
+                    size="xs"
+                    icon="sliders-horizontal"
+                    ariaLabel="Settings"
+                    (buttonClick)="toggleRefSettings(target, ref.id)"
+                  />
+                  <twang-button variant="default" size="xs" icon="chevron-up" ariaLabel="Move up" [disabled]="first" (buttonClick)="moveRef(target, j, -1)" />
+                  <twang-button variant="default" size="xs" icon="chevron-down" ariaLabel="Move down" [disabled]="last" (buttonClick)="moveRef(target, j, 1)" />
+                  <twang-button variant="default" size="xs" icon="x" ariaLabel="Remove" (buttonClick)="toggleRef(target, ref.id)" />
                 </div>
-                @if (refIssue(ref.id); as issue) {
-                  <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase" [class]="issue.cls" [title]="issue.title">{{ issue.label }}</span>
+                <!-- Per-reference overrides: LLM (over the sub-agent's own, then the conversation's) and relay -->
+                @if (isRefOpen(target, ref.id)) {
+                  @let refLlm = ref.llm_config ?? noLlm;
+                  <div class="flex flex-col gap-3 border-t border-border bg-gray-50 px-4 py-3 pl-11">
+                    <div class="grid gap-3 sm:grid-cols-3">
+                      <div class="flex min-w-0 flex-col gap-1">
+                        <label class="text-[11px] font-medium text-text-muted">Provider</label>
+                        <twang-dropdown [options]="providerOptionsFor(refLlm.llm, 'Agent default')" [value]="refLlm.llm ?? ''" (valueChange)="setRefProvider(target, j, $event)" />
+                      </div>
+                      <div class="flex min-w-0 flex-col gap-1">
+                        <label class="text-[11px] font-medium text-text-muted">Model</label>
+                        <twang-dropdown
+                          [options]="modelOptionsFor(refLlm)"
+                          [placeholder]="refLlm.llm ? 'Select a model' : 'Agent default'"
+                          [value]="refLlm.model ?? ''"
+                          [disabled]="!refLlm.llm"
+                          (valueChange)="setRefLlm(target, j, { model: $event || null })"
+                        />
+                      </div>
+                      <div class="flex min-w-0 flex-col gap-1">
+                        <label class="text-[11px] font-medium text-text-muted">Preset</label>
+                        <twang-dropdown [options]="refPresetOptions" [value]="refLlm.preset ?? ''" (valueChange)="setRefLlm(target, j, { preset: $any($event) || null })" />
+                      </div>
+                    </div>
+                    @if (canRelay(ref.id) || ref.relay_tool_output) {
+                      <label class="flex cursor-pointer items-center gap-2 text-sm" title="Return the sub-agent's tool output as its response, without a final LLM pass">
+                        <input type="checkbox" class="accent-primary-600" [checked]="!!ref.relay_tool_output" (change)="updateRef(target, j, { relay_tool_output: ref.relay_tool_output ? null : true })" />
+                        Relay tool output
+                        @if (!canRelay(ref.id)) {
+                          <span class="text-xs text-amber-700">(only applies to pipeline agents)</span>
+                        }
+                      </label>
+                    }
+                    <p class="text-xs text-text-muted">Unset LLM fields fall back to the sub-agent's own settings, then the conversation's.</p>
+                  </div>
                 }
-                <twang-button variant="default" size="xs" icon="chevron-up" ariaLabel="Move up" [disabled]="first" (buttonClick)="moveRef(target, j, -1)" />
-                <twang-button variant="default" size="xs" icon="chevron-down" ariaLabel="Move down" [disabled]="last" (buttonClick)="moveRef(target, j, 1)" />
-                <twang-button variant="default" size="xs" icon="x" ariaLabel="Remove" (buttonClick)="toggleRef(target, ref.id)" />
               </li>
             } @empty {
               <li class="px-4 py-3 text-sm text-text-muted">None yet — pick agents on the right.</li>
@@ -777,40 +834,46 @@ export class AgentEditorComponent {
   /** The draft's LLM settings, with nulls for anything unset. */
   protected readonly llm = computed<LlmConfig>(() => this.draft().llm_config ?? { llm: null, model: null, preset: null });
 
-  protected readonly providerOptions = computed<TwangDropdownOption[]>(() =>
-    withCurrent(
+  protected readonly providerOptions = computed<TwangDropdownOption[]>(() => this.providerOptionsFor(this.llm().llm));
+  protected readonly modelOptions = computed<TwangDropdownOption[]>(() => this.modelOptionsFor(this.llm()));
+
+  protected readonly presetOptions: TwangDropdownOption[] = [SERVER_DEFAULT, ...PRESETS.map(p => ({ value: p.value, label: `${p.value} — ${p.hint}` }))];
+  /** Sub-agent references: unset means the sub-agent's own preset, not the server's. */
+  protected readonly refPresetOptions: TwangDropdownOption[] = [{ value: '', label: 'Agent default' }, ...this.presetOptions.slice(1)];
+  protected readonly noLlm: LlmConfig = { llm: null, model: null, preset: null };
+
+  /** Enabled providers only, plus `current` if it has since been disabled. */
+  protected providerOptionsFor(current: string | null, unsetLabel = SERVER_DEFAULT.label): TwangDropdownOption[] {
+    return withCurrent(
       [
-        SERVER_DEFAULT,
-        // Enabled providers only, plus the agent's current one if it has since been disabled.
+        { value: '', label: unsetLabel },
         ...this.providers()
-          .filter(p => p.enabled || p.id === this.llm().llm)
+          .filter(p => p.enabled || p.id === current)
           .sort((a, b) => a.llm.localeCompare(b.llm))
           .map(p => ({ value: p.id, label: p.enabled ? p.llm : `${p.llm} (disabled)` })),
       ],
-      this.llm().llm,
-    ),
-  );
+      current,
+    );
+  }
 
   /**
-   * The selected provider's enabled models, default (marked `*`) first — plus the agent's current
-   * model if it has since been disabled.
+   * The provider's enabled models, default (marked `*`) first — plus the current model if it has
+   * since been disabled.
    */
-  protected readonly modelOptions = computed<TwangDropdownOption[]>(() => {
-    const provider = this.providers().find(p => p.id === this.llm().llm);
+  protected modelOptionsFor(llm: LlmConfig): TwangDropdownOption[] {
+    const provider = this.providers().find(p => p.id === llm.llm);
     const rank = (id: string, enabled: boolean) => (id === provider?.default_model ? 0 : enabled ? 1 : 2);
     const models = (provider?.models ?? [])
-      .filter(m => m.enabled || m.id === this.llm().model)
+      .filter(m => m.enabled || m.id === llm.model)
       .sort((a, b) => rank(a.id, a.enabled) - rank(b.id, b.enabled) || a.id.localeCompare(b.id));
     return withCurrent(
       models.map(m => ({
         value: m.id,
         label: m.id + (m.id === provider?.default_model ? ' *' : '') + (m.enabled ? '' : ' (disabled)'),
       })),
-      this.llm().model,
+      llm.model,
     );
-  });
-
-  protected readonly presetOptions: TwangDropdownOption[] = [SERVER_DEFAULT, ...PRESETS.map(p => ({ value: p.value, label: `${p.value} — ${p.hint}` }))];
+  }
 
   // ── Description ──
   protected readonly descriptionTabs = ['write', 'preview'] as const;
@@ -873,6 +936,12 @@ export class AgentEditorComponent {
       .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id)),
   );
   private readonly agentNames = computed(() => new Map(this.agentList().map(r => [r.config.id, r.config.name])));
+  private readonly agentExecutions = computed(() => new Map(this.agentList().map(r => [r.config.id, r.config.execution])));
+
+  /** Relaying tool output only applies when the referenced agent is a pipeline agent. */
+  protected canRelay(id: string): boolean {
+    return this.agentExecutions().get(id) === 'pipeline_agent';
+  }
 
   /** Stage shown below the stage list (clamped, since stages can be removed). */
   protected readonly selectedStage = signal(0);
@@ -1025,18 +1094,18 @@ export class AgentEditorComponent {
 
   /** Merges into `llm_config`; all-unset collapses back to `null` (no override). */
   protected setLlm(changes: Partial<LlmConfig>): void {
-    this.mutate(d => {
-      const next: LlmConfig = { ...(d.llm_config ?? { llm: null, model: null, preset: null }), ...changes };
-      return { ...d, llm_config: next.llm || next.model || next.preset ? next : null };
-    });
+    this.mutate(d => ({ ...d, llm_config: mergedLlm(d.llm_config, changes) }));
+  }
+
+  protected setProvider(value: string): void {
+    this.setLlm(this.providerChange(value, this.llm().model));
   }
 
   /** Changing provider drops a model that the new provider doesn't have. */
-  protected setProvider(value: string): void {
+  private providerChange(value: string, model: string | null): Partial<LlmConfig> {
     const llm = value || null;
-    const model = this.llm().model;
     const keep = !!llm && !!model && !!this.providers().find(p => p.id === llm)?.models.some(m => m.id === model);
-    this.setLlm({ llm, model: keep ? model : null });
+    return { llm, model: keep ? model : null };
   }
 
   protected toggleTool(source: ToolSource, name: string): void {
@@ -1119,6 +1188,36 @@ export class AgentEditorComponent {
 
   protected moveRef(target: RefTarget, index: number, delta: number): void {
     this.setRefs(target, moved(this.refs(target), index, delta));
+  }
+
+  /** Per list (`targetKey`): the reference whose override panel is open, or null for none. A list not in here opens its first. */
+  private readonly openRefs = signal<Record<string, string | null>>({});
+
+  private targetKey(target: RefTarget): string {
+    return target.kind === 'stage' ? `stage-${target.index}` : 'available';
+  }
+
+  protected isRefOpen(target: RefTarget, id: string): boolean {
+    const key = this.targetKey(target);
+    const open = key in this.openRefs() ? this.openRefs()[key] : this.refs(target)[0]?.id;
+    return open === id;
+  }
+
+  protected toggleRefSettings(target: RefTarget, id: string): void {
+    const open = this.isRefOpen(target, id) ? null : id;
+    this.openRefs.update(refs => ({ ...refs, [this.targetKey(target)]: open }));
+  }
+
+  protected updateRef(target: RefTarget, index: number, changes: Partial<AvailableAgent>): void {
+    this.setRefs(target, this.refs(target).map((r, i) => (i === index ? { ...r, ...changes } : r)));
+  }
+
+  protected setRefLlm(target: RefTarget, index: number, changes: Partial<LlmConfig>): void {
+    this.updateRef(target, index, { llm_config: mergedLlm(this.refs(target)[index]?.llm_config ?? null, changes) });
+  }
+
+  protected setRefProvider(target: RefTarget, index: number, value: string): void {
+    this.setRefLlm(target, index, this.providerChange(value, this.refs(target)[index]?.llm_config?.model ?? null));
   }
 
   /** Create mode only: switching to/from a pipeline adds or drops the pipeline settings. */
