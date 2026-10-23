@@ -38,7 +38,7 @@ import { ShellTitleBarComponent } from './shell-title-bar.component';
         <!-- Sidebar: in the layout from md up; a drawer over the page below that. -->
         <app-shell-sidebar
           class="hidden md:flex"
-          [class]="collapsed() ? 'w-16' : 'w-64 xl:w-72 3xl:w-80'"
+          [class]="collapsed() ? 'w-16' : 'w-72 xl:w-80 3xl:w-96'"
           [navItems]="navItems()"
           [activeLink]="activeItem()?.link ?? null"
           [closedGroups]="closedGroups()"
@@ -51,7 +51,7 @@ import { ShellTitleBarComponent } from './shell-title-bar.component';
         @if (drawerOpen()) {
           <div class="absolute inset-0 z-40 bg-black/20 md:hidden" aria-hidden="true" (click)="drawerOpen.set(false)"></div>
           <app-shell-sidebar
-            class="absolute inset-y-0 left-0 z-50 w-72 shadow-xl md:hidden"
+            class="absolute inset-y-0 left-0 z-50 w-80 shadow-xl md:hidden"
             [navItems]="navItems()"
             [activeLink]="activeItem()?.link ?? null"
             [closedGroups]="closedGroups()"
