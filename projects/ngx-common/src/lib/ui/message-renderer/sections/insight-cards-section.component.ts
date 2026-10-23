@@ -27,7 +27,7 @@ import { InsightCardsSection } from '../message-renderer.types';
                     </tr>
                 </thead>
                 <tbody>
-                    @for (card of section().data; track $index) {
+                    @for (card of section().data; track $index; let i = $index) {
                         <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
                             <td class="px-1 md:px-3 py-1.5 w-10 text-center align-top">
                                 <span class="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold"
@@ -37,7 +37,7 @@ import { InsightCardsSection } from '../message-renderer.types';
                                       [class.text-red-700]="card.signal === 'down'"
                                       [class.bg-gray-100]="!card.signal || card.signal === 'neutral'"
                                       [class.text-gray-600]="!card.signal || card.signal === 'neutral'">
-                                    {{ card.number }}
+                                    {{ card.number ?? i + 1 }}
                                 </span>
                             </td>
                             <td class="px-1 md:px-3 py-1.5 font-medium text-gray-900 align-top">{{ card.title }}</td>

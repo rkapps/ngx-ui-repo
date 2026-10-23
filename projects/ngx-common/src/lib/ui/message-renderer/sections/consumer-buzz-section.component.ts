@@ -131,7 +131,7 @@ export const CONSUMER_BUZZ_ICON_NAMES = Object.keys(CONSUMER_BUZZ_ICONS);
 
                 @if (section().related_searches?.length) {
                     <div>
-                        <p class="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-400">Related searches</p>
+                        <p class="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-400">{{ relatedLabel() }}</p>
                         <div class="flex flex-wrap gap-1.5">
                             @for (term of section().related_searches; track term) {
                                 <span class="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-600">
@@ -147,6 +147,8 @@ export const CONSUMER_BUZZ_ICON_NAMES = Object.keys(CONSUMER_BUZZ_ICONS);
 })
 export class ConsumerBuzzSectionComponent {
     section = input.required<ConsumerBuzzSection>();
+    /** Heading over `related_searches` (`ratings` sections show related topics, not searches). */
+    relatedLabel = input('Related searches');
 
     protected readonly sentimentItems = computed(() => {
         const s = this.section().sentiment;

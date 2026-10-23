@@ -1,5 +1,6 @@
 import { Component, input } from '@angular/core';
 import { TableSection, TechnicalsSection, TableCell, TableRow, TableRowInput, TableRowType, ColumnAlign } from '../message-renderer.types';
+import { displayValue } from '../report-format';
 
 interface NormalizedRow { cells: TableCell[]; rowType?: TableRowType; }
 
@@ -50,8 +51,22 @@ interface NormalizedRow { cells: TableCell[]; rowType?: TableRowType; }
                                         <div class="inline-flex items-center gap-1 whitespace-nowrap">
                                             @if (cell.indicator === 'arrow') {
                                                 <span class="font-bold">{{ cell.signal === 'up' ? '↑' : cell.signal === 'down' ? '↓' : '' }}</span>
+                                            } @else if (cell.indicator === 'dot') {
+                                                <span class="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                                                      [class.bg-emerald-500]="cell.signal === 'up'"
+                                                      [class.bg-red-500]="cell.signal === 'down'"
+                                                      [class.bg-amber-500]="cell.signal === 'warning'"
+                                                      [class.bg-gray-400]="!cell.signal || cell.signal === 'neutral'"></span>
                                             }
-                                            {{ cell.value }}
+                                            @if (cell.indicator === 'badge') {
+                                                <span class="rounded px-1.5 py-0.5 text-xs font-medium"
+                                                      [class.bg-emerald-50]="cell.signal === 'up'"
+                                                      [class.bg-red-50]="cell.signal === 'down'"
+                                                      [class.bg-amber-50]="cell.signal === 'warning'"
+                                                      [class.bg-gray-100]="!cell.signal || cell.signal === 'neutral'">{{ cell.value }}</span>
+                                            } @else {
+                                                {{ cell.value }}
+                                            }
                                         </div>
                                         @if (cell.note) {
                                             <div class="font-normal text-gray-500">({{ cell.note }})</div>
@@ -115,10 +130,15 @@ export class TableSectionComponent {
     }
 
     private normalizeRowSet(source: TableRowInput[] | undefined): NormalizedRow[] {
-        const normalizeCell = (cell: TableCell | string | unknown): TableCell =>
-            (cell && typeof cell === 'object' && 'value' in cell)
-                ? cell as TableCell
-                : { value: String(cell ?? '') };
+        // Cells leave here with display text in `value`: a number is formatted when the cell has a
+        // `format` (rustic-report), otherwise shown as sent.
+        const normalizeCell = (cell: TableCell | string | unknown): TableCell => {
+            if (cell && typeof cell === 'object' && 'value' in cell) {
+                const c = cell as TableCell;
+                return { ...c, value: displayValue(c.value, c.format) };
+            }
+            return { value: displayValue(cell as string | number | null | undefined) };
+        };
 
         return (source ?? []).map(row => {
             if (Array.isArray(row)) {
@@ -153,7 +173,7 @@ export class TableSectionComponent {
         const h = this.headers();
         if (h.length) lines.push(h.map(toCsv).join(','));
         for (const row of this.normalizedRows()) {
-            lines.push(row.cells.map(c => toCsv(c.value)).join(','));
+            lines.push(row.cells.map(c => toCsv(String(c.value))).join(','));
         }
         return lines.join('\n');
     }

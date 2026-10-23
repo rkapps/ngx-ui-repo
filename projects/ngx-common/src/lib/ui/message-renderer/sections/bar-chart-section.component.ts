@@ -1,7 +1,7 @@
 import { Component, ElementRef, afterRenderEffect, computed, input, signal, viewChildren } from '@angular/core';
 import { BarChartItem, BarChartSection } from '../message-renderer.types';
 
-const FORMAT_UNITS: Record<string, string> = { currency: '$', percent: '%' };
+const FORMAT_UNITS: Record<string, string> = { currency: '$', percent: '%', percent_change: '%', multiple: 'x' };
 
 @Component({
     selector: 'app-bar-chart-section',
@@ -207,7 +207,9 @@ export class BarChartSectionComponent {
 
     // Normalize the LLM's {label,value}[] format into the renderer's number[] + groups format.
     protected normalizedSection = computed<BarChartSection>(() => {
-        const s = this.section();
+        const raw = this.section();
+        // rustic-report names the series `series`; older sections call them `groups`.
+        const s: BarChartSection = raw.series?.length && !raw.groups?.length ? { ...raw, groups: raw.series } : raw;
         const firstValues = s.data?.[0]?.values;
 
         // Derive unit from format field if not already set

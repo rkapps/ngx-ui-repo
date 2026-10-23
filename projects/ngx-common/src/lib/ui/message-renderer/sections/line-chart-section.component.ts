@@ -1,7 +1,7 @@
 import { Component, computed, input } from '@angular/core';
 import { LineChartItem, LineChartSection } from '../message-renderer.types';
 
-const FORMAT_UNITS: Record<string, string> = { currency: '$', percent: '%' };
+const FORMAT_UNITS: Record<string, string> = { currency: '$', percent: '%', percent_change: '%', multiple: 'x' };
 
 @Component({
     selector: 'app-line-chart-section',
@@ -66,10 +66,12 @@ const FORMAT_UNITS: Record<string, string> = { currency: '$', percent: '%' };
                                             <path [attr.d]="pathFor(item)" fill="none" stroke="currentColor" stroke-width="2"
                                                   stroke-linecap="round" stroke-linejoin="round" />
                                             @for (val of item.values ?? []; track $index; let pi = $index) {
-                                                <circle [attr.cx]="xPositions()[pi]" [attr.cy]="yFor(val)" r="3.5"
-                                                        fill="white" stroke="currentColor" stroke-width="2">
-                                                    <title>{{ (normalizedSection().groups ?? [])[pi] }}: {{ formatValue(val, normalizedSection().unit) }}</title>
-                                                </circle>
+                                                @if (val !== null) {
+                                                    <circle [attr.cx]="xPositions()[pi]" [attr.cy]="yFor(val)" r="3.5"
+                                                            fill="white" stroke="currentColor" stroke-width="2">
+                                                        <title>{{ (normalizedSection().groups ?? [])[pi] }}: {{ formatValue(val, normalizedSection().unit) }}</title>
+                                                    </circle>
+                                                }
                                             }
                                             <!-- Direct label on the endpoint only -->
                                             @if (lastValue(item) !== undefined) {
@@ -115,7 +117,11 @@ export class LineChartSectionComponent {
 
     // Normalize the LLM's {label,value}[] format into the renderer's number[] + groups format.
     protected normalizedSection = computed<LineChartSection>(() => {
-        const s = this.section();
+        const raw = this.section();
+        // rustic-report shape: x labels + named series → the renderer's groups + data.
+        const s: LineChartSection = raw.x && raw.series && !raw.data?.length
+            ? { ...raw, groups: raw.x, data: raw.series.map(se => ({ name: se.name, values: se.values })) }
+            : raw;
         const firstValues = s.data?.[0]?.values;
 
         const unit = s.unit ?? (s.format ? FORMAT_UNITS[s.format] : undefined);
@@ -157,7 +163,7 @@ export class LineChartSectionComponent {
         this.normalizedSection().data?.some(d => d.values?.length)
     );
 
-    private allValues = computed(() => this.normalizedSection().data.flatMap(d => d.values ?? []));
+    private allValues = computed(() => this.normalizedSection().data.flatMap(d => (d.values ?? []).filter((v): v is number => v !== null)));
     private rawMin = computed(() => Math.min(...this.allValues()));
     private rawMax = computed(() => Math.max(...this.allValues()));
 
@@ -192,17 +198,27 @@ export class LineChartSectionComponent {
         return this.CHART_HEIGHT_PX - ((value - this.displayMin()) / range) * this.CHART_HEIGHT_PX;
     }
 
+    /** The series' line; a null point breaks it (the next point starts a new segment). */
     pathFor(item: LineChartItem): string {
         const xs = this.xPositions();
-        const values = item.values ?? [];
-        return values
-            .map((v, i) => `${i === 0 ? 'M' : 'L'} ${xs[i]},${this.yFor(v)}`)
-            .join(' ');
+        let gap = true;
+        const parts: string[] = [];
+        (item.values ?? []).forEach((v, i) => {
+            if (v === null) { gap = true; return; }
+            parts.push(`${gap ? 'M' : 'L'} ${xs[i]},${this.yFor(v)}`);
+            gap = false;
+        });
+        return parts.join(' ');
     }
 
+    /** The last point with data (labelled at the line's end). */
     lastValue(item: LineChartItem): number | undefined {
         const values = item.values ?? [];
-        return values.length ? values[values.length - 1] : undefined;
+        for (let i = values.length - 1; i >= 0; i--) {
+            const v = values[i];
+            if (v !== null) return v;
+        }
+        return undefined;
     }
 
     yAxisTicks = computed(() => {

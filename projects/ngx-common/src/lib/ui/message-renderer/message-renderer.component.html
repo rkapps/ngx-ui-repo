@@ -29,6 +29,12 @@
                                 <app-positioning-section [section]="$any(section)"></app-positioning-section>
                             } @else if (section.type === 'price_targets') {
                                 <app-price-targets-section [section]="$any(section)"></app-price-targets-section>
+                            } @else if (section.type === 'profiles') {
+                                <app-profiles-section [section]="$any(section)"></app-profiles-section>
+                            } @else if (section.type === 'targets') {
+                                <app-targets-section [section]="$any(section)"></app-targets-section>
+                            } @else if (section.type === 'ratings') {
+                                <app-consumer-buzz-section [section]="ratingsAsBuzz($any(section))" relatedLabel="Related"></app-consumer-buzz-section>
                             } @else if (section.type === 'consumer_buzz') {
                                 <app-consumer-buzz-section [section]="$any(section)"></app-consumer-buzz-section>
                             } @else {

@@ -64,6 +64,8 @@ export interface StageDecision {
   execution: 'sequential' | 'parallel';
   stop: boolean;
   reasoning: string | null;
+  /** What the user gets back; only meaningful when `stop` is true. Absent in older executions. */
+  deliverable?: 'screen' | 'pdf';
 }
 
 export interface DecisionResponse {
@@ -258,7 +260,8 @@ function stageNode(stage: StageResponse, id: string, depth: number): ExecNode {
 
 function decisionNode(decision: DecisionResponse, id: string, depth: number): ExecNode {
   const children = decision.responses.map((r, i) => turnNode(r, `${id}/r${i}`, depth + 1, 'agent'));
-  const meta = [decision.decision.execution, decision.decision.stop ? 'stop' : ''].filter(Boolean).join(' · ');
+  const { execution, stop, deliverable } = decision.decision;
+  const meta = [execution, stop ? 'stop' : '', stop ? deliverable ?? '' : ''].filter(Boolean).join(' · ');
   return node(
     id,
     depth,

@@ -165,6 +165,10 @@ const seconds = (ms: number | null | undefined) => (ms == null ? '—' : (ms / 1
                       <dd>{{ d.decision.execution }}</dd>
                       <dt class="text-xs text-text-muted">Stop</dt>
                       <dd>{{ d.decision.stop ? 'Yes (synthesis)' : 'No' }}</dd>
+                      @if (d.decision.stop && d.decision.deliverable) {
+                        <dt class="text-xs text-text-muted">Deliverable</dt>
+                        <dd>{{ d.decision.deliverable === 'pdf' ? 'PDF' : 'Screen' }}</dd>
+                      }
                     }
                   }
                   @default {

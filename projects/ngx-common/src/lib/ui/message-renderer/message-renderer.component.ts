@@ -3,7 +3,7 @@ import { JsonPipe } from '@angular/common';
 import { LucideAngularModule } from 'lucide-angular';
 import { formatLooseJson, parseJsonContent } from '../../models/turn-execution';
 import { MarkdownPipe } from '../chat/markdown.pipe';
-import { Section, StructuredResponse, TableCell } from './message-renderer.types';
+import { ConsumerBuzzSection, RatingsSection, Section, StructuredResponse, TableCell } from './message-renderer.types';
 import { ContextSectionComponent } from './sections/context-section.component';
 import { MetricCardsSectionComponent } from './sections/metric-cards-section.component';
 import { BarChartSectionComponent } from './sections/bar-chart-section.component';
@@ -14,6 +14,12 @@ import { EconomicSignalsSectionComponent } from './sections/economic-signals-sec
 import { ConsumerBuzzSectionComponent } from './sections/consumer-buzz-section.component';
 import { PositioningSectionComponent } from './sections/positioning-section.component';
 import { PriceTargetsSectionComponent } from './sections/price-targets-section.component';
+import { ProfilesSectionComponent } from './sections/profiles-section.component';
+import { TargetsSectionComponent } from './sections/targets-section.component';
+import { displayValue, formatReportNumber, targetChangePct } from './report-format';
+
+/** `price_targets` and its rustic-report successor `targets`: a narrow list kept to the right of a pair. */
+const isTargets = (s: Section) => s.type === 'price_targets' || s.type === 'targets';
 
 @Component({
     selector: 'app-message-renderer',
@@ -32,6 +38,8 @@ import { PriceTargetsSectionComponent } from './sections/price-targets-section.c
         ConsumerBuzzSectionComponent,
         PositioningSectionComponent,
         PriceTargetsSectionComponent,
+        ProfilesSectionComponent,
+        TargetsSectionComponent,
     ],
     templateUrl: './message-renderer.component.html',
 })
@@ -45,6 +53,29 @@ export class MessageRendererComponent {
     });
 
     protected readonly copiedSection = signal<unknown>(null);
+
+    /** `ratings` drawn with the `consumer_buzz` gauges; cached per section so the input stays stable. */
+    private readonly buzzCache = new WeakMap<RatingsSection, ConsumerBuzzSection>();
+    protected ratingsAsBuzz(section: RatingsSection): ConsumerBuzzSection {
+        let buzz = this.buzzCache.get(section);
+        if (!buzz) {
+            buzz = {
+                type: 'consumer_buzz',
+                title: section.title,
+                group: section.group,
+                sentiment: (section.data ?? []).map(r => ({
+                    source: r.source,
+                    rating: String(r.rating),
+                    max_rating: String(r.max_rating),
+                    signal: r.signal,
+                    theme: r.theme,
+                })),
+                related_searches: section.related,
+            };
+            this.buzzCache.set(section, buzz);
+        }
+        return buzz;
+    }
 
     protected copySection(section: unknown): void {
         const text = this.formatSection(section as Section);
@@ -73,9 +104,9 @@ export class MessageRendererComponent {
                 return `grid grid-cols-1 ${cols} gap-4 items-start`;
             }
         }
-        // price_targets is a narrow list — cap its width instead of flexing with the row (whatever
+        // price_targets / targets is a narrow list — cap its width instead of flexing with the row (whatever
         // count that row has), and let the rest of the sections share the remaining space evenly.
-        const targetsIdx = row.sections.findIndex(s => s.type === 'price_targets');
+        const targetsIdx = row.sections.findIndex(isTargets);
         if (targetsIdx !== -1) {
             const cols = this.priceTargetsCols(targetsIdx, row.sections.length);
             if (cols) return `grid grid-cols-1 ${cols} gap-4 items-start`;
@@ -124,7 +155,7 @@ export class MessageRendererComponent {
             const n = s.headers?.length ?? 0;
             return n >= 10 ? 3 : n >= 6 ? 2 : n >= 5 ? 1 : 0;
         }
-        if (s.type === 'chart' || s.type === 'bar_chart' || s.type === 'line_chart' || s.type === 'positioning') {
+        if (s.type === 'chart' || s.type === 'bar_chart' || s.type === 'line_chart' || s.type === 'positioning' || s.type === 'profiles') {
             const n = s.data?.length ?? 0;
             return n >= 5 ? 2 : n >= 4 ? 1 : 0;
         }
@@ -165,12 +196,12 @@ export class MessageRendererComponent {
         return rows;
     }
 
-    // insight_cards always lands on the left (wider) side; price_targets always lands on the right.
+    // insight_cards always lands on the left (wider) side; price_targets / targets always land on the right.
     private orderPairedGroup(group: Section[]): Section[] {
         if (group.length !== 2) return group;
         const insightIdx = group.findIndex(s => s.type === 'insight_cards');
         if (insightIdx === 1) return [group[1], group[0]];
-        const targetsIdx = group.findIndex(s => s.type === 'price_targets');
+        const targetsIdx = group.findIndex(isTargets);
         if (targetsIdx === 0) return [group[1], group[0]];
         return group;
     }
@@ -186,21 +217,29 @@ export class MessageRendererComponent {
             case 'metric_cards':
                 for (const card of section.data ?? []) {
                     const bench = card.benchmark ? ` (vs ${card.benchmark})` : '';
-                    lines.push(`${card.label}: ${card.value}${bench}`);
+                    lines.push(`${card.label}: ${displayValue(card.value, card.format)}${bench}`);
                 }
                 break;
             case 'bar_chart':
             case 'line_chart':
-            case 'chart':
-                for (const item of section.data ?? []) {
+            case 'chart': {
+                // Old shape: groups + data. rustic-report: bar `series` names; line `x` labels + `series`.
+                const groups = section.groups
+                    ?? (section.type === 'bar_chart' ? section.series : section.type === 'line_chart' ? section.x : undefined)
+                    ?? [];
+                const data = section.data?.length || section.type !== 'line_chart'
+                    ? section.data ?? []
+                    : (section.series ?? []).map(se => ({ name: se.name, values: se.values, value: undefined }));
+                for (const item of data) {
                     if (item.values?.length) {
-                        const vals = (section.groups ?? []).map((g, i) => `${g}: ${item.values![i]}`).join(', ');
+                        const vals = groups.map((g, i) => `${g}: ${item.values![i] ?? '—'}`).join(', ');
                         lines.push(`${item.name} — ${vals}`);
                     } else {
                         lines.push(`${item.name}: ${item.value}`);
                     }
                 }
                 break;
+            }
             case 'table':
             case 'technicals': {
                 const headers = section.headers ?? [];
@@ -209,7 +248,9 @@ export class MessageRendererComponent {
                 for (const row of section.rows ?? []) {
                     const cells = Array.isArray(row) ? row : Object.values(row);
                     lines.push(cells.map((c: unknown) => {
-                        const val = (c && typeof c === 'object' && 'value' in c) ? (c as TableCell).value : String(c ?? '');
+                        const val = (c && typeof c === 'object' && 'value' in c)
+                            ? displayValue((c as TableCell).value, (c as TableCell).format)
+                            : displayValue(c as string | number | null | undefined);
                         return toCsv(val);
                     }).join(','));
                 }
@@ -231,9 +272,33 @@ export class MessageRendererComponent {
                     lines.push(`${item.symbol}: $${num(item.current).toFixed(2)} -> $${num(item.target).toFixed(2)} (${sign}${upside.toFixed(1)}%)${item.consensus ? ` — ${item.consensus}` : ''}`);
                 }
                 break;
+            case 'profiles':
+                for (const profile of section.data ?? []) {
+                    lines.push(profile.subject);
+                    for (const item of profile.items ?? []) {
+                        lines.push(`  ${item.label}: ${item.value}`);
+                    }
+                }
+                break;
+            case 'targets':
+                for (const item of section.data ?? []) {
+                    const change = targetChangePct(item);
+                    const pct = change === null ? '' : ` (${change >= 0 ? '+' : ''}${change.toFixed(1)}%)`;
+                    const fmt = (v: number) => formatReportNumber(v, section.format);
+                    lines.push(`${item.subject}: ${fmt(item.current)} -> ${fmt(item.target)}${pct}${item.label ? ` — ${item.label}` : ''}`);
+                }
+                break;
+            case 'ratings':
+                for (const r of section.data ?? []) {
+                    lines.push(`${r.source}: ${r.rating}/${r.max_rating}${r.theme ? ` — ${r.theme}` : ''}`);
+                }
+                if (section.related?.length) {
+                    lines.push('', 'Related: ' + section.related.join(', '));
+                }
+                break;
             case 'insight_cards':
-                for (const card of section.data ?? []) {
-                    lines.push(`${card.number}. ${card.title}`);
+                for (const [i, card] of (section.data ?? []).entries()) {
+                    lines.push(`${card.number ?? i + 1}. ${card.title}`);
                     lines.push(`   ${card.evidence}`);
                     if (card.source) lines.push(`   Source: ${card.source}`);
                     lines.push('');
