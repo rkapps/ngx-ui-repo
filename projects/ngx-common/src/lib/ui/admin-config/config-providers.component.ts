@@ -12,7 +12,7 @@ import {
   type TwangTreeTableNode,
 } from 'ngx-twang-ui';
 import { finalize } from 'rxjs';
-import { AdminConfigService, type ConfigScope, type ModelConfig, type ProviderConfig } from '../../services/admin-config.service';
+import { AdminConfigService, type ConfigScope, type ModelConfig, type ModelPrice, type ProviderConfig } from '../../services/admin-config.service';
 import { ADMIN_RIGHT_WIDTH, ADMIN_TABLE_HEIGHT } from '../admin-page/admin-layout';
 import { PageBreadcrumbs } from '../breadcrumbs/page-breadcrumbs';
 import { ThreePanelLayoutComponent } from '../three-panel-layout/three-panel-layout.component';
@@ -21,58 +21,90 @@ import { RefreshCacheButtonComponent } from './refresh-cache-button.component';
 
 type StatusView = 'enabled' | 'disabled';
 
-/** One tree row: a provider (`model` null) or one of its models. */
+/** One tree row: a provider (`model` null) or one of its models, with the model's price in effect. */
 interface ProviderRow {
   provider: ProviderConfig;
   model: ModelConfig | null;
+  price: ModelPrice | null;
 }
 
 const providerNodeId = (p: ProviderConfig) => `provider:${p.id}`;
 const modelNodeId = (p: ProviderConfig, m: ModelConfig) => `model:${p.id}:${m.id}`;
+const priceKey = (provider: string, model: string) => `${provider}:${model}`;
 
-const cost = (v: number) => (v ? `$${v}` : '—');
+/** A decimal-string price per million tokens, as shown. */
+const price = (v: string | null | undefined) => (v ? `$${v}` : '—');
 
-type CostKey = 'input_cost' | 'cached_read_cost' | 'cached_write_cost' | 'output_cost';
-/** `step`: spin-button increment — coarser for input/output prices, finer for the (smaller) cache prices. */
-const COST_FIELDS: { key: CostKey; label: string; step: string }[] = [
-  { key: 'input_cost', label: 'Input', step: '0.05' },
-  { key: 'cached_read_cost', label: 'Cache read', step: '0.01' },
-  { key: 'cached_write_cost', label: 'Cache write', step: '0.01' },
-  { key: 'output_cost', label: 'Output', step: '0.05' },
+/** Token counts compactly: 1000000 → "1M", 128000 → "128K". */
+function tokens(v: number | null | undefined): string {
+  if (v == null) return '—';
+  if (v >= 1_000_000 && v % 100_000 === 0) return `${v / 1_000_000}M`;
+  if (v >= 1_000 && v % 100 === 0) return `${v / 1_000}K`;
+  return v.toLocaleString();
+}
+
+/** Local today as `YYYY-MM-DD`, to compare with `effective_from`. */
+function today(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** Per `provider:model`, the price in effect: the latest `effective_from` on or before today. */
+function currentPrices(prices: ModelPrice[]): Map<string, ModelPrice> {
+  const now = today();
+  const current = new Map<string, ModelPrice>();
+  for (const p of prices) {
+    if (p.effective_from > now) continue;
+    const key = priceKey(p.provider, p.model);
+    const prev = current.get(key);
+    if (!prev || p.effective_from > prev.effective_from) current.set(key, p);
+  }
+  return current;
+}
+
+type LimitKey = 'context_window' | 'max_output_tokens';
+const LIMIT_FIELDS: { key: LimitKey; label: string }[] = [
+  { key: 'context_window', label: 'Context window' },
+  { key: 'max_output_tokens', label: 'Max output' },
 ];
 
-/** A model while it's edited: costs stay as typed text (so "0." or "1.50" survive), converted on save. */
-type ModelDraft = Omit<ModelConfig, CostKey> & Record<CostKey, string>;
+type PriceKey = 'input' | 'cached_input' | 'cache_write' | 'output' | 'reasoning';
+const PRICE_FIELDS: { key: PriceKey; label: string }[] = [
+  { key: 'input', label: 'Input' },
+  { key: 'cached_input', label: 'Cached input' },
+  { key: 'cache_write', label: 'Cache write' },
+  { key: 'output', label: 'Output' },
+  { key: 'reasoning', label: 'Reasoning' },
+];
 
-const blankModel = (): ModelDraft => ({ id: '', enabled: true, input_cost: '0', cached_read_cost: '0', cached_write_cost: '0', output_cost: '0' });
+/** A model while it's edited: limits stay as typed text, converted on save. */
+type ModelDraft = Omit<ModelConfig, LimitKey> & Record<LimitKey, string>;
+
+const blankModel = (): ModelDraft => ({ id: '', enabled: true, context_window: '', max_output_tokens: '' });
 const toDraft = (m: ModelConfig): ModelDraft => ({
   ...m,
-  input_cost: String(m.input_cost),
-  cached_read_cost: String(m.cached_read_cost),
-  cached_write_cost: String(m.cached_write_cost),
-  output_cost: String(m.output_cost),
+  context_window: m.context_window == null ? '' : String(m.context_window),
+  max_output_tokens: m.max_output_tokens == null ? '' : String(m.max_output_tokens),
 });
 
-/** Non-negative decimal: "3", "0.5", ".5", "1." — blank counts as 0. */
-const DECIMAL = /^(\d+\.?\d*|\.\d+)$/;
-const parseCost = (text: string): number | null => {
+/** Whole token count; blank = null (unknown); undefined when it isn't one. */
+const parseLimit = (text: string): number | null | undefined => {
   const t = text.trim();
-  if (!t) return 0;
-  return DECIMAL.test(t) ? Number(t) : null;
+  if (!t) return null;
+  return /^\d+$/.test(t) ? Number(t) : undefined;
 };
 
-/** The draft as a ModelConfig, or null while any cost isn't a valid decimal. */
+/** The draft as a ModelConfig, or null while any limit isn't a whole number. */
 function fromDraft(d: ModelDraft): ModelConfig | null {
-  const input = parseCost(d.input_cost);
-  const cachedRead = parseCost(d.cached_read_cost);
-  const cachedWrite = parseCost(d.cached_write_cost);
-  const output = parseCost(d.output_cost);
-  if (input === null || cachedRead === null || cachedWrite === null || output === null) return null;
-  return { id: d.id, enabled: d.enabled, input_cost: input, cached_read_cost: cachedRead, cached_write_cost: cachedWrite, output_cost: output };
+  const contextWindow = parseLimit(d.context_window);
+  const maxOutput = parseLimit(d.max_output_tokens);
+  if (contextWindow === undefined || maxOutput === undefined) return null;
+  return { id: d.id, enabled: d.enabled, context_window: contextWindow, max_output_tokens: maxOutput };
 }
 
 const sameModel = (a: ModelConfig, b: ModelConfig) =>
-  a.id === b.id && a.enabled === b.enabled && COST_FIELDS.every(c => a[c.key] === b[c.key]);
+  a.id === b.id && a.enabled === b.enabled && LIMIT_FIELDS.every(c => (a[c.key] ?? null) === (b[c.key] ?? null));
 
 /** Backend error text (axum returns plain strings), else a fallback. */
 function errorText(err: unknown, fallback: string): string {
@@ -82,19 +114,24 @@ function errorText(err: unknown, fallback: string): string {
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isOptString = (v: unknown) => v === undefined || v === null || typeof v === 'string';
+const isOptCount = (v: unknown) => v === undefined || v === null || (typeof v === 'number' && Number.isInteger(v) && v >= 0);
 
-/** An import file's provider configs ({ "llm_providers": [...] }, a JSON array, or a single provider), or an error message. */
-function parseProviders(text: string): ProviderConfig[] | string {
+/** An import file's list: `{ "<key>": [...] }`, a JSON array, or a single object; or an error message. */
+function parseList(text: string, key: string): unknown[] | string {
   let json: unknown;
   try {
     json = JSON.parse(text);
   } catch {
     return 'The file is not valid JSON.';
   }
-  // The providers config file wraps the list: { "llm_providers": [...] }. A bare array, or a single
-  // provider object, also works.
-  const wrapped = isObject(json) && Array.isArray(json['llm_providers']) ? json['llm_providers'] : json;
-  const list = Array.isArray(wrapped) ? wrapped : [wrapped];
+  const wrapped = isObject(json) && Array.isArray(json[key]) ? json[key] : json;
+  return Array.isArray(wrapped) ? wrapped : [wrapped];
+}
+
+/** An import file's provider configs ({ "llm_providers": [...] }, a JSON array, or a single provider), or an error message. */
+function parseProviders(text: string): ProviderConfig[] | string {
+  const list = parseList(text, 'llm_providers');
+  if (typeof list === 'string') return list;
   if (!list.length) return 'The file has no providers.';
   for (const [i, p] of list.entries()) {
     const where = `Provider ${i + 1}`;
@@ -106,24 +143,68 @@ function parseProviders(text: string): ProviderConfig[] | string {
     if (!isOptString(p['api_key_env']) || !isOptString(p['base_url_env'])) return `${where} (${p['id']}): "api_key_env" / "base_url_env" must be strings or null.`;
     if (!Array.isArray(p['models'])) return `${where} (${p['id']}) needs a "models" list.`;
     for (const m of p['models'] as unknown[]) {
-      const ok =
-        isObject(m) &&
-        typeof m['id'] === 'string' &&
-        typeof m['enabled'] === 'boolean' &&
-        COST_FIELDS.every(c => typeof m[c.key] === 'number' && (m[c.key] as number) >= 0);
-      if (!ok) return `${where} (${p['id']}): every model needs "id", "enabled" and non-negative numeric costs.`;
+      const ok = isObject(m) && typeof m['id'] === 'string' && typeof m['enabled'] === 'boolean' && LIMIT_FIELDS.every(c => isOptCount(m[c.key]));
+      if (!ok) return `${where} (${p['id']}): every model needs "id", "enabled", and whole-number (or null) token limits.`;
     }
   }
   return list as ProviderConfig[];
 }
 
+const DECIMAL = /^(\d+\.?\d*|\.\d+)$/;
+/** A price amount as the backend's decimal string; numbers are accepted and converted. */
+const amount = (v: unknown): string | null | undefined =>
+  typeof v === 'number' && v >= 0 ? String(v) : typeof v === 'string' && DECIMAL.test(v.trim()) ? v.trim() : undefined;
+
+/** An import file's model prices ({ "model_prices": [...] }, a JSON array, or a single price), or an error message. */
+function parsePrices(text: string): ModelPrice[] | string {
+  const list = parseList(text, 'model_prices');
+  if (typeof list === 'string') return list;
+  if (!list.length) return 'The file has no prices.';
+  const prices: ModelPrice[] = [];
+  for (const [i, p] of list.entries()) {
+    const where = `Price ${i + 1}`;
+    if (!isObject(p)) return `${where} is not an object.`;
+    const name = typeof p['id'] === 'string' && p['id'] ? p['id'] : null;
+    if (!name) return `${where} needs an "id".`;
+    for (const k of ['currency', 'provider', 'model'] as const) {
+      if (typeof p[k] !== 'string' || !p[k]) return `${where} (${name}) needs a "${k}".`;
+    }
+    if (p['unit'] !== 'per_million_tokens') return `${where} (${name}): "unit" must be "per_million_tokens".`;
+    if (typeof p['effective_from'] !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(p['effective_from'])) return `${where} (${name}): "effective_from" must be a YYYY-MM-DD date.`;
+    const input = amount(p['input']);
+    const output = amount(p['output']);
+    if (!input || !output) return `${where} (${name}) needs non-negative "input" and "output" amounts.`;
+    const optional: Partial<Record<PriceKey, string | null>> = {};
+    for (const k of ['cached_input', 'cache_write', 'reasoning'] as const) {
+      const v = p[k] === undefined || p[k] === null ? null : amount(p[k]);
+      if (v === undefined) return `${where} (${name}): "${k}" must be a non-negative amount or null.`;
+      optional[k] = v;
+    }
+    prices.push({
+      id: name,
+      currency: p['currency'] as string,
+      unit: 'per_million_tokens',
+      provider: p['provider'] as string,
+      model: p['model'] as string,
+      effective_from: p['effective_from'],
+      input,
+      output,
+      cached_input: optional.cached_input ?? null,
+      cache_write: optional.cache_write ?? null,
+      reasoning: optional.reasoning ?? null,
+    });
+  }
+  return prices;
+}
+
 /**
  * Admin > Config > Providers (and Platform > Providers): every LLM provider configuration. The
- * middle tree lists providers with their models (and costs) as children; selecting either shows the
- * provider's settings in the right panel (the first provider is selected on load). The route's
- * `data.scope` picks the API and what can change. `admin` (default): enable/disable providers and
- * models. `platform`: the model catalog — add and delete models and set their costs, plus an Import
- * (JSON file) button in the page header. Either way a change saves the whole provider
+ * middle tree lists providers with their models as children — token limits plus the price in effect
+ * (from `/{scope}/model_prices`); selecting either shows details in the right panel (the first
+ * provider is selected on load). The route's `data.scope` picks the API and what can change.
+ * `admin` (default): enable/disable providers and models. `platform`: the model catalog — add and
+ * delete models and set their token limits, plus Import providers / Import prices (JSON files) in the
+ * page header. Prices only change by import. A provider change saves the whole provider
  * (PUT /{scope}/providers/{id}).
  */
 @Component({
@@ -178,7 +259,7 @@ function parseProviders(text: string): ProviderConfig[] | string {
               [scrollPanelMinHeight]="treeHeight"
               initialSortKey="name"
               initialSortDir="asc"
-              tableMinWidthClass="min-w-[940px]"
+              tableMinWidthClass="min-w-[1260px]"
               emptyMessage="No providers configured."
               (nodeSelected)="onNodeSelected($event)"
             />
@@ -198,7 +279,7 @@ function parseProviders(text: string): ProviderConfig[] | string {
 
         @if (selected(); as s) {
           @if (platformScope && modelForm(); as f) {
-            <!-- Selected model (platform): costs edited in place, delete -->
+            <!-- Selected model (platform): token limits edited in place, price, delete -->
             <section class="flex flex-col gap-3">
               <div class="flex items-center gap-2">
                 <span class="min-w-0 flex-1 break-all font-mono text-xs font-medium">{{ f.id }}</span>
@@ -210,6 +291,7 @@ function parseProviders(text: string): ProviderConfig[] | string {
                 }
               </div>
               <ng-container *ngTemplateOutlet="modelFields; context: { $implicit: f, patch: patchModel }" />
+              <ng-container *ngTemplateOutlet="priceInfo; context: { $implicit: s }" />
               <div class="flex items-center gap-2 border-t border-border pt-3">
                 @if (confirmDelete()) {
                   <span class="flex-1 text-xs text-red-700">Delete this model?</span>
@@ -238,7 +320,7 @@ function parseProviders(text: string): ProviderConfig[] | string {
               </div>
             </section>
           } @else if (s.model; as m) {
-            <!-- Selected model (admin): enable/disable, saved straight away; costs are set by the platform -->
+            <!-- Selected model (admin): enable/disable, saved straight away; limits and prices are set by the platform -->
             <section class="flex flex-col gap-3">
               <div class="flex items-center gap-2">
                 <span class="min-w-0 flex-1 break-all font-mono text-xs font-medium">{{ m.id }}</span>
@@ -252,20 +334,21 @@ function parseProviders(text: string): ProviderConfig[] | string {
                 size="sm"
                 [icon]="m.enabled ? 'toggle-right' : 'toggle-left'"
                 [label]="m.enabled ? 'Enabled' : 'Disabled'"
-                [title]="m.id === s.provider.default_model ? 'The default model must stay enabled' : m.enabled ? 'Enabled — click to disable this model' : 'Disabled — click to enable this model'"
+                [title]="m.enabled && m.id === s.provider.default_model ? 'The default model must stay enabled' : m.enabled ? 'Enabled — click to disable this model' : 'Disabled — click to enable this model'"
                 [loading]="saving()"
-                [disabled]="saving() || m.id === s.provider.default_model"
+                [disabled]="saving() || (m.enabled && m.id === s.provider.default_model)"
                 (buttonClick)="toggleModel(s.provider, m)"
               />
               <section class="flex flex-col gap-2 border-t border-border pt-3">
-                <span class="text-xs font-semibold uppercase tracking-wider text-primary-600">Cost</span>
+                <span class="text-xs font-semibold uppercase tracking-wider text-primary-600">Limits</span>
                 <dl class="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-2">
-                  @for (c of costFields; track c.key) {
+                  @for (c of limitFields; track c.key) {
                     <dt class="text-xs text-text-muted">{{ c.label }}</dt>
-                    <dd>{{ cost(m[c.key]) }}</dd>
+                    <dd class="tabular-nums">{{ m[c.key] == null ? '—' : m[c.key]!.toLocaleString() }}</dd>
                   }
                 </dl>
               </section>
+              <ng-container *ngTemplateOutlet="priceInfo; context: { $implicit: s }" />
             </section>
           } @else {
             <!-- Selected provider: enable/disable (admin), add a model (platform) -->
@@ -286,7 +369,7 @@ function parseProviders(text: string): ProviderConfig[] | string {
                 <twang-button class="ml-auto" variant="primary" size="sm" icon="plus" label="Add model" [disabled]="saving()" (buttonClick)="startAdd(s.provider)" />
               }
             </div>
-            <!-- Same label width as the cost fields, so the two line up. -->
+            <!-- Same label width as the limit fields, so the two line up. -->
             <dl class="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-2 border-t border-border pt-4">
               <dt class="text-xs text-text-muted">ID</dt>
               <dd class="break-all font-mono text-xs">{{ s.provider.id }}</dd>
@@ -334,27 +417,68 @@ function parseProviders(text: string): ProviderConfig[] | string {
         }
       </div>
 
-      <!-- The four cost inputs (platform), shared by the model editor and the new-model form. -->
+      <!-- Token limit inputs (platform), shared by the model editor and the new-model form. -->
       <ng-template #modelFields let-m let-patch="patch">
         <section class="flex flex-col gap-2 border-t border-border pt-3">
-          <span class="text-xs font-semibold uppercase tracking-wider text-primary-600">Cost</span>
+          <span class="text-xs font-semibold uppercase tracking-wider text-primary-600">Limits</span>
           <div class="grid grid-cols-[7rem_1fr] items-center gap-x-3 gap-y-2">
-            @for (c of costFields; track c.key) {
+            @for (c of limitFields; track c.key) {
               <label class="text-xs text-text-muted">{{ c.label }}</label>
-              <!-- Spin buttons step per field (see COST_FIELDS) from 0. The value is kept as typed text ("0." survives) until save. -->
               <twang-input
                 type="number"
-                [step]="c.step"
+                step="1000"
                 min="0"
-                placeholder="0"
-                [class]="costInvalid(m, c.key) ? '[&_input]:border-red-500' : ''"
+                placeholder="tokens"
+                [class]="limitInvalid(m, c.key) ? '[&_input]:border-red-500' : ''"
                 [ngModel]="m[c.key]"
-                (ngModelChange)="patch(costPatch(c.key, $event))"
+                (ngModelChange)="patch(limitPatch(c.key, $event))"
               />
             }
           </div>
           @if (!draftValid(m)) {
-            <span class="text-xs text-red-600">Costs must be non-negative decimal numbers, e.g. 3 or 0.75.</span>
+            <span class="text-xs text-red-600">Limits must be whole numbers of tokens, or blank.</span>
+          }
+        </section>
+      </ng-template>
+
+      <!-- A model's price in effect, and every price on file for it (imported, read-only). -->
+      <ng-template #priceInfo let-s>
+        <section class="flex flex-col gap-2 border-t border-border pt-3">
+          <div class="flex items-baseline gap-2">
+            <span class="text-xs font-semibold uppercase tracking-wider text-primary-600">Price</span>
+            @if (s.price) {
+              <span class="text-[11px] text-text-muted">{{ s.price.currency }} per million tokens · from {{ s.price.effective_from }}</span>
+            }
+          </div>
+          @if (s.price; as p) {
+            <dl class="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-2">
+              @for (f of priceFields; track f.key) {
+                <dt class="text-xs text-text-muted">{{ f.label }}</dt>
+                <dd class="tabular-nums">{{ price(p[f.key]) }}</dd>
+              }
+            </dl>
+          } @else {
+            <p class="text-xs text-text-muted">{{ pricesError() ?? 'No price in effect for this model.' }}</p>
+          }
+          @if (priceHistory(s).length > 1 || (priceHistory(s).length === 1 && !s.price)) {
+            <table class="mt-1 w-full text-xs">
+              <thead>
+                <tr class="text-left text-text-muted">
+                  <th class="py-1 font-medium">From</th>
+                  <th class="py-1 text-right font-medium">Input</th>
+                  <th class="py-1 text-right font-medium">Output</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (h of priceHistory(s); track h.id) {
+                  <tr class="border-t border-border" [class.font-semibold]="h.id === s.price?.id">
+                    <td class="py-1">{{ h.effective_from }}@if (h.effective_from > todayIso) { <span class="text-text-muted"> (upcoming)</span> }</td>
+                    <td class="py-1 text-right tabular-nums">{{ price(h.input) }}</td>
+                    <td class="py-1 text-right tabular-nums">{{ price(h.output) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
           }
         </section>
       </ng-template>
@@ -365,17 +489,30 @@ function parseProviders(text: string): ProviderConfig[] | string {
       @if (adminScope) {
         <app-refresh-cache-button (refreshed)="load()" />
       } @else {
-        <input #importFile type="file" accept=".json,application/json" class="hidden" (change)="importFrom(importFile)" />
-        <twang-button
-          variant="primary"
-          size="sm"
-          icon="upload"
-          label="Import"
-          title="Import providers from a JSON file: the providers config ({ &quot;llm_providers&quot;: [...] }), an array, or one provider"
-          [loading]="importing()"
-          [disabled]="importing()"
-          (buttonClick)="importFile.click()"
-        />
+        <input #providersFile type="file" accept=".json,application/json" class="hidden" (change)="importFrom(providersFile, 'providers')" />
+        <input #pricesFile type="file" accept=".json,application/json" class="hidden" (change)="importFrom(pricesFile, 'prices')" />
+        <div class="flex items-center gap-2">
+          <twang-button
+            variant="default"
+            size="sm"
+            icon="upload"
+            label="Import prices"
+            title="Import model prices from a JSON file: an array of prices ({ &quot;model_prices&quot;: [...] } also works)"
+            [loading]="importing() === 'prices'"
+            [disabled]="!!importing()"
+            (buttonClick)="pricesFile.click()"
+          />
+          <twang-button
+            variant="primary"
+            size="sm"
+            icon="upload"
+            label="Import providers"
+            title="Import providers from a JSON file: the providers config ({ &quot;llm_providers&quot;: [...] }), an array, or one provider"
+            [loading]="importing() === 'providers'"
+            [disabled]="!!importing()"
+            (buttonClick)="providersFile.click()"
+          />
+        </div>
       }
     </ng-template>
   `,
@@ -386,9 +523,9 @@ export class ConfigProvidersComponent {
   private readonly scope: ConfigScope = inject(ActivatedRoute).snapshot.data['scope'] ?? 'admin';
   /** Admin: enable/disable providers and models. */
   protected readonly adminScope = this.scope === 'admin';
-  /** Platform: the model catalog — add/delete models, set costs; Import. */
+  /** Platform: the model catalog — add/delete models, set token limits; Import providers / prices. */
   protected readonly platformScope = this.scope === 'platform';
-  protected readonly importing = signal(false);
+  protected readonly importing = signal<'providers' | 'prices' | null>(null);
 
   /** Refresh cache, shown on the right of the admin header while this page is open. */
   private readonly headerActions = viewChild<TemplateRef<unknown>>('headerActions');
@@ -397,6 +534,11 @@ export class ConfigProvidersComponent {
   protected readonly rightWidth = ADMIN_RIGHT_WIDTH;
 
   protected readonly providers = signal<ProviderConfig[]>([]);
+  /** Every model price on file; `pricesError` when they couldn't be loaded (providers still show). */
+  protected readonly prices = signal<ModelPrice[]>([]);
+  protected readonly pricesError = signal<string | null>(null);
+  private readonly pricesInEffect = computed(() => currentPrices(this.prices()));
+  private readonly priceOf = (p: ProviderConfig, m: ModelConfig) => this.pricesInEffect().get(priceKey(p.id, m.id)) ?? null;
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
 
@@ -405,17 +547,14 @@ export class ConfigProvidersComponent {
 
   /**
    * Providers (and models) for the current view. Enabled: enabled providers with their enabled
-   * models. Disabled: disabled providers (all their models) plus enabled providers that have
-   * disabled models (just those).
+   * models — a disabled provider's models never show here. Disabled: disabled providers with all
+   * their models (so each can still be enabled/disabled), plus enabled providers' disabled models.
    */
   protected readonly visibleProviders = computed(() => {
     const enabledView = this.statusView() === 'enabled';
     return this.providers()
-      .map(p => ({
-        ...p,
-        models: enabledView ? (p.enabled ? p.models.filter(m => m.enabled) : []) : p.enabled ? p.models.filter(m => !m.enabled) : p.models,
-      }))
-      .filter(p => (enabledView ? p.enabled : !p.enabled || p.models.length > 0));
+      .filter(p => (enabledView ? p.enabled : !p.enabled || p.models.some(m => !m.enabled)))
+      .map(p => ({ ...p, models: enabledView ? p.models.filter(m => m.enabled) : p.enabled ? p.models.filter(m => !m.enabled) : p.models }));
   });
 
   protected readonly nodes = computed<TwangTreeTableNode<ProviderRow>[]>(() =>
@@ -424,9 +563,9 @@ export class ConfigProvidersComponent {
         id: modelNodeId(provider, model),
         label: model.id,
         depth: 1,
-        data: { provider, model },
+        data: { provider, model, price: this.priceOf(provider, model) },
       }));
-      const row = { provider, model: null };
+      const row = { provider, model: null, price: null };
       // A provider with nothing to show under it is a leaf, not an (empty) group.
       return children.length
         ? { id: providerNodeId(provider), label: provider.llm, depth: 0, summary: row, children }
@@ -441,9 +580,9 @@ export class ConfigProvidersComponent {
   protected readonly selected = computed<ProviderRow | null>(() => {
     const id = this.selectedNodeId();
     for (const provider of this.providers()) {
-      if (providerNodeId(provider) === id) return { provider, model: null };
+      if (providerNodeId(provider) === id) return { provider, model: null, price: null };
       const model = provider.models.find(m => modelNodeId(provider, m) === id);
-      if (model) return { provider, model };
+      if (model) return { provider, model, price: this.priceOf(provider, model) };
     }
     return null;
   });
@@ -451,7 +590,9 @@ export class ConfigProvidersComponent {
   protected readonly treeHeight = ADMIN_TABLE_HEIGHT;
 
   // ── Editing ──
-  protected readonly costFields = COST_FIELDS;
+  protected readonly limitFields = LIMIT_FIELDS;
+  protected readonly priceFields = PRICE_FIELDS;
+  protected readonly todayIso = today();
   protected readonly saving = signal(false);
   protected readonly saveError = signal<string | null>(null);
   protected readonly confirmDelete = signal(false);
@@ -461,7 +602,7 @@ export class ConfigProvidersComponent {
     const model = this.selected()?.model;
     return model ? toDraft(model) : null;
   });
-  /** Changed from the saved model (an invalid cost counts as changed, so Reset is offered). */
+  /** Changed from the saved model (an invalid limit counts as changed, so Reset is offered). */
   protected readonly modelDirty = computed(() => {
     const form = this.modelForm();
     const saved = this.selected()?.model;
@@ -478,22 +619,39 @@ export class ConfigProvidersComponent {
     return id && this.addingTo()?.models.some(m => m.id === id) ? 'This provider already has a model with this id.' : null;
   });
 
-  protected readonly costPatch = (key: CostKey, v: unknown): Partial<ModelDraft> => ({ [key]: String(v ?? '') });
+  protected readonly limitPatch = (key: LimitKey, v: unknown): Partial<ModelDraft> => ({ [key]: String(v ?? '') });
   protected readonly patchModel = (changes: Partial<ModelDraft>) => this.modelForm.update(f => (f ? { ...f, ...changes } : f));
   protected readonly patchNewModel = (changes: Partial<ModelDraft>) => this.newModel.update(m => ({ ...m, ...changes }));
-  protected readonly costInvalid = (m: ModelDraft, key: CostKey) => parseCost(m[key]) === null;
+  protected readonly limitInvalid = (m: ModelDraft, key: LimitKey) => parseLimit(m[key]) === undefined;
   protected readonly draftValid = (m: ModelDraft) => fromDraft(m) !== null;
-  protected readonly cost = cost;
+  protected readonly price = price;
+  /** Every price on file for the row's model, newest first. */
+  protected readonly priceHistory = (r: ProviderRow) =>
+    r.model
+      ? this.prices()
+          .filter(p => p.provider === r.provider.id && p.model === r.model!.id)
+          .sort((a, b) => b.effective_from.localeCompare(a.effective_from))
+      : [];
   protected readonly enabledCount = (p: ProviderConfig) => p.models.filter(m => m.enabled).length;
 
-  private readonly costColumn = (id: string, header: string, pick: (m: ModelConfig) => number): TwangTreeTableColumn<ProviderRow> => ({
-    id,
+  private readonly priceColumn = (key: PriceKey, header: string, width = '120px'): TwangTreeTableColumn<ProviderRow> => ({
+    id: key,
     header,
     align: 'right',
     sortable: true,
-    width: '140px',
-    value: r => (r.model ? pick(r.model) : null),
-    format: v => (v == null ? '' : cost(Number(v))),
+    width,
+    value: r => (r.price?.[key] == null ? null : Number(r.price[key])),
+    format: v => (v == null ? '' : `$${v}`),
+  });
+
+  private readonly limitColumn = (key: LimitKey, header: string, width = '120px'): TwangTreeTableColumn<ProviderRow> => ({
+    id: key,
+    header,
+    align: 'right',
+    sortable: true,
+    width,
+    value: r => r.model?.[key] ?? null,
+    format: v => (v == null ? '' : tokens(Number(v))),
   });
 
   protected readonly columns: TwangTreeTableColumn<ProviderRow>[] = [
@@ -523,10 +681,20 @@ export class ConfigProvidersComponent {
       width: '100px',
       value: r => ((r.model ?? r.provider).enabled ? 'Enabled' : 'Disabled'),
     },
-    this.costColumn('input', 'Input', m => m.input_cost),
-    this.costColumn('cache_read', 'Cache read', m => m.cached_read_cost),
-    this.costColumn('cache_write', 'Cache write', m => m.cached_write_cost),
-    this.costColumn('output', 'Output', m => m.output_cost),
+    this.limitColumn('context_window', 'Context'),
+    this.limitColumn('max_output_tokens', 'Max output', '150px'),
+    this.priceColumn('input', 'Input'),
+    this.priceColumn('cached_input', 'Cached', '100px'),
+    this.priceColumn('cache_write', 'Write', '100px'),
+    this.priceColumn('output', 'Output'),
+    {
+      id: 'effective_from',
+      header: 'Price from',
+      align: 'right',
+      sortable: true,
+      width: '150px',
+      value: r => r.price?.effective_from ?? null,
+    },
   ];
 
   constructor() {
@@ -635,36 +803,37 @@ export class ConfigProvidersComponent {
     this.selectedNodeId.set(nodeId);
   }
 
-  /** Import the chosen JSON file (`POST /platform/providers/import`), then reload. */
-  protected importFrom(input: HTMLInputElement): void {
+  /** Import the chosen JSON file (`POST /platform/providers/import` or `/platform/model_prices/import`), then reload. */
+  protected importFrom(input: HTMLInputElement, kind: 'providers' | 'prices'): void {
     const file = input.files?.[0];
     input.value = ''; // so choosing the same file again still fires (change)
     if (!file) return;
     this.saveError.set(null);
     file.text().then(text => {
-      const parsed = parseProviders(text);
+      const parsed = kind === 'providers' ? parseProviders(text) : parsePrices(text);
       if (typeof parsed === 'string') {
         this.saveError.set(`Couldn't import ${file.name}: ${parsed}`);
         return;
       }
-      this.importing.set(true);
-      this.configService
-        .importProviders(parsed)
+      this.importing.set(kind);
+      const request = kind === 'providers' ? this.configService.importProviders(parsed as ProviderConfig[]) : this.configService.importModelPrices(parsed as ModelPrice[]);
+      request
         .pipe(
-          finalize(() => this.importing.set(false)),
+          finalize(() => this.importing.set(null)),
           takeUntilDestroyed(this.destroyRef),
         )
         .subscribe({
           next: () => this.load(),
           error: err => {
-            console.error('Failed to import providers', err);
-            this.saveError.set(errorText(err, 'Failed to import providers.'));
+            console.error(`Failed to import ${kind}`, err);
+            this.saveError.set(errorText(err, `Failed to import ${kind}.`));
           },
         });
     });
   }
 
   protected load(): void {
+    this.loadPrices();
     this.loading.set(true);
     this.error.set(null);
     this.configService
@@ -685,6 +854,20 @@ export class ConfigProvidersComponent {
         error: err => {
           console.error('Failed to load providers', err);
           this.error.set('Failed to load providers.');
+        },
+      });
+  }
+
+  private loadPrices(): void {
+    this.pricesError.set(null);
+    this.configService
+      .getModelPrices(this.scope)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: prices => this.prices.set(prices),
+        error: err => {
+          console.error('Failed to load model prices', err);
+          this.pricesError.set("Couldn't load model prices.");
         },
       });
   }

@@ -22,6 +22,7 @@ export {
   type McpServerConfig,
   type ProviderConfig,
   type ModelConfig,
+  type ModelPrice,
   type ConfigScope,
   type LlmConfig,
   type ExecutionType,

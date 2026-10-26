@@ -76,10 +76,31 @@ export interface AgentConfig {
 export interface ModelConfig {
   id: string;
   enabled: boolean;
-  input_cost: number;
-  cached_read_cost: number;
-  cached_write_cost: number;
-  output_cost: number;
+  /** Tokens the provider accepts as input; null when unknown. */
+  context_window: number | null;
+  /** Hard cap the provider enforces on output; null when unknown. */
+  max_output_tokens: number | null;
+}
+
+/**
+ * One price for a provider's model from a date on (`GET /{scope}/model_prices`). The price in effect
+ * is the latest `effective_from` on or before today. Amounts are decimal strings ("5.00").
+ */
+export interface ModelPrice {
+  id: string;
+  currency: string;
+  /** Always "per_million_tokens". */
+  unit: string;
+  /** Provider id (e.g. "anthropic"). */
+  provider: string;
+  model: string;
+  /** `YYYY-MM-DD`. */
+  effective_from: string;
+  input: string;
+  output: string;
+  cached_input: string | null;
+  cache_write: string | null;
+  reasoning: string | null;
 }
 
 /** Full LLM provider configuration, including disabled providers and models. */
@@ -276,6 +297,16 @@ export class AdminConfigService {
   /** Platform: save these MCP server configs (`POST /platform/mcp_server_configs/import`). Empty response = success. */
   importMcpServerConfigs(configs: McpServerConfig[]): Observable<void> {
     return this.http.post<void>(`${this.base}/platform/mcp_server_configs/import`, configs);
+  }
+
+  /** Every model price, current and past (`GET /{scope}/model_prices`). */
+  getModelPrices(scope: ConfigScope = 'admin'): Observable<ModelPrice[]> {
+    return this.http.get<ModelPrice[]>(`${this.base}/${scope}/model_prices`);
+  }
+
+  /** Platform only: save these model prices (`POST /platform/model_prices/import`). Empty response = success. */
+  importModelPrices(prices: ModelPrice[]): Observable<void> {
+    return this.http.post<void>(`${this.base}/platform/model_prices/import`, prices);
   }
 
   /** Platform only: save these provider configs (`POST /platform/providers/import`). Empty response = success. */
