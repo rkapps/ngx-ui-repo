@@ -13,7 +13,6 @@ export interface ConversationRequest {
   conversation_type: 'chat' | 'agent';
   title?: string;
   template_id?: string;
-  system_prompt?: string;
   agent_id?: string;
   llm: string;
   model: string;
@@ -25,7 +24,6 @@ export interface ConversationRequest {
 
 export interface ConversationUpdateRequest {
   title?: string;
-  system_prompt?: string;
   stream?: boolean;
   strategy?: ConversationStrategy;
   history_mode?: HistoryMode;
@@ -46,7 +44,6 @@ export interface Conversation {
   usage?: TokenUsage | null;
   strategy: string;
   stream?: boolean;
-  system_prompt?: string;
   history_mode?: HistoryMode;
   max_turns?: number;
   uid: string;

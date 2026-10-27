@@ -27,18 +27,6 @@ import type { ConversationStrategy, HistoryMode } from '../../services/conversat
 
           <!-- Optional header content (e.g. agent details) -->
           <ng-content select="[form-header]" />
-
-          @if (showSystemPrompt()) {
-            <div class="flex flex-col gap-1.5 flex-1">
-              <label class="text-sm font-medium text-text">System Prompt</label>
-              <textarea
-                class="w-full flex-1 min-h-48 resize-y rounded-lg border border-border bg-white px-3 py-2 text-sm text-text placeholder:text-text-muted outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-400/20 transition-shadow"
-                placeholder="Optional system prompt to guide the assistant's behavior…"
-                [value]="systemPrompt()"
-                (input)="systemPrompt.set($any($event.target).value)"
-              ></textarea>
-            </div>
-          }
         </div>
 
         <!-- Right: Settings -->
@@ -193,13 +181,11 @@ export class ConversationFormComponent {
   strategy = model<ConversationStrategy>('stateful');
   historyMode = model<HistoryMode>('full');
   maxTurns = model<number | null>(null);
-  systemPrompt = model('');
   selectedLlmId = model('');
   selectedModel = model('');
 
   showAllFields = input(true);
   showLlm = input(true);
-  showSystemPrompt = input(true);
   loadingProviders = input(false);
   providers = input<LlmProvider[]>([]);
   currentModel = input('');

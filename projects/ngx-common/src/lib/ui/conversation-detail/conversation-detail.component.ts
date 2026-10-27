@@ -124,14 +124,12 @@ function readSplitPreference(): boolean | null {
               <div class="flex flex-col gap-4">
                 <app-conversation-form
                   [showLlm]="false"
-                  [showSystemPrompt]="showSystemPrompt()"
                   [currentModel]="conv.model"
                   [(title)]="editTitle"
                   [(stream)]="editStream"
                   [(strategy)]="editStrategy"
                   [(historyMode)]="editHistoryMode"
                   [(maxTurns)]="editMaxTurns"
-                  [(systemPrompt)]="editSystemPrompt"
                 >
                   <!-- Model info card (mirrors agent card in create) -->
                   <div form-header class="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-100 px-5 py-4">
@@ -267,7 +265,6 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
   /** The conversation as one white card (tile) on the page background, with its buttons in the page header; bindable from route data. */
   readonly tiled = input(false);
   readonly alwaysMarkdown = input(false);
-  readonly showSystemPrompt = input(true);
 
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -310,7 +307,6 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
   protected readonly saving = signal(false);
   protected readonly saveError = signal('');
   protected readonly editTitle = signal('');
-  protected readonly editSystemPrompt = signal('');
   protected readonly editStream = signal(false);
   protected readonly editStrategy = signal<ConversationStrategy>('stateful');
   protected readonly editHistoryMode = signal<HistoryMode>('full');
@@ -431,7 +427,6 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
       return;
     }
     this.editTitle.set(conv.title);
-    this.editSystemPrompt.set(conv.system_prompt ?? '');
     this.editStream.set(conv.stream ?? false);
     this.editStrategy.set((conv.strategy as ConversationStrategy) ?? 'stateful');
     this.editHistoryMode.set(conv.history_mode ?? 'full');
@@ -445,7 +440,6 @@ export class ConversationDetailComponent implements OnInit, OnDestroy {
     this.saveError.set('');
     this.conversationService.updateConversation(id, {
       title: this.editTitle().trim() || undefined,
-      system_prompt: this.editSystemPrompt().trim() || undefined,
       stream: this.editStream(),
       strategy: this.editStrategy(),
       history_mode: this.editHistoryMode(),

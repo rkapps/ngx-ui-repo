@@ -101,7 +101,6 @@ import { MarkdownPipe } from '../chat/markdown.pipe';
                 [(strategy)]="strategy"
                 [(historyMode)]="historyMode"
                 [(maxTurns)]="maxTurns"
-                [(systemPrompt)]="systemPrompt"
                 [(selectedLlmId)]="selectedLlmId"
                 [(selectedModel)]="selectedModel"
               />
@@ -162,7 +161,6 @@ export class NewChatComponent {
   protected readonly strategy = signal<ConversationStrategy>('stateful');
   protected readonly historyMode = signal<HistoryMode>('full');
   protected readonly maxTurns = signal<number | null>(null);
-  protected readonly systemPrompt = signal('');
   protected readonly creating = signal(false);
   protected readonly createError = signal('');
 
@@ -221,7 +219,6 @@ export class NewChatComponent {
   protected selectTemplate(tmpl: ChatTemplate): void {
     this.selectedTemplate.set(tmpl);
     this.title.set(tmpl.title);
-    this.systemPrompt.set(tmpl.system_prompt ?? '');
 
     const match = this.findLlmMatch(tmpl.recommended_llm);
     if (match) {
@@ -284,7 +281,6 @@ export class NewChatComponent {
       strategy: this.strategy(),
       history_mode: this.historyMode(),
       ...(this.maxTurns() != null ? { max_turns: this.maxTurns()! } : {}),
-      ...(this.systemPrompt().trim() ? { system_prompt: this.systemPrompt().trim() } : {}),
       ...(this.selectedTemplate() ? { template_id: this.selectedTemplate()!.id } : {}),
     }).subscribe({
       next: conv => {

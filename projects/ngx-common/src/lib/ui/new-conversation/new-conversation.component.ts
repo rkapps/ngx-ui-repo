@@ -75,7 +75,6 @@ import { MarkdownPipe } from '../chat/markdown.pipe';
               <div class="flex flex-col gap-4">
                 <app-conversation-form
                   [showAllFields]="showAllFields()"
-                  [showSystemPrompt]="showSystemPrompt()"
                   [providers]="providers()"
                   [loadingProviders]="loadingProviders()"
                   [(title)]="title"
@@ -83,7 +82,6 @@ import { MarkdownPipe } from '../chat/markdown.pipe';
                   [(strategy)]="strategy"
                   [(historyMode)]="historyMode"
                   [(maxTurns)]="maxTurns"
-                  [(systemPrompt)]="systemPrompt"
                   [(selectedLlmId)]="selectedLlmId"
                   [(selectedModel)]="selectedModel"
                 >
@@ -133,7 +131,6 @@ export class NewConversationComponent {
   readonly tiled = input(false);
   /** Where Cancel goes and where the new conversation opens (`<basePath>/<id>`); bindable from route data. */
   readonly basePath = input('/agents');
-  readonly showSystemPrompt = input(true);
 
   private readonly agentService = inject(AgentService);
   private readonly conversationService = inject(ConversationService);
@@ -151,7 +148,6 @@ export class NewConversationComponent {
   protected readonly strategy = signal<ConversationStrategy>('stateful');
   protected readonly historyMode = signal<HistoryMode>('trimmed');
   protected readonly maxTurns = signal<number | null>(5);
-  protected readonly systemPrompt = signal('');
   protected readonly creating = signal(false);
   protected readonly createError = signal('');
 
@@ -201,7 +197,6 @@ export class NewConversationComponent {
   protected selectAgent(agent: Agent): void {
     this.selectedAgent.set(agent);
     this.title.set(agent.name);
-    this.systemPrompt.set(agent.system_prompt ?? '');
 
     const strategy = agent.conversation?.default_strategy ?? 'stateful';
     this.strategy.set(strategy);
@@ -235,7 +230,6 @@ export class NewConversationComponent {
       strategy: this.strategy(),
       history_mode: this.historyMode(),
       ...(this.maxTurns() != null ? { max_turns: this.maxTurns()! } : {}),
-      ...(this.showSystemPrompt() && this.systemPrompt().trim() ? { system_prompt: this.systemPrompt().trim() } : {}),
     }).subscribe({
       next: conv => {
         this.creating.set(false);
