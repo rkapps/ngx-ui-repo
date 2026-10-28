@@ -1,4 +1,4 @@
-import type { ReportFormat, TargetItem } from './message-renderer.types';
+import type { Rating, ReportFormat, TargetItem } from './message-renderer.types';
 
 const num = (value: number, max: number, min = 0) => value.toLocaleString('en-US', { minimumFractionDigits: min, maximumFractionDigits: max });
 
@@ -34,4 +34,17 @@ export function displayValue(value: string | number | null | undefined, format?:
     if (value == null) return '';
     if (typeof value !== 'number') return String(value);
     return format ? formatReportNumber(value, format) : String(value);
+}
+
+/** A rating's score as text: two decimals on a narrow scale (sentiment 0–1), one on a wider one (stars 0–5). */
+export function ratingScore(rating: Rating): string {
+    const span = rating.max_rating - (rating.min_rating ?? 0);
+    return span <= 2 ? rating.rating.toFixed(2) : rating.rating.toFixed(1);
+}
+
+/** How much of the gauge's arc a rating fills, 0–1, from `min_rating` (default 0) to `max_rating`. */
+export function ratingFill(rating: Rating): number {
+    const min = rating.min_rating ?? 0;
+    const span = rating.max_rating - min;
+    return span > 0 ? Math.min(1, Math.max(0, (rating.rating - min) / span)) : 0;
 }

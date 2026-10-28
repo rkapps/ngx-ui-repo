@@ -1,6 +1,13 @@
 import { Component, input } from '@angular/core';
 import { InlineMarkdownPipe } from '../../chat/inline-markdown.pipe';
-import { InsightCardsSection } from '../message-renderer.types';
+import { InsightCardsSection, Signal } from '../message-renderer.types';
+
+/** rustic-report's insight signal styles: pill label, accent (left bar, pill text) and its RGB for the pill fill. */
+const INSIGHT_STYLES: Partial<Record<Signal, { label: string; accent: string; rgb: string }>> = {
+    up:      { label: 'POSITIVE', accent: '#15803d', rgb: '21, 128, 61' },
+    down:    { label: 'RISK',     accent: '#b91c1c', rgb: '185, 28, 28' },
+    neutral: { label: 'WATCH',    accent: '#6b7280', rgb: '107, 114, 128' },
+};
 
 @Component({
     selector: 'app-insight-cards-section',
@@ -28,8 +35,10 @@ import { InsightCardsSection } from '../message-renderer.types';
                 </thead>
                 <tbody>
                     @for (card of section().data; track $index; let i = $index) {
+                        @let style = styleFor(card.signal);
                         <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
-                            <td class="px-1 md:px-3 py-1.5 w-10 text-center align-top">
+                            <td class="px-1 md:px-3 py-1.5 w-10 text-center align-top"
+                                [style.box-shadow]="style ? 'inset 3px 0 0 ' + style.accent : null">
                                 <span class="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold"
                                       [class.bg-emerald-100]="card.signal === 'up'"
                                       [class.text-emerald-700]="card.signal === 'up'"
@@ -40,7 +49,15 @@ import { InsightCardsSection } from '../message-renderer.types';
                                     {{ card.number ?? i + 1 }}
                                 </span>
                             </td>
-                            <td class="px-1 md:px-3 py-1.5 font-medium text-gray-900 align-top">{{ card.title }}</td>
+                            <td class="px-1 md:px-3 py-1.5 font-medium text-gray-900 align-top">
+                                @if (style) {
+                                    <span class="mb-1 inline-block rounded px-1.5 py-0.5 text-[11px] font-bold leading-none tracking-wide"
+                                          [style.color]="style.accent"
+                                          [style.background-color]="'rgba(' + style.rgb + ', 0.2)'">{{ style.label }}</span>
+                                    <br>
+                                }
+                                {{ card.title }}
+                            </td>
                             <td class="px-1 md:px-3 py-1.5 text-gray-500 leading-relaxed align-top" [innerHTML]="card.evidence | inlineMarkdown"></td>
                             <td class="px-1 md:px-3 py-1.5 align-top">
                                 @if (card.source) {
@@ -58,4 +75,9 @@ import { InsightCardsSection } from '../message-renderer.types';
 })
 export class InsightCardsSectionComponent {
     section = input.required<InsightCardsSection>();
+
+    /** Pill and tint for a signalled insight; none for older insights without a signal. */
+    protected styleFor(signal: Signal | null | undefined) {
+        return signal ? INSIGHT_STYLES[signal] ?? null : null;
+    }
 }

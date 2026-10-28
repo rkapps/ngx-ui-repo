@@ -1,8 +1,70 @@
-import { Component, input } from '@angular/core';
-import { TableSection, TechnicalsSection, TableCell, TableRow, TableRowInput, TableRowType, ColumnAlign } from '../message-renderer.types';
+import { Component, computed, input } from '@angular/core';
+import { TableSection, TechnicalsSection, TableCell, TableCellInput, TableRow, TableRowInput, TableRowType, ColumnAlign, ReportFormat } from '../message-renderer.types';
 import { displayValue } from '../report-format';
 
-interface NormalizedRow { cells: TableCell[]; rowType?: TableRowType; }
+/** A row ready to draw: display text in each cell's `value`, the label column first. */
+export interface NormalizedRow { cells: TableCell[]; rowType?: TableRowType; }
+
+/** rustic-report's row object: `{ label, format, cells }`. */
+const isReportRow = (row: unknown): row is TableRow & { label: string } =>
+    !!row && typeof row === 'object' && !Array.isArray(row) && typeof (row as TableRow).label === 'string' && Array.isArray((row as TableRow).cells);
+
+/** True when the rows use rustic-report's `{ label, format, cells }` shape. */
+export const isReportTable = (rows: TableRowInput[] | null | undefined): boolean => (rows ?? []).some(isReportRow);
+
+/**
+ * A cell with its display text: a bare value or a `{ value, ... }` object. A number is formatted
+ * with the cell's format, else the row's (rustic-report); with neither it shows as sent.
+ */
+function normalizeCell(cell: TableCellInput | unknown, rowFormat?: ReportFormat | null): TableCell {
+    if (cell && typeof cell === 'object' && 'value' in cell) {
+        const c = cell as TableCell;
+        return { ...c, value: displayValue(c.value, c.format ?? rowFormat ?? undefined) };
+    }
+    return { value: displayValue(cell as string | number | null | undefined, rowFormat ?? undefined) };
+}
+
+/** Every row shape — rustic-report's `{ label, format, cells }` and the older ones — as display cells. */
+export function normalizeRows(source: TableRowInput[] | null | undefined): NormalizedRow[] {
+    return (source ?? []).map(row => {
+        if (Array.isArray(row)) {
+            return { cells: row.map(c => normalizeCell(c)) };
+        }
+        if (row && typeof row === 'object') {
+            // rustic-report: { label, format, cells } — the label is the first column.
+            if (isReportRow(row)) {
+                return { rowType: row.row_type, cells: [{ value: row.label }, ...row.cells.map(c => normalizeCell(c, row.format))] };
+            }
+            // Row wrapper: { row_type, cells: [...] }
+            if ('cells' in row && Array.isArray((row as TableRow).cells)) {
+                const r = row as TableRow;
+                return { rowType: r.row_type, cells: r.cells.map(c => normalizeCell(c)) };
+            }
+            // Single-cell row: { value, note, signal, indicator } — label + data in one object
+            if ('value' in row) {
+                const r = row as Record<string, unknown>;
+                return {
+                    cells: [
+                        { value: String(r['value'] ?? '') },
+                        { value: String(r['note'] ?? ''), signal: r['signal'] as TableCell['signal'], indicator: r['indicator'] as TableCell['indicator'] },
+                    ],
+                };
+            }
+            // Keyed-by-header row: { "Metric": "Price", "CRUS": { value, ... } }
+            return { cells: Object.values(row).map(c => normalizeCell(c)) };
+        }
+        return { cells: [] };
+    });
+}
+
+/** The table as CSV: headers, then each row's display text. */
+export function tableCsv(headers: string[], rows: NormalizedRow[]): string {
+    const toCsv = (val: string) => (val.includes(',') ? `"${val.replace(/"/g, '""')}"` : val);
+    const lines: string[] = [];
+    if (headers.length) lines.push(headers.map(toCsv).join(','));
+    for (const row of rows) lines.push(row.cells.map(c => toCsv(String(c.value))).join(','));
+    return lines.join('\n');
+}
 
 @Component({
     selector: 'app-table-section',
@@ -105,76 +167,29 @@ interface NormalizedRow { cells: TableCell[]; rowType?: TableRowType; }
 export class TableSectionComponent {
     section = input.required<TableSection | TechnicalsSection>();
 
-    isColumnLayout(): boolean {
+    protected readonly normalizedRows = computed(() => normalizeRows(this.section().rows));
+    protected readonly normalizedTotals = computed(() => {
         const s = this.section();
-        return s.type === 'technicals' || s.layout === 'column';
-    }
+        return normalizeRows(s.type === 'table' ? s.totals : undefined);
+    });
+    protected readonly headers = computed(() => this.section().headers ?? []);
 
-    alignFor(i: number): ColumnAlign {
-        const align = this.section().column_align?.[i];
-        if (align) return align;
-        return (i === 0 || this.isColumnLayout()) ? 'left' : 'right';
-    }
-
-    headers(): string[] {
-        return this.section().headers ?? [];
-    }
-
-    normalizedRows(): NormalizedRow[] {
-        return this.normalizeRowSet(this.section().rows);
-    }
-
-    normalizedTotals(): NormalizedRow[] {
+    /**
+     * Column alignment. rustic-report computes `align` (missing entries = left); otherwise the older
+     * `column_align`, and for older tables without either, label left and values right (all left in
+     * column layout). A rustic-report table without `align` is all left.
+     */
+    protected alignFor(i: number): ColumnAlign {
         const s = this.section();
-        return this.normalizeRowSet(s.type === 'table' ? s.totals : undefined);
-    }
-
-    private normalizeRowSet(source: TableRowInput[] | undefined): NormalizedRow[] {
-        // Cells leave here with display text in `value`: a number is formatted when the cell has a
-        // `format` (rustic-report), otherwise shown as sent.
-        const normalizeCell = (cell: TableCell | string | unknown): TableCell => {
-            if (cell && typeof cell === 'object' && 'value' in cell) {
-                const c = cell as TableCell;
-                return { ...c, value: displayValue(c.value, c.format) };
-            }
-            return { value: displayValue(cell as string | number | null | undefined) };
-        };
-
-        return (source ?? []).map(row => {
-            if (Array.isArray(row)) {
-                return { cells: row.map(normalizeCell) };
-            }
-            if (row && typeof row === 'object') {
-                // Row wrapper: { row_type, cells: [...] }
-                if ('cells' in row && Array.isArray((row as TableRow).cells)) {
-                    const r = row as TableRow;
-                    return { rowType: r.row_type, cells: r.cells.map(normalizeCell) };
-                }
-                // Single-cell row: { value, note, signal, indicator } — label + data in one object
-                if ('value' in row) {
-                    const r = row as Record<string, unknown>;
-                    return {
-                        cells: [
-                            { value: String(r['value'] ?? '') },
-                            { value: String(r['note'] ?? ''), signal: r['signal'] as TableCell['signal'], indicator: r['indicator'] as TableCell['indicator'] },
-                        ],
-                    };
-                }
-                // Keyed-by-header row: { "Metric": "Price", "CRUS": { value, ... } }
-                return { cells: Object.values(row).map(normalizeCell) };
-            }
-            return { cells: [] };
-        });
+        const align = s.type === 'table' ? s.align : undefined;
+        if (align?.length) return align[i] ?? 'left';
+        const legacy = s.column_align?.[i];
+        if (legacy) return legacy;
+        if (isReportTable(s.rows)) return 'left';
+        return i === 0 || s.type === 'technicals' || s.layout === 'column' ? 'left' : 'right';
     }
 
     csvText(): string {
-        const toCsv = (val: string) => val.includes(',') ? `"${val.replace(/"/g, '""')}"` : val;
-        const lines: string[] = [];
-        const h = this.headers();
-        if (h.length) lines.push(h.map(toCsv).join(','));
-        for (const row of this.normalizedRows()) {
-            lines.push(row.cells.map(c => toCsv(String(c.value))).join(','));
-        }
-        return lines.join('\n');
+        return tableCsv(this.headers(), this.normalizedRows());
     }
 }

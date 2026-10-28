@@ -3,12 +3,12 @@ import { JsonPipe } from '@angular/common';
 import { LucideAngularModule } from 'lucide-angular';
 import { formatLooseJson, parseJsonContent } from '../../models/turn-execution';
 import { MarkdownPipe } from '../chat/markdown.pipe';
-import { ConsumerBuzzSection, RatingsSection, Section, StructuredResponse, TableCell } from './message-renderer.types';
+import { ConsumerBuzzSection, RatingsSection, Section, SectionSize, StructuredResponse } from './message-renderer.types';
 import { ContextSectionComponent } from './sections/context-section.component';
 import { MetricCardsSectionComponent } from './sections/metric-cards-section.component';
 import { BarChartSectionComponent } from './sections/bar-chart-section.component';
 import { LineChartSectionComponent } from './sections/line-chart-section.component';
-import { TableSectionComponent } from './sections/table-section.component';
+import { normalizeRows, TableSectionComponent, tableCsv } from './sections/table-section.component';
 import { InsightCardsSectionComponent } from './sections/insight-cards-section.component';
 import { EconomicSignalsSectionComponent } from './sections/economic-signals-section.component';
 import { ConsumerBuzzSectionComponent } from './sections/consumer-buzz-section.component';
@@ -16,10 +16,18 @@ import { PositioningSectionComponent } from './sections/positioning-section.comp
 import { PriceTargetsSectionComponent } from './sections/price-targets-section.component';
 import { ProfilesSectionComponent } from './sections/profiles-section.component';
 import { TargetsSectionComponent } from './sections/targets-section.component';
-import { displayValue, formatReportNumber, targetChangePct } from './report-format';
+import { displayValue, formatReportNumber, ratingFill, ratingScore, targetChangePct } from './report-format';
 
 /** `price_targets` and its rustic-report successor `targets`: a narrow list kept to the right of a pair. */
 const isTargets = (s: Section) => s.type === 'price_targets' || s.type === 'targets';
+
+/** rustic-report's computed width; null/absent on older reports, which size by content here instead. */
+const sizeOf = (s: Section): SectionSize | null => {
+    const size = (s as { size?: unknown }).size;
+    return size === 'full' || size === 'half' ? size : null;
+};
+
+type SectionRow = { sections: Section[]; paired: boolean };
 
 @Component({
     selector: 'app-message-renderer',
@@ -65,8 +73,9 @@ export class MessageRendererComponent {
                 group: section.group,
                 sentiment: (section.data ?? []).map(r => ({
                     source: r.source,
-                    rating: String(r.rating),
+                    rating: ratingScore(r),
                     max_rating: String(r.max_rating),
+                    fill: ratingFill(r),
                     signal: r.signal,
                     theme: r.theme,
                 })),
@@ -85,8 +94,10 @@ export class MessageRendererComponent {
         });
     }
 
-    protected rowGridClass(row: { sections: Section[]; paired: boolean }): string {
+    protected rowGridClass(row: SectionRow): string {
         if (!row.paired) return '';
+        // rustic-report sizes its sections: halves share a row, fulls span it.
+        if (row.sections.some(s => sizeOf(s))) return 'grid grid-cols-1 2xl:grid-cols-2 gap-4 items-start';
         if (row.sections.length === 2) {
             // Give insight_cards more width than a single paired sibling — it holds denser, more valuable content.
             const insightIdx = row.sections.findIndex(s => s.type === 'insight_cards');
@@ -162,8 +173,10 @@ export class MessageRendererComponent {
         return 0;
     }
 
-    protected sectionColClass(row: { sections: Section[]; paired: boolean }, section: Section): string {
+    protected sectionColClass(row: SectionRow, section: Section): string {
         if (!row.paired) return '';
+        const size = sizeOf(section);
+        if (size) return size === 'full' ? 'min-w-0 col-span-full' : 'min-w-0';
         const tier = this.wideTier(section);
         if (tier === 3) return 'min-w-0 col-span-full 5xl:col-span-1';
         if (tier === 2) return 'min-w-0 col-span-full 4xl:col-span-1';
@@ -171,10 +184,14 @@ export class MessageRendererComponent {
         return 'min-w-0';
     }
 
-    get groupedRows(): Array<{ sections: Section[]; paired: boolean }> {
+    /**
+     * Rows of sections: a run of sections sharing a `group` forms one row; so do two consecutive
+     * ungrouped half-width sections (rustic-report `size`).
+     */
+    get groupedRows(): SectionRow[] {
         const p = this.parsed;
         if (!p) return [];
-        const rows: Array<{ sections: Section[]; paired: boolean }> = [];
+        const rows: SectionRow[] = [];
         // suggested_prompts never renders here (it's shown as prompt chips elsewhere) — exclude it
         // so it can't force a real section into an unwanted paired 2-column layout with an empty sibling.
         const secs = p.sections.filter(s => s.type !== 'suggested_prompts');
@@ -189,6 +206,9 @@ export class MessageRendererComponent {
                     if ((next.group || '') === g) group.push(next);
                     else break;
                 }
+            } else if (sizeOf(s) === 'half') {
+                const next = secs[i + 1] as (Section & { group?: string }) | undefined;
+                if (next && !next.group && sizeOf(next) === 'half') group.push(next);
             }
             rows.push({ sections: this.orderPairedGroup(group), paired: group.length > 1 });
             i += group.length;
@@ -197,8 +217,9 @@ export class MessageRendererComponent {
     }
 
     // insight_cards always lands on the left (wider) side; price_targets / targets always land on the right.
+    // Sized (rustic-report) sections keep the report's order.
     private orderPairedGroup(group: Section[]): Section[] {
-        if (group.length !== 2) return group;
+        if (group.length !== 2 || group.some(s => sizeOf(s))) return group;
         const insightIdx = group.findIndex(s => s.type === 'insight_cards');
         if (insightIdx === 1) return [group[1], group[0]];
         const targetsIdx = group.findIndex(isTargets);
@@ -242,18 +263,8 @@ export class MessageRendererComponent {
             }
             case 'table':
             case 'technicals': {
-                const headers = section.headers ?? [];
-                const toCsv = (val: string) => val.includes(',') ? `"${val.replace(/"/g, '""')}"` : val;
-                if (headers.length) lines.push(headers.map(toCsv).join(','));
-                for (const row of section.rows ?? []) {
-                    const cells = Array.isArray(row) ? row : Object.values(row);
-                    lines.push(cells.map((c: unknown) => {
-                        const val = (c && typeof c === 'object' && 'value' in c)
-                            ? displayValue((c as TableCell).value, (c as TableCell).format)
-                            : displayValue(c as string | number | null | undefined);
-                        return toCsv(val);
-                    }).join(','));
-                }
+                const totals = section.type === 'table' ? section.totals ?? [] : [];
+                lines.push(tableCsv(section.headers ?? [], normalizeRows([...(section.rows ?? []), ...totals])));
                 break;
             }
             case 'positioning':
@@ -290,7 +301,7 @@ export class MessageRendererComponent {
                 break;
             case 'ratings':
                 for (const r of section.data ?? []) {
-                    lines.push(`${r.source}: ${r.rating}/${r.max_rating}${r.theme ? ` — ${r.theme}` : ''}`);
+                    lines.push(`${r.source}: ${ratingScore(r)}/${r.max_rating}${r.theme ? ` — ${r.theme}` : ''}`);
                 }
                 if (section.related?.length) {
                     lines.push('', 'Related: ' + section.related.join(', '));
@@ -298,7 +309,8 @@ export class MessageRendererComponent {
                 break;
             case 'insight_cards':
                 for (const [i, card] of (section.data ?? []).entries()) {
-                    lines.push(`${card.number ?? i + 1}. ${card.title}`);
+                    const tag = card.signal === 'up' ? '[POSITIVE] ' : card.signal === 'down' ? '[RISK] ' : card.signal === 'neutral' ? '[WATCH] ' : '';
+                    lines.push(`${tag}${card.number ?? i + 1}. ${card.title}`);
                     lines.push(`   ${card.evidence}`);
                     if (card.source) lines.push(`   Source: ${card.source}`);
                     lines.push('');

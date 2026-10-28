@@ -96,20 +96,23 @@ export const CONSUMER_BUZZ_ICON_NAMES = Object.keys(CONSUMER_BUZZ_ICONS);
                                         <path [attr.d]="arcPath"
                                               fill="none" stroke="#f3f4f6"
                                               stroke-width="5" stroke-linecap="round" />
-                                        <!-- Progress arc -->
-                                        <path [attr.d]="arcPath"
-                                              fill="none"
-                                              [attr.stroke]="dialColor(item.signal)"
-                                              stroke-width="5" stroke-linecap="round"
-                                              [attr.stroke-dasharray]="arcLength"
-                                              [attr.stroke-dashoffset]="arcOffset(item)" />
+                                        <!-- Progress arc: from the start over the filled share of the sweep -->
+                                        @if (arcFilled(item) > 0) {
+                                            <path [attr.d]="arcPath"
+                                                  fill="none"
+                                                  [attr.stroke]="dialColor(item.signal)"
+                                                  [attr.stroke-opacity]="strength(item)"
+                                                  stroke-width="5" stroke-linecap="round"
+                                                  [attr.stroke-dasharray]="arcFilled(item) + ' ' + arcLength" />
+                                        }
                                         <!-- Rating centred inside the arch, wrapped onto multiple lines if it's a phrase -->
                                         <text [attr.x]="cx" text-anchor="middle">
                                             @for (line of ratingLines(item.rating); track $index; let li = $index) {
                                                 <tspan [attr.x]="cx"
                                                        [attr.y]="ratingLineY(item.rating, li)"
                                                        [attr.font-size]="ratingFontSize(item.rating)" font-weight="700"
-                                                       [attr.fill]="dialColor(item.signal)">{{ line }}</tspan>
+                                                       [attr.fill]="dialColor(item.signal)"
+                                                       [attr.fill-opacity]="strength(item)">{{ line }}</tspan>
                                             }
                                         </text>
                                     </svg>
@@ -214,7 +217,18 @@ export class ConsumerBuzzSectionComponent {
         return match ? match[1] : null;
     }
 
-    arcOffset(item: SentimentItem): number {
+    /** Length of the coloured part of the arc. */
+    arcFilled(item: SentimentItem): number {
+        return ARC_LENGTH - this.arcOffset(item);
+    }
+
+    /** Colour strength from the score (`ratings`): faint for weak, full for strong. */
+    strength(item: SentimentItem): number {
+        return item.fill != null ? 0.45 + 0.55 * item.fill : 1;
+    }
+
+    private arcOffset(item: SentimentItem): number {
+        if (item.fill != null) return ARC_LENGTH * (1 - item.fill);
         const r = parseFloat(item.rating);
         if (!isNaN(r)) {
             if (!item.max_rating) return 0;
@@ -229,7 +243,7 @@ export class ConsumerBuzzSectionComponent {
         return ARC_LENGTH * (1 - signalPct / 100);
     }
 
-    dialColor(signal?: Signal): string {
+    dialColor(signal?: Signal | null): string {
         if (signal === 'up') return '#10b981';
         if (signal === 'down') return '#dc2626';
         return '#9ca3af';
