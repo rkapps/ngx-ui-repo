@@ -12,6 +12,7 @@ import {
   type AgentConfigVersion,
   AdminConfigService,
   type AvailableAgent,
+  type Deliverable,
   EXECUTION_TYPE_LABELS,
   type ExecutionType,
   type LlmConfig,
@@ -33,8 +34,8 @@ import { ThreePanelLayoutComponent } from '../three-panel-layout/three-panel-lay
 
 type ToolSource = 'registry' | 'mcp';
 
-/** Which list of sub-agent references the picker edits. */
-type RefTarget = { kind: 'stage'; index: number } | { kind: 'available' };
+/** Which list of sub-agent references the picker edits; `synthesizer` and `delivery` hold at most one. */
+type RefTarget = { kind: 'stage'; index: number } | { kind: 'available' } | { kind: 'synthesizer' } | { kind: 'delivery' };
 
 /** One entry in the left section nav; `depth` 1 = nested under Pipeline (stages, etc.). */
 interface NavItem {
@@ -98,6 +99,25 @@ function blankAgent(): AgentConfig {
 function mergedLlm(current: LlmConfig | null, changes: Partial<LlmConfig>): LlmConfig | null {
   const next: LlmConfig = { llm: null, model: null, preset: null, ...current, ...changes };
   return next.llm || next.model || next.preset ? next : null;
+}
+
+const DELIVERABLES: { value: Deliverable; label: string; hint: string }[] = [
+  { value: 'pdf', label: 'PDF', hint: 'Synthesize without streaming, then attach a PDF' },
+  { value: 'email', label: 'Email', hint: 'As PDF, then email it to the signed-in user' },
+];
+
+/**
+ * `config` as the editor edits it: a pipeline always has `pipeline`; the older `delivery_agent`
+ * becomes `delivery` (with nothing allowed yet) and `pipeline.synthesizer_agent` becomes `synthesizer`.
+ */
+function normalised(config: AgentConfig): AgentConfig {
+  const { delivery_agent: legacy, ...rest } = config as AgentConfig & { delivery_agent?: AvailableAgent | null };
+  let next: AgentConfig = legacy && !rest.delivery ? { ...rest, delivery: { agent: legacy, allowed: [] } } : rest;
+  if (next.pipeline && 'synthesizer_agent' in next.pipeline) {
+    const { synthesizer_agent: oldSynth, ...pipeline } = next.pipeline as PipelineConfig & { synthesizer_agent?: AvailableAgent | null };
+    next = { ...next, pipeline: { ...pipeline, synthesizer: pipeline.synthesizer ?? oldSynth ?? null } };
+  }
+  return next.execution === 'pipeline' && !next.pipeline ? { ...next, pipeline: blankPipeline() } : next;
 }
 
 function blankPipeline(): PipelineConfig {
@@ -381,64 +401,113 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
                   </span>
                 </h2>
 
-                @if (mode() === 'deterministic') {
-                  <div class="flex max-h-[45%] shrink-0 flex-col gap-4 overflow-y-auto border-b border-border p-4 text-sm">
-                    <div class="flex flex-col gap-2">
-                      <div class="flex items-center gap-2">
-                        <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Stages</span>
-                        <span class="text-xs text-text-muted">run in order; the last one is the synthesizer</span>
-                        <twang-button class="ml-auto" variant="primarySoft" size="sm" icon="plus" label="Add stage" (buttonClick)="addStage()" />
+                <!-- Left: delivery, stages (or available agents), synthesizer. Right: agents for the selected one. -->
+                <div class="grid min-h-0 flex-1 gap-4 p-4 md:grid-cols-3">
+                  <div class="flex min-h-0 flex-col gap-3 overflow-y-auto md:col-span-2">
+                    @if (hasOutputAgents()) {
+                      <ng-container
+                        *ngTemplateOutlet="slotCard; context: { $implicit: { kind: 'delivery' }, label: 'Delivery agent', hint: 'Decides how each turn is delivered (screen, PDF). Runs once per turn, before the first stage or decision.' }"
+                      />
+                    }
+
+                    @if (mode() === 'deterministic') {
+                      <div class="flex shrink-0 flex-col rounded-lg border border-border bg-white">
+                        <div class="flex cursor-pointer items-center gap-2 bg-gray-50 px-3 py-1.5" [class.border-b]="!isCollapsed('stages')" [class.border-border]="!isCollapsed('stages')" (click)="toggleCollapsed('stages')">
+                          <lucide-icon [name]="isCollapsed('stages') ? 'chevron-right' : 'chevron-down'" [size]="14" class="shrink-0 text-text-muted" />
+                          <span class="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Stages · {{ pipeline()!.stages.length }} · run in order</span>
+                          <twang-button class="ml-auto" variant="primarySoft" size="xs" icon="plus" label="Add stage" (click)="$event.stopPropagation()" (buttonClick)="addStage()" />
+                        </div>
+                        @if (!isCollapsed('stages')) {
+                        <ol class="flex flex-col">
+                          @for (stage of pipeline()!.stages; track $index; let i = $index; let first = $first; let last = $last) {
+                            @let selected = isTarget({ kind: 'stage', index: i });
+                            <li class="border-b border-border last:border-b-0">
+                              <div class="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-surface-muted" (click)="selectStage(i)">
+                                <span class="w-5 shrink-0 text-right tabular-nums text-text-muted">{{ i + 1 }}.</span>
+                                <span class="min-w-0 flex-1 truncate" [class.font-semibold]="selected" [class.font-medium]="!selected">{{ stage.name || 'Untitled' }}</span>
+                                @if (stage.parallel) {
+                                  <span class="rounded bg-surface-muted px-1.5 py-0.5 text-[10px] uppercase text-text-muted">parallel</span>
+                                }
+                                <span class="shrink-0 text-xs text-text-muted">{{ stage.sub_agents.length }} agent{{ stage.sub_agents.length === 1 ? '' : 's' }}</span>
+                                <span class="flex shrink-0 gap-1" (click)="$event.stopPropagation()">
+                                  <twang-button variant="default" size="xs" icon="chevron-up" ariaLabel="Move stage up" [disabled]="first" (buttonClick)="moveStage(i, -1)" />
+                                  <twang-button variant="default" size="xs" icon="chevron-down" ariaLabel="Move stage down" [disabled]="last" (buttonClick)="moveStage(i, 1)" />
+                                  <twang-button variant="default" size="xs" icon="trash-2" ariaLabel="Remove stage" (buttonClick)="removeStage(i)" />
+                                </span>
+                              </div>
+                              <!-- The open stage stays open while delivery / synthesizer is the target. -->
+                              @if (i === stageIndex()) {
+                                <div class="contents" (click)="selectStage(i)">
+                                <div class="flex flex-wrap items-end gap-4 border-t border-border px-4 py-2 pl-10">
+                                  <div class="flex w-56 flex-col gap-1">
+                                    <label class="text-[11px] font-medium text-text-muted">Name</label>
+                                    <twang-input placeholder="e.g. fetch-data" [ngModel]="stage.name" (ngModelChange)="updateStage(i, { name: $event })" />
+                                  </div>
+                                  <label class="flex cursor-pointer items-center gap-2 pb-2 text-sm" title="Run this stage's sub-agents concurrently instead of one after another">
+                                    <input type="checkbox" class="accent-primary-600" [checked]="stage.parallel" (change)="updateStage(i, { parallel: !stage.parallel })" />
+                                    Run sub-agents in parallel
+                                  </label>
+                                </div>
+                                <div class="border-t border-border">
+                                  <ng-container *ngTemplateOutlet="refList; context: { $implicit: { kind: 'stage', index: i } }" />
+                                </div>
+                                </div>
+                              }
+                            </li>
+                          } @empty {
+                            <li class="px-3 py-2 text-sm text-text-muted">No stages yet — add one, then pick its sub-agents on the right.</li>
+                          }
+                        </ol>
+                        }
                       </div>
-                      <ol class="flex flex-col rounded-lg border border-border">
-                        @for (stage of pipeline()!.stages; track $index; let i = $index; let first = $first; let last = $last) {
-                          <li
-                            class="flex cursor-pointer items-center gap-2 border-b border-border px-3 py-1.5 last:border-b-0 hover:bg-surface-muted"
-                            [class.bg-primary-50]="i === stageIndex()"
-                            (click)="selectedStage.set(i)"
-                          >
-                            <span class="w-5 shrink-0 text-right tabular-nums text-text-muted">{{ i + 1 }}.</span>
-                            <span class="min-w-0 flex-1 truncate font-medium" [class.text-primary-700]="i === stageIndex()">{{ stage.name || 'Untitled' }}</span>
-                            @if (last) {
-                              <span class="rounded bg-green-50 px-1.5 py-0.5 text-[10px] uppercase text-green-700">synthesizer</span>
-                            }
-                            @if (stage.parallel) {
-                              <span class="rounded bg-surface-muted px-1.5 py-0.5 text-[10px] uppercase text-text-muted">parallel</span>
-                            }
-                            <span class="shrink-0 text-xs text-text-muted">{{ stage.sub_agents.length }} agent{{ stage.sub_agents.length === 1 ? '' : 's' }}</span>
-                            <span class="flex shrink-0 gap-1" (click)="$event.stopPropagation()">
-                              <twang-button variant="default" size="xs" icon="chevron-up" ariaLabel="Move stage up" [disabled]="first" (buttonClick)="moveStage(i, -1)" />
-                              <twang-button variant="default" size="xs" icon="chevron-down" ariaLabel="Move stage down" [disabled]="last" (buttonClick)="moveStage(i, 1)" />
-                              <twang-button variant="default" size="xs" icon="trash-2" ariaLabel="Remove stage" (buttonClick)="removeStage(i)" />
-                            </span>
+                    } @else {
+                      <ng-container
+                        *ngTemplateOutlet="slotCard; context: { $implicit: { kind: 'available' }, label: 'Available to the orchestrator', hint: null }"
+                      />
+                    }
+
+                    @if (hasOutputAgents()) {
+                      <ng-container
+                        *ngTemplateOutlet="slotCard; context: { $implicit: { kind: 'synthesizer' }, label: 'Synthesizer agent', hint: 'Produces the final output from the collected outputs. None returns them merged as-is.' }"
+                      />
+                    }
+                  </div>
+
+                  <!-- Agents to pick from, for the selected delivery / stage / synthesizer -->
+                  <div class="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border">
+                    <div class="shrink-0 truncate border-b border-border bg-gray-50 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+                      Agents · {{ targetLabel() }}
+                    </div>
+                    @if (activeTarget(); as target) {
+                      <ul class="min-h-0 flex-1 overflow-y-auto">
+                        @for (c of choicesFor(target); track c.id) {
+                          <li class="[&:last-child>label]:border-b-0">
+                            <label class="flex cursor-pointer items-center gap-3 border-b border-border px-4 py-2 hover:bg-surface-muted">
+                              <input type="checkbox" class="accent-primary-600" [checked]="hasRef(target, c.id)" (change)="toggleRef(target, c.id)" />
+                              <div class="min-w-0 flex-1">
+                                <div class="truncate text-sm" [class.font-semibold]="hasRef(target, c.id)">{{ c.name || c.id }}</div>
+                                <div class="truncate font-mono text-[11px] text-text-muted">{{ c.id }}</div>
+                              </div>
+                              @if (c.execution !== 'pipeline_agent') {
+                                <span class="shrink-0 rounded bg-primary-50 px-1.5 py-0.5 text-[10px] uppercase text-primary-700">{{ executionLabel(c.execution) }}</span>
+                              }
+                              @if (c.draftOnly) {
+                                <span class="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] uppercase text-amber-700" title="Not promoted yet — has no live version">draft</span>
+                              }
+                              @if (!c.enabled) {
+                                <span class="shrink-0 rounded bg-surface-muted px-1.5 py-0.5 text-[10px] uppercase text-text-muted">disabled</span>
+                              }
+                            </label>
                           </li>
                         } @empty {
-                          <li class="px-3 py-2 text-text-muted">No stages yet — add one, then pick its sub-agents below.</li>
+                          <li class="px-4 py-3 text-sm text-text-muted">{{ agentsLoaded() ? 'No other agents yet — create one first.' : 'Loading agents…' }}</li>
                         }
-                      </ol>
-                    </div>
+                      </ul>
+                    } @else {
+                      <p class="px-4 py-3 text-sm text-text-muted">Add a stage to pick its agents.</p>
+                    }
                   </div>
-                }
-
-                @if (mode() === 'deterministic') {
-                  @if (selectedStageConfig(); as stage) {
-                    <div class="flex shrink-0 flex-wrap items-end gap-4 border-b border-border px-4 py-3">
-                      <span class="pb-2 text-sm font-semibold text-primary-600">Stage {{ stageIndex() + 1 }}</span>
-                      <div class="flex w-64 flex-col gap-1.5">
-                        <label class="text-xs font-medium text-text-muted">Name</label>
-                        <twang-input placeholder="e.g. fetch-data" [ngModel]="stage.name" (ngModelChange)="updateStage(stageIndex(), { name: $event })" />
-                      </div>
-                      <label class="flex cursor-pointer items-center gap-2 pb-2 text-sm" title="Run this stage's sub-agents concurrently instead of one after another">
-                        <input type="checkbox" class="accent-primary-600" [checked]="stage.parallel" (change)="updateStage(stageIndex(), { parallel: !stage.parallel })" />
-                        Run sub-agents in parallel
-                      </label>
-                    </div>
-                    <ng-container
-                      *ngTemplateOutlet="subAgentPicker; context: { $implicit: { kind: 'stage', index: stageIndex() }, label: stage.parallel ? 'Sub-agents' : 'Sub-agents (run in order)' }"
-                    />
-                  }
-                } @else {
-                  <ng-container *ngTemplateOutlet="subAgentPicker; context: { $implicit: { kind: 'available' }, label: 'Available to the orchestrator' }" />
-                }
+                </div>
               </section>
             }
           } @else {
@@ -596,114 +665,110 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
       </app-three-panel-layout>
     }
 
-    <!-- Sub-agent picker: ordered selection (left) | live agents of any type (right). target = stage or available. -->
-    <ng-template #subAgentPicker let-target let-label="label">
-      <!-- Selected (left) and all agents (right), as two cards -->
-      <div class="grid min-h-0 flex-1 gap-4 p-4 md:grid-cols-2">
-        <div class="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border">
-          <div class="shrink-0 border-b border-border bg-gray-50 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-            {{ label }} · {{ refs(target).length }}
-          </div>
-          <ol class="min-h-0 flex-1 overflow-y-auto">
-            @for (ref of refs(target); track ref.id; let j = $index; let first = $first; let last = $last) {
-              <li class="border-b border-border last:border-b-0">
-                <div class="flex items-center gap-2 px-4 py-2">
-                  <span class="w-5 shrink-0 text-right text-xs tabular-nums text-text-muted">{{ j + 1 }}.</span>
-                  <div class="min-w-0 flex-1">
-                    <div class="truncate text-sm">{{ agentName(ref.id) }}</div>
-                    <div class="truncate font-mono text-[11px] text-text-muted">{{ ref.id }}</div>
+    <!-- Selected sub-agents of a target (stage, available, delivery, synthesizer), with per-reference overrides. -->
+    <ng-template #refList let-target>
+      <ol>
+        @for (ref of refs(target); track ref.id; let j = $index; let first = $first; let last = $last) {
+          <li class="border-b border-border last:border-b-0">
+            <div class="flex items-center gap-2 px-4 py-2">
+              <span class="w-5 shrink-0 text-right text-xs tabular-nums text-text-muted">{{ j + 1 }}.</span>
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-sm">{{ agentName(ref.id) }}</div>
+                <div class="truncate font-mono text-[11px] text-text-muted">{{ ref.id }}</div>
+              </div>
+              @if (refIssue(ref.id); as issue) {
+                <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase" [class]="issue.cls" [title]="issue.title">{{ issue.label }}</span>
+              }
+              @if (ref.llm_config) {
+                <span class="shrink-0 rounded bg-primary-50 px-1.5 py-0.5 text-[10px] uppercase text-primary-700" title="Overrides the sub-agent's LLM settings">llm</span>
+              }
+              @if (ref.relay_tool_output && !isSingle(target)) {
+                <span class="shrink-0 rounded bg-primary-50 px-1.5 py-0.5 text-[10px] uppercase text-primary-700" title="Returns tool output as-is">relay</span>
+              }
+              <twang-button
+                [variant]="isRefOpen(target, ref.id) ? 'primary' : 'default'"
+                size="xs"
+                icon="sliders-horizontal"
+                ariaLabel="Settings"
+                (buttonClick)="toggleRefSettings(target, ref.id)"
+              />
+              <twang-button variant="default" size="xs" icon="chevron-up" ariaLabel="Move up" [disabled]="first" (buttonClick)="moveRef(target, j, -1)" />
+              <twang-button variant="default" size="xs" icon="chevron-down" ariaLabel="Move down" [disabled]="last" (buttonClick)="moveRef(target, j, 1)" />
+              <twang-button variant="default" size="xs" icon="x" ariaLabel="Remove" (buttonClick)="toggleRef(target, ref.id)" />
+            </div>
+            <!-- Per-reference overrides: LLM (over the sub-agent's own, then the conversation's) and relay -->
+            @if (isRefOpen(target, ref.id)) {
+              @let refLlm = ref.llm_config ?? noLlm;
+              <div class="flex flex-col gap-3 border-t border-border px-4 py-3 pl-11">
+                <div class="grid gap-3 sm:grid-cols-3">
+                  <div class="flex min-w-0 flex-col gap-1">
+                    <label class="text-[11px] font-medium text-text-muted">Provider</label>
+                    <twang-dropdown [options]="providerOptionsFor(refLlm.llm, 'Agent default')" [value]="refLlm.llm ?? ''" (valueChange)="setRefProvider(target, j, $event)" />
                   </div>
-                  @if (refIssue(ref.id); as issue) {
-                    <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase" [class]="issue.cls" [title]="issue.title">{{ issue.label }}</span>
-                  }
-                  @if (ref.llm_config) {
-                    <span class="shrink-0 rounded bg-primary-50 px-1.5 py-0.5 text-[10px] uppercase text-primary-700" title="Overrides the sub-agent's LLM settings">llm</span>
-                  }
-                  @if (ref.relay_tool_output) {
-                    <span class="shrink-0 rounded bg-primary-50 px-1.5 py-0.5 text-[10px] uppercase text-primary-700" title="Returns tool output as-is">relay</span>
-                  }
-                  <twang-button
-                    [variant]="isRefOpen(target, ref.id) ? 'primary' : 'default'"
-                    size="xs"
-                    icon="sliders-horizontal"
-                    ariaLabel="Settings"
-                    (buttonClick)="toggleRefSettings(target, ref.id)"
-                  />
-                  <twang-button variant="default" size="xs" icon="chevron-up" ariaLabel="Move up" [disabled]="first" (buttonClick)="moveRef(target, j, -1)" />
-                  <twang-button variant="default" size="xs" icon="chevron-down" ariaLabel="Move down" [disabled]="last" (buttonClick)="moveRef(target, j, 1)" />
-                  <twang-button variant="default" size="xs" icon="x" ariaLabel="Remove" (buttonClick)="toggleRef(target, ref.id)" />
+                  <div class="flex min-w-0 flex-col gap-1">
+                    <label class="text-[11px] font-medium text-text-muted">Model</label>
+                    <twang-dropdown
+                      [options]="modelOptionsFor(refLlm)"
+                      [placeholder]="refLlm.llm ? 'Select a model' : 'Agent default'"
+                      [value]="refLlm.model ?? ''"
+                      [disabled]="!refLlm.llm"
+                      (valueChange)="setRefLlm(target, j, { model: $event || null })"
+                    />
+                  </div>
+                  <div class="flex min-w-0 flex-col gap-1">
+                    <label class="text-[11px] font-medium text-text-muted">Preset</label>
+                    <twang-dropdown [options]="refPresetOptions" [value]="refLlm.preset ?? ''" (valueChange)="setRefLlm(target, j, { preset: $any($event) || null })" />
+                  </div>
                 </div>
-                <!-- Per-reference overrides: LLM (over the sub-agent's own, then the conversation's) and relay -->
-                @if (isRefOpen(target, ref.id)) {
-                  @let refLlm = ref.llm_config ?? noLlm;
-                  <div class="flex flex-col gap-3 border-t border-border bg-gray-50 px-4 py-3 pl-11">
-                    <div class="grid gap-3 sm:grid-cols-3">
-                      <div class="flex min-w-0 flex-col gap-1">
-                        <label class="text-[11px] font-medium text-text-muted">Provider</label>
-                        <twang-dropdown [options]="providerOptionsFor(refLlm.llm, 'Agent default')" [value]="refLlm.llm ?? ''" (valueChange)="setRefProvider(target, j, $event)" />
-                      </div>
-                      <div class="flex min-w-0 flex-col gap-1">
-                        <label class="text-[11px] font-medium text-text-muted">Model</label>
-                        <twang-dropdown
-                          [options]="modelOptionsFor(refLlm)"
-                          [placeholder]="refLlm.llm ? 'Select a model' : 'Agent default'"
-                          [value]="refLlm.model ?? ''"
-                          [disabled]="!refLlm.llm"
-                          (valueChange)="setRefLlm(target, j, { model: $event || null })"
-                        />
-                      </div>
-                      <div class="flex min-w-0 flex-col gap-1">
-                        <label class="text-[11px] font-medium text-text-muted">Preset</label>
-                        <twang-dropdown [options]="refPresetOptions" [value]="refLlm.preset ?? ''" (valueChange)="setRefLlm(target, j, { preset: $any($event) || null })" />
-                      </div>
-                    </div>
-                    @if (canRelay(ref.id) || ref.relay_tool_output) {
-                      <label class="flex cursor-pointer items-center gap-2 text-sm" title="Return the sub-agent's tool output as its response, without a final LLM pass">
-                        <input type="checkbox" class="accent-primary-600" [checked]="!!ref.relay_tool_output" (change)="updateRef(target, j, { relay_tool_output: ref.relay_tool_output ? null : true })" />
-                        Relay tool output
-                        @if (!canRelay(ref.id)) {
-                          <span class="text-xs text-amber-700">(only applies to pipeline agents)</span>
-                        }
-                      </label>
+                @if (!isSingle(target) && (canRelay(ref.id) || ref.relay_tool_output)) {
+                  <label class="flex cursor-pointer items-center gap-2 text-sm" title="Return the sub-agent's tool output as its response, without a final LLM pass">
+                    <input type="checkbox" class="accent-primary-600" [checked]="!!ref.relay_tool_output" (change)="updateRef(target, j, { relay_tool_output: ref.relay_tool_output ? null : true })" />
+                    Relay tool output
+                    @if (!canRelay(ref.id)) {
+                      <span class="text-xs text-amber-700">(only applies to pipeline agents)</span>
                     }
-                    <p class="text-xs text-text-muted">Unset LLM fields fall back to the sub-agent's own settings, then the conversation's.</p>
-                  </div>
+                  </label>
                 }
-              </li>
-            } @empty {
-              <li class="px-4 py-3 text-sm text-text-muted">None yet — pick agents on the right.</li>
+                <p class="text-xs text-text-muted">Unset LLM fields fall back to the sub-agent's own settings, then the conversation's.</p>
+              </div>
             }
-          </ol>
-        </div>
-        <div class="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border">
-          <div class="shrink-0 border-b border-border bg-gray-50 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-            Agents
+          </li>
+        } @empty {
+          <li class="px-4 py-3 text-sm text-text-muted">{{ isSingle(target) ? 'None — pick an agent on the right.' : 'None yet — pick agents on the right.' }}</li>
+        }
+      </ol>
+    </ng-template>
+
+    <!-- A titled card around one target's selection; clicking it makes it the target the agents list edits. -->
+    <ng-template #slotCard let-target let-label="label" let-hint="hint">
+      @let key = target.kind;
+      <div class="flex shrink-0 flex-col rounded-lg border bg-white" [class]="isTarget(target) ? 'border-primary-300' : 'border-border'" (click)="selectTarget(target)">
+        <div class="flex cursor-pointer items-start gap-2 bg-gray-50 px-3 py-1.5" [class.border-b]="!isCollapsed(key)" [class.border-border]="!isCollapsed(key)" (click)="toggleCollapsed(key)">
+          <lucide-icon [name]="isCollapsed(key) ? 'chevron-right' : 'chevron-down'" [size]="14" class="mt-0.5 shrink-0 text-text-muted" />
+          <div class="min-w-0 flex-1">
+            <span class="text-[11px] font-semibold uppercase tracking-wider text-text-muted">{{ label }} · {{ refs(target).length }}</span>
+            @if (hint && !isCollapsed(key)) {
+              <p class="text-xs text-text-muted">{{ hint }}</p>
+            }
           </div>
-          <ul class="min-h-0 flex-1 overflow-y-auto">
-            @for (c of subAgentChoices(); track c.id) {
-              <li class="[&:last-child>label]:border-b-0">
-                <label class="flex cursor-pointer items-center gap-3 border-b border-border px-4 py-2 hover:bg-surface-muted">
-                  <input type="checkbox" class="accent-primary-600" [checked]="hasRef(target, c.id)" (change)="toggleRef(target, c.id)" />
-                  <div class="min-w-0 flex-1">
-                    <div class="truncate text-sm" [class.font-semibold]="hasRef(target, c.id)">{{ c.name || c.id }}</div>
-                    <div class="truncate font-mono text-[11px] text-text-muted">{{ c.id }}</div>
-                  </div>
-                  @if (c.execution !== 'pipeline_agent') {
-                    <span class="shrink-0 rounded bg-primary-50 px-1.5 py-0.5 text-[10px] uppercase text-primary-700">{{ executionLabel(c.execution) }}</span>
-                  }
-                  @if (c.draftOnly) {
-                    <span class="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] uppercase text-amber-700" title="Not promoted yet — has no live version">draft</span>
-                  }
-                  @if (!c.enabled) {
-                    <span class="shrink-0 rounded bg-surface-muted px-1.5 py-0.5 text-[10px] uppercase text-text-muted">disabled</span>
-                  }
-                </label>
-              </li>
-            } @empty {
-              <li class="px-4 py-3 text-sm text-text-muted">{{ agentsLoaded() ? 'No other agents yet — create one first.' : 'Loading agents…' }}</li>
-            }
-          </ul>
         </div>
+        @if (!isCollapsed(key)) {
+          <ng-container *ngTemplateOutlet="refList; context: { $implicit: target }" />
+          @if (key === 'delivery' && draft().delivery) {
+            <div class="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border px-4 py-2 text-sm">
+              <span class="text-[11px] font-medium text-text-muted">Allowed beyond the screen</span>
+              @for (d of deliverables; track d.value) {
+                <label class="flex cursor-pointer items-center gap-2" [title]="d.hint">
+                  <input type="checkbox" class="accent-primary-600" [checked]="isAllowed(d.value)" (change)="toggleAllowed(d.value)" />
+                  {{ d.label }}
+                </label>
+              }
+              @if (!draft().delivery!.allowed.length) {
+                <span class="text-xs text-amber-700">Nothing allowed — every turn stays on screen.</span>
+              }
+            </div>
+          }
+        }
       </div>
     </ng-template>
 
@@ -816,6 +881,24 @@ export class AgentEditorComponent {
   private readonly headerActions = viewChild<TemplateRef<unknown>>('headerActions');
 
   protected readonly isPipeline = computed(() => this.draft().execution === 'pipeline');
+  /** Synthesizer and delivery agents only apply to standalone pipelines. */
+  protected readonly hasOutputAgents = computed(() => this.isPipeline() && this.draft().standalone);
+
+  /** The delivery / stage / available / synthesizer list the agents column edits; null picks the default. */
+  private readonly chosenTarget = signal<RefTarget | null>(null);
+  /** The chosen target while it still exists, else the selected stage (or the orchestrator's agents). */
+  protected readonly activeTarget = computed<RefTarget | null>(() => {
+    const t = this.chosenTarget();
+    if (t && (t.kind === 'available' ? this.mode() === 'dynamic' : t.kind === 'stage' ? false : this.hasOutputAgents())) return t;
+    if (this.mode() === 'dynamic') return { kind: 'available' };
+    return this.pipeline()?.stages.length ? { kind: 'stage', index: this.stageIndex() } : null;
+  });
+  protected readonly targetLabel = computed(() => {
+    const t = this.activeTarget();
+    if (!t) return 'no stage';
+    if (t.kind === 'stage') return `Stage ${t.index + 1}${this.pipeline()?.stages[t.index]?.name ? ' — ' + this.pipeline()!.stages[t.index].name : ''}`;
+    return { available: 'Available to the orchestrator', delivery: 'Delivery agent', synthesizer: 'Synthesizer agent' }[t.kind];
+  });
   protected readonly mode = computed(() => pipelineMode(this.draft().pipeline));
 
   protected readonly activeSection = signal('sec-general');
@@ -935,6 +1018,11 @@ export class AgentEditorComponent {
       .map(r => ({ id: r.config.id, name: r.config.name, enabled: r.config.enabled, execution: r.config.execution, draftOnly: r.status === 'draft' }))
       .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id)),
   );
+  /** Delivery and synthesizer take pipeline agents only; a stale pick of another type stays listed so it can be unticked. */
+  protected choicesFor(target: RefTarget) {
+    const all = this.subAgentChoices();
+    return this.isSingle(target) ? all.filter(c => c.execution === 'pipeline_agent' || this.hasRef(target, c.id)) : all;
+  }
   private readonly agentNames = computed(() => new Map(this.agentList().map(r => [r.config.id, r.config.name])));
   private readonly agentExecutions = computed(() => new Map(this.agentList().map(r => [r.config.id, r.config.execution])));
 
@@ -946,7 +1034,6 @@ export class AgentEditorComponent {
   /** Stage shown below the stage list (clamped, since stages can be removed). */
   protected readonly selectedStage = signal(0);
   protected readonly stageIndex = computed(() => Math.min(this.selectedStage(), Math.max(0, (this.pipeline()?.stages.length ?? 1) - 1)));
-  protected readonly selectedStageConfig = computed(() => this.pipeline()?.stages[this.stageIndex()] ?? null);
 
   protected readonly agentName = (id: string) => this.agentNames().get(id) || id;
   private readonly agentsById = computed(() => new Map(this.agentList().map(r => [r.config.id, r])));
@@ -1145,7 +1232,7 @@ export class AgentEditorComponent {
   protected addStage(): void {
     const stages = this.pipeline()?.stages ?? [];
     this.updatePipeline({ stages: [...stages, { name: `stage-${stages.length + 1}`, parallel: true, sub_agents: [] }] });
-    this.selectedStage.set(stages.length);
+    this.selectStage(stages.length);
   }
 
   protected updateStage(index: number, changes: Partial<PipelineStage>): void {
@@ -1166,14 +1253,69 @@ export class AgentEditorComponent {
 
   // Sub-agent references for a stage or the dynamic pipeline's available agents.
   protected refs(target: RefTarget): AvailableAgent[] {
+    if (target.kind === 'delivery') return this.draft().delivery ? [this.draft().delivery!.agent] : [];
     const p = this.pipeline();
     if (!p) return [];
+    if (target.kind === 'synthesizer') return p.synthesizer ? [p.synthesizer] : [];
     return target.kind === 'stage' ? (p.stages[target.index]?.sub_agents ?? []) : p.available_agents;
   }
 
   private setRefs(target: RefTarget, refs: AvailableAgent[]): void {
     if (target.kind === 'stage') this.updateStage(target.index, { sub_agents: refs });
-    else this.updatePipeline({ available_agents: refs });
+    else if (target.kind === 'available') this.updatePipeline({ available_agents: refs });
+    else if (target.kind === 'synthesizer') this.updatePipeline({ synthesizer: refs[0] ?? null });
+    else this.mutate(d => ({ ...d, delivery: refs[0] ? { agent: refs[0], allowed: d.delivery?.allowed ?? [] } : null }));
+  }
+
+  /** Collapsed cards in the Pipeline tab: delivery, stages, available, synthesizer. */
+  private readonly collapsed = signal<ReadonlySet<string>>(new Set());
+
+  protected isCollapsed(key: string): boolean {
+    return this.collapsed().has(key);
+  }
+
+  protected toggleCollapsed(key: string): void {
+    this.collapsed.update(set => {
+      const next = new Set(set);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+  }
+
+  protected isTarget(target: RefTarget): boolean {
+    const active = this.activeTarget();
+    return !!active && this.targetKey(active) === this.targetKey(target);
+  }
+
+  protected selectTarget(target: RefTarget): void {
+    this.chosenTarget.set(target.kind === 'stage' ? null : target);
+    if (target.kind === 'stage') this.selectedStage.set(target.index);
+  }
+
+  /** Opens the stage (name, parallel, sub-agents) and points the agents column at it. */
+  protected selectStage(index: number): void {
+    this.selectTarget({ kind: 'stage', index });
+  }
+
+  protected readonly deliverables = DELIVERABLES;
+
+  protected isAllowed(value: Deliverable): boolean {
+    return !!this.draft().delivery?.allowed.includes(value);
+  }
+
+  /** Toggles a deliverable, kept in the listed order. */
+  protected toggleAllowed(value: Deliverable): void {
+    this.mutate(d => {
+      if (!d.delivery) return d;
+      const has = d.delivery.allowed.includes(value);
+      const allowed = DELIVERABLES.map(x => x.value).filter(v => (v === value ? !has : d.delivery!.allowed.includes(v)));
+      return { ...d, delivery: { ...d.delivery, allowed } };
+    });
+  }
+
+  /** Synthesizer and delivery hold one agent: picking another replaces it. */
+  protected isSingle(target: RefTarget): boolean {
+    return target.kind === 'synthesizer' || target.kind === 'delivery';
   }
 
   protected hasRef(target: RefTarget, id: string): boolean {
@@ -1183,7 +1325,8 @@ export class AgentEditorComponent {
   /** Adds (at the end) or removes; existing references keep their per-agent overrides. */
   protected toggleRef(target: RefTarget, id: string): void {
     const refs = this.refs(target);
-    this.setRefs(target, refs.some(r => r.id === id) ? refs.filter(r => r.id !== id) : [...refs, { id, llm_config: null, relay_tool_output: null }]);
+    const added: AvailableAgent = { id, llm_config: null, relay_tool_output: null };
+    this.setRefs(target, refs.some(r => r.id === id) ? refs.filter(r => r.id !== id) : this.isSingle(target) ? [added] : [...refs, added]);
   }
 
   protected moveRef(target: RefTarget, index: number, delta: number): void {
@@ -1194,7 +1337,7 @@ export class AgentEditorComponent {
   private readonly openRefs = signal<Record<string, string | null>>({});
 
   private targetKey(target: RefTarget): string {
-    return target.kind === 'stage' ? `stage-${target.index}` : 'available';
+    return target.kind === 'stage' ? `stage-${target.index}` : target.kind;
   }
 
   protected isRefOpen(target: RefTarget, id: string): boolean {
@@ -1231,13 +1374,13 @@ export class AgentEditorComponent {
 
   /** Starts editing `config` (normalised: a pipeline always edits through `pipeline`). */
   private edit(config: AgentConfig): void {
-    const normalised = config.execution === 'pipeline' && !config.pipeline ? { ...config, pipeline: blankPipeline() } : config;
-    this.original.set(structuredClone(normalised));
-    this.draft.set(structuredClone(normalised));
+    const next = normalised(config);
+    this.original.set(structuredClone(next));
+    this.draft.set(structuredClone(next));
   }
 
   protected save(): void {
-    const config = this.draft();
+    const config = this.withoutOutputAgents(this.draft());
     this.saving.set(true);
     this.saveError.set(null);
     const done = () => this.saving.set(false);
@@ -1274,11 +1417,21 @@ export class AgentEditorComponent {
         next: version => {
           this.draftVersion.set(version);
           this.original.set(structuredClone(config));
+          this.draft.set(structuredClone(config));
           done();
           this.loadVersions();
         },
         error: fail("Couldn't save the draft."),
       });
+  }
+
+  /** Synthesizer and delivery agents are dropped unless the agent is a standalone pipeline. */
+  private withoutOutputAgents(config: AgentConfig): AgentConfig {
+    if (config.execution === 'pipeline' && config.standalone) return config;
+    const { delivery: _d, ...rest } = config;
+    if (!config.pipeline) return rest;
+    const { synthesizer: _s, ...pipeline } = config.pipeline;
+    return { ...rest, pipeline };
   }
 
   private loadVersions(): void {
@@ -1306,8 +1459,7 @@ export class AgentEditorComponent {
     if (v.status === 'Draft') return this.backToEditing();
     if (!this.viewing()) this.stashedDraft = this.draft();
     this.viewing.set(v);
-    const config = v.config.execution === 'pipeline' && !v.config.pipeline ? { ...v.config, pipeline: blankPipeline() } : v.config;
-    this.draft.set(structuredClone(config));
+    this.draft.set(structuredClone(normalised(v.config)));
   }
 
   protected backToEditing(): void {

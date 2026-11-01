@@ -151,6 +151,9 @@ const PRESETS: Preset[] = ['fast', 'balanced', 'data', 'precise', 'thorough', 'l
                       <div class="truncate">{{ agentById(id)?.config?.name || id }}</div>
                       <div class="truncate font-mono text-[11px] text-text-muted">{{ id }}</div>
                     </div>
+                    @if (node.role) {
+                      <span class="shrink-0 rounded bg-surface-muted px-1.5 py-0.5 text-[10px] uppercase text-text-muted">{{ node.role }}</span>
+                    }
                     @if (!agentById(id)) {
                       <span class="rounded bg-red-50 px-1.5 py-0.5 text-[10px] uppercase text-red-700">missing</span>
                     } @else if (choicesFor(id).length > 1) {
@@ -271,8 +274,8 @@ export class AgentTestComponent {
   }
 
   /**
-   * Every agent below the one under test, depth-first: each pipeline's stage sub-agents and
-   * available agents, followed down through whichever config (draft or live) is chosen for it, so
+   * Every agent below the one under test, depth-first: each pipeline's delivery agent, stage
+   * sub-agents and available agents, then its synthesizer, followed down through whichever config (draft or live) is chosen for it, so
    * nested pipelines' agents are included too. `depth` 0 = a direct child. Each agent appears once
    * (first place it's reached), which also stops cycles. A draft still loading is listed but not
    * followed yet — this recomputes when it arrives.
@@ -282,16 +285,22 @@ export class AgentTestComponent {
     this.choices();
     const root = this.agentId();
     const seen = new Set([root]);
-    const out: { id: string; depth: number }[] = [];
+    const out: { id: string; depth: number; role?: 'delivery' | 'synthesizer' }[] = [];
     const visit = (id: string, depth: number) => {
       const p = this.configFor(id);
       const pipeline = p?.execution === 'pipeline' ? p.pipeline : null;
       if (!pipeline) return;
-      for (const child of [...pipeline.stages.flatMap(s => s.sub_agents.map(r => r.id)), ...pipeline.available_agents.map(r => r.id)]) {
-        if (seen.has(child)) continue;
-        seen.add(child);
-        out.push({ id: child, depth });
-        visit(child, depth + 1);
+      const children: { id: string; role?: 'delivery' | 'synthesizer' }[] = [
+        ...(p!.delivery ? [{ id: p!.delivery.agent.id, role: 'delivery' as const }] : []),
+        ...pipeline.stages.flatMap(s => s.sub_agents.map(r => ({ id: r.id }))),
+        ...pipeline.available_agents.map(r => ({ id: r.id })),
+        ...(pipeline.synthesizer ? [{ id: pipeline.synthesizer.id, role: 'synthesizer' as const }] : []),
+      ];
+      for (const child of children) {
+        if (seen.has(child.id)) continue;
+        seen.add(child.id);
+        out.push({ ...child, depth });
+        visit(child.id, depth + 1);
       }
     };
     visit(root, 0);

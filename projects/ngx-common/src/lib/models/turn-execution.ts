@@ -25,13 +25,33 @@ export interface AgentToolCall {
   duration_ms: number;
 }
 
+/** One model call within an iteration: the request, the generation, the stream drained. */
+export interface LlmCall {
+  model: string;
+  duration_ms: number;
+  /** Text the model produced (often empty when it only called tools). */
+  content: string;
+  response_id: string;
+  usage: TokenUsage;
+}
+
+/**
+ * The whole iteration: the LLM call plus the tools (parallel tools overlap). Older executions have
+ * no `llm` and carry `usage`, `response_id` and `finish_reason` on the iteration itself.
+ */
 export interface AgentIteration {
   iteration: number;
-  tool_calls: AgentToolCall[];
-  usage: TokenUsage;
   duration_ms: number;
-  response_id: string;
-  finish_reason: string;
+  llm?: LlmCall | null;
+  tool_calls: AgentToolCall[];
+  usage?: TokenUsage;
+  response_id?: string;
+  finish_reason?: string;
+}
+
+/** An iteration's token usage: its LLM call's, or the iteration's own in older executions. */
+export function iterationUsage(it: AgentIteration): TokenUsage | null {
+  return it.llm?.usage ?? it.usage ?? null;
 }
 
 export interface AgentResponse {
@@ -44,6 +64,12 @@ export interface AgentResponse {
   duration_ms: number;
 }
 
+/** What a turn delivered beyond the screen, as the delivery agent decided (clamped to what's allowed). */
+export interface Delivery {
+  pdf: boolean;
+  email: boolean;
+}
+
 export interface TurnResponse {
   agent_id: string;
   prompt: string;
@@ -51,6 +77,15 @@ export interface TurnResponse {
   response_id: string | null;
   usage: TokenUsage;
   execution: TurnExecution;
+  /** Absent in older executions and when the agent has no delivery config. */
+  delivery?: Delivery | null;
+  /** The delivery agent's own run, made once before the first stage or decision. */
+  delivery_response?: TurnResponse | null;
+}
+
+/** "PDF + email", "PDF", or "Screen" for a turn's delivery. */
+export function deliveryLabel(d: Delivery): string {
+  return [d.pdf ? 'PDF' : '', d.email ? 'email' : ''].filter(Boolean).join(' + ') || 'Screen';
 }
 
 export interface StageResponse {
@@ -68,11 +103,23 @@ export interface StageDecision {
   deliverable?: 'screen' | 'pdf';
 }
 
+/** One orchestrator decision cycle. Older executions have `duration_ms` and no orchestrator run or split timings. */
 export interface DecisionResponse {
   iteration: number;
   decision: StageDecision;
+  /** The orchestrator's own run for this decision (iterations, usage, content). */
+  orchestrator?: AgentResponse | null;
+  /** Time spent deciding. */
+  decide_ms?: number;
+  /** Time spent running the chosen sub-agents (0 when the decision was stop). */
+  subs_ms?: number;
   responses: TurnResponse[];
-  duration_ms: number;
+  duration_ms?: number;
+}
+
+/** A decision's total time: deciding plus running its sub-agents (older executions: `duration_ms`). */
+export function decisionMs(d: DecisionResponse): number {
+  return d.duration_ms ?? (d.decide_ms ?? 0) + (d.subs_ms ?? 0);
 }
 
 export type TurnExecution =
@@ -184,11 +231,12 @@ export interface PipelineStep {
 
 /** One row of the execution tree, tagged by what it represents; `data` feeds the detail view. */
 export type ExecRow = { label: string; meta: string; duration_ms: number | null; error: boolean } & (
-  | { kind: 'turn' | 'agent' | 'synthesizer'; data: AgentStep }
+  | { kind: 'turn' | 'agent' | 'synthesizer' | 'delivery' | 'orchestrator'; data: AgentStep }
   | { kind: 'stage'; data: StageResponse }
   | { kind: 'pipeline'; data: PipelineStep }
   | { kind: 'decision'; data: DecisionResponse }
   | { kind: 'iteration'; data: AgentIteration }
+  | { kind: 'llm'; data: LlmCall }
   | { kind: 'tool'; data: AgentToolCall }
 );
 
@@ -199,7 +247,7 @@ export function buildTurnTree(turn: TurnResponse): ExecNode {
   return turnNode(turn, 'root', 0, 'turn');
 }
 
-function turnNode(turn: TurnResponse, id: string, depth: number, kind: 'turn' | 'agent' | 'synthesizer'): ExecNode {
+function turnNode(turn: TurnResponse, id: string, depth: number, kind: 'turn' | 'agent' | 'synthesizer' | 'delivery' | 'orchestrator'): ExecNode {
   const ex = turn.execution;
   let children: ExecNode[] = [];
   let agent: AgentResponse | null = null;
@@ -220,7 +268,16 @@ function turnNode(turn: TurnResponse, id: string, depth: number, kind: 'turn' | 
     meta = rowOf(pipeline).meta;
   }
 
-  const label = kind === 'synthesizer' ? `Synthesizer · ${turn.agent_id}` : turn.agent_id;
+  // The delivery agent ran first, so it leads the children.
+  if (turn.delivery_response) {
+    const delivery = turnNode(turn.delivery_response, `${id}/delivery`, depth + 1, 'delivery');
+    children = [delivery, ...children];
+    duration = (duration ?? 0) + (rowOf(delivery).duration_ms ?? 0);
+  }
+  if (turn.delivery) meta = [meta, deliveryLabel(turn.delivery)].filter(Boolean).join(' · ');
+
+  const prefix = { synthesizer: 'Synthesizer · ', delivery: 'Delivery · ', orchestrator: 'Orchestrator · ' }[kind as string] ?? '';
+  const label = prefix + turn.agent_id;
   return node(id, depth, { kind, label, meta, duration_ms: duration, error: anyError(children), data: { turn, agent } }, children);
 }
 
@@ -260,20 +317,37 @@ function stageNode(stage: StageResponse, id: string, depth: number): ExecNode {
 
 function decisionNode(decision: DecisionResponse, id: string, depth: number): ExecNode {
   const children = decision.responses.map((r, i) => turnNode(r, `${id}/r${i}`, depth + 1, 'agent'));
+  // The orchestrator's run that made this decision comes first, as an agent step of its own.
+  const o = decision.orchestrator;
+  if (o) {
+    const turn: TurnResponse = { agent_id: o.agent_id, prompt: '', content: o.content, response_id: o.response_id, usage: o.usage, execution: { SingleAgent: { response: o } } };
+    children.unshift(turnNode(turn, `${id}/o`, depth + 1, 'orchestrator'));
+  }
   const { execution, stop, deliverable } = decision.decision;
   const meta = [execution, stop ? 'stop' : '', stop ? deliverable ?? '' : ''].filter(Boolean).join(' · ');
   return node(
     id,
     depth,
-    { kind: 'decision', label: `Decision ${decision.iteration}`, meta, duration_ms: decision.duration_ms, error: anyError(children), data: decision },
+    { kind: 'decision', label: `Decision ${decision.iteration}`, meta, duration_ms: decisionMs(decision), error: anyError(children), data: decision },
     children,
   );
 }
 
 function iterationNode(it: AgentIteration, id: string, depth: number): ExecNode {
+  // Parallel tools overlap, so the iteration takes the LLM call plus its slowest tool — marked `*`.
+  const slowest = it.tool_calls.reduce((best, t, i) => (t.duration_ms > (it.tool_calls[best]?.duration_ms ?? -1) ? i : best), -1);
   const children = it.tool_calls.map((t, i) =>
-    node(`${id}/t${i}`, depth + 1, { kind: 'tool', label: t.name, meta: t.error ? 'error' : '', duration_ms: t.duration_ms, error: !!t.error, data: t }, []),
+    node(
+      `${id}/t${i}`,
+      depth + 1,
+      { kind: 'tool', label: i === slowest ? `${t.name} *` : t.name, meta: t.error ? 'error' : '', duration_ms: t.duration_ms, error: !!t.error, data: t },
+      [],
+    ),
   );
+  // The model call comes before the tools it asked for.
+  if (it.llm) {
+    children.unshift(node(`${id}/llm`, depth + 1, { kind: 'llm', label: `LLM · ${it.llm.model}`, meta: '', duration_ms: it.llm.duration_ms, error: false, data: it.llm }, []));
+  }
   const meta = it.tool_calls.length ? plural(it.tool_calls.length, 'tool') : 'response';
   return node(id, depth, { kind: 'iteration', label: `Iteration ${it.iteration}`, meta, duration_ms: it.duration_ms, error: anyError(children), data: it }, children);
 }

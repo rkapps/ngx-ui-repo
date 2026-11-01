@@ -5,7 +5,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { TwangTreeTableComponent, type TwangTreeTableColumn } from 'ngx-twang-ui';
 import { catchError, map, of, startWith, switchMap } from 'rxjs';
-import { buildTurnTree, type ExecNode, execNodePath, type ExecRow, findExecNode, rowOf, type TokenUsage } from '../../models/turn-execution';
+import { buildTurnTree, deliveryLabel, iterationUsage, type ExecNode, execNodePath, type ExecRow, findExecNode, rowOf, type TokenUsage } from '../../models/turn-execution';
 import { AgentTestSessions } from '../../services/agent-test-sessions';
 import { TURN_LOGS, type TurnLogDetail } from '../../services/turn-logs.service';
 import { type PageCrumb, PageBreadcrumbs } from '../breadcrumbs/page-breadcrumbs';
@@ -16,10 +16,13 @@ const KIND_LABELS: Record<ExecRow['kind'], string> = {
   turn: 'Turn',
   agent: 'Agent',
   synthesizer: 'Synthesizer',
+  delivery: 'Delivery',
+  orchestrator: 'Orchestrator',
   pipeline: 'Pipeline',
   stage: 'Stage',
   decision: 'Decision',
   iteration: 'Iteration',
+  llm: 'LLM call',
   tool: 'Tool call',
 };
 
@@ -27,10 +30,13 @@ const KIND_ICONS: Record<ExecRow['kind'], string> = {
   turn: 'message-square',
   agent: 'bot',
   synthesizer: 'sparkles',
+  delivery: 'mail',
+  orchestrator: 'bot',
   pipeline: 'workflow',
   stage: 'layers',
   decision: 'git-branch',
   iteration: 'refresh-cw',
+  llm: 'message-circle',
   tool: 'wrench',
 };
 
@@ -39,6 +45,8 @@ const KIND_TEXT: Partial<Record<ExecRow['kind'], string>> = {
   turn: 'text-primary-600',
   agent: 'text-primary-600',
   synthesizer: 'text-green-600',
+  delivery: 'text-green-600',
+  orchestrator: 'text-primary-600',
 };
 const kindText = (r: ExecRow) => KIND_TEXT[r.kind] ?? '';
 
@@ -133,10 +141,23 @@ const seconds = (ms: number | null | undefined) => (ms == null ? '—' : (ms / 1
                       <dd>{{ it.iteration }}</dd>
                       <dt class="text-xs text-text-muted">Tool calls</dt>
                       <dd>{{ it.tool_calls.length }}</dd>
-                      <dt class="text-xs text-text-muted">Finish reason</dt>
-                      <dd>{{ it.finish_reason || '—' }}</dd>
+                      @if (it.llm) {
+                        <dt class="text-xs text-text-muted">Model</dt>
+                        <dd class="break-all">{{ it.llm.model }}</dd>
+                      } @else {
+                        <dt class="text-xs text-text-muted">Finish reason</dt>
+                        <dd>{{ it.finish_reason || '—' }}</dd>
+                      }
                       <dt class="text-xs text-text-muted">Response id</dt>
-                      <dd class="break-all font-mono text-xs">{{ it.response_id || '—' }}</dd>
+                      <dd class="break-all font-mono text-xs">{{ it.llm?.response_id || it.response_id || '—' }}</dd>
+                    }
+                  }
+                  @case ('llm') {
+                    @if (asLlm(row); as l) {
+                      <dt class="text-xs text-text-muted">Model</dt>
+                      <dd class="break-all">{{ l.model }}</dd>
+                      <dt class="text-xs text-text-muted">Response id</dt>
+                      <dd class="break-all font-mono text-xs">{{ l.response_id || '—' }}</dd>
                     }
                   }
                   @case ('pipeline') {
@@ -165,6 +186,12 @@ const seconds = (ms: number | null | undefined) => (ms == null ? '—' : (ms / 1
                       <dd>{{ d.decision.execution }}</dd>
                       <dt class="text-xs text-text-muted">Stop</dt>
                       <dd>{{ d.decision.stop ? 'Yes (synthesis)' : 'No' }}</dd>
+                      @if (d.decide_ms != null) {
+                        <dt class="text-xs text-text-muted">Deciding (s)</dt>
+                        <dd class="tabular-nums">{{ seconds(d.decide_ms) }}</dd>
+                        <dt class="text-xs text-text-muted">Sub-agents (s)</dt>
+                        <dd class="tabular-nums">{{ seconds(d.subs_ms ?? 0) }}</dd>
+                      }
                       @if (d.decision.stop && d.decision.deliverable) {
                         <dt class="text-xs text-text-muted">Deliverable</dt>
                         <dd>{{ d.decision.deliverable === 'pdf' ? 'PDF' : 'Screen' }}</dd>
@@ -181,6 +208,10 @@ const seconds = (ms: number | null | undefined) => (ms == null ? '—' : (ms / 1
                       }
                       <dt class="text-xs text-text-muted">Steps</dt>
                       <dd>{{ row.meta || '—' }}</dd>
+                      @if (a.turn.delivery; as dl) {
+                        <dt class="text-xs text-text-muted">Delivered</dt>
+                        <dd>{{ deliveryLabel(dl) }}</dd>
+                      }
                       <dt class="text-xs text-text-muted">Response id</dt>
                       <dd class="break-all font-mono text-xs">{{ a.turn.response_id || a.agent?.response_id || '—' }}</dd>
                     }
@@ -243,6 +274,11 @@ const seconds = (ms: number | null | undefined) => (ms == null ? '—' : (ms / 1
                 }
                 @case ('pipeline') {
                   <ng-container *ngTemplateOutlet="stepsTpl" />
+                }
+                @case ('llm') {
+                  @if (asLlm(row); as l) {
+                    <app-json-view title="Content" [text]="l.content" emptyText="No text — the model only called tools." [fill]="true" />
+                  }
                 }
                 @case ('iteration') {
                   @if (selectedChildren().length) {
@@ -408,8 +444,9 @@ export class TurnExecutionComponent {
   protected readonly usage = computed<TokenUsage | null>(() => {
     const row = this.selected();
     if (!row) return null;
-    if (row.kind === 'iteration') return row.data.usage;
-    if (row.kind === 'turn' || row.kind === 'agent' || row.kind === 'synthesizer') return row.data.agent?.usage ?? row.data.turn.usage;
+    if (row.kind === 'iteration') return iterationUsage(row.data);
+    if (row.kind === 'llm') return row.data.usage;
+    if (row.kind === 'turn' || row.kind === 'agent' || row.kind === 'synthesizer' || row.kind === 'delivery' || row.kind === 'orchestrator') return row.data.agent?.usage ?? row.data.turn.usage;
     return null;
   });
 
@@ -466,10 +503,12 @@ export class TurnExecutionComponent {
   protected readonly kindText = kindText;
   protected readonly kindLabel = (r: ExecRow) => KIND_LABELS[r.kind];
   protected readonly icon = (r: ExecRow) => KIND_ICONS[r.kind];
+  protected readonly deliveryLabel = deliveryLabel;
   protected readonly asTool = (r: ExecRow) => (r.kind === 'tool' ? r.data : null);
   protected readonly asIteration = (r: ExecRow) => (r.kind === 'iteration' ? r.data : null);
+  protected readonly asLlm = (r: ExecRow) => (r.kind === 'llm' ? r.data : null);
   protected readonly asPipeline = (r: ExecRow) => (r.kind === 'pipeline' ? r.data : null);
   protected readonly asStage = (r: ExecRow) => (r.kind === 'stage' ? r.data : null);
   protected readonly asDecision = (r: ExecRow) => (r.kind === 'decision' ? r.data : null);
-  protected readonly asAgent = (r: ExecRow) => (r.kind === 'turn' || r.kind === 'agent' || r.kind === 'synthesizer' ? r.data : null);
+  protected readonly asAgent = (r: ExecRow) => (r.kind === 'turn' || r.kind === 'agent' || r.kind === 'synthesizer' || r.kind === 'delivery' || r.kind === 'orchestrator' ? r.data : null);
 }

@@ -43,6 +43,8 @@ export interface PipelineConfig {
   type: string;
   available_agents: AvailableAgent[];
   stages: PipelineStage[];
+  /** Produces the final output from the collected outputs; unset returns them merged (a parent pipeline synthesizes). */
+  synthesizer?: AvailableAgent | null;
 }
 
 export interface AgentConversationConfig {
@@ -71,6 +73,18 @@ export interface AgentConfig {
   conversation: AgentConversationConfig | null;
   pipeline: PipelineConfig | null;
   response_format_schema: unknown | null;
+  /** How each turn is delivered beyond the screen; runs once per turn, not seen by the orchestrator. */
+  delivery?: DeliveryConfig | null;
+}
+
+/** Beyond the screen: `pdf` attaches a PDF (synthesized without streaming); `email` also emails it to the user. */
+export type Deliverable = 'pdf' | 'email';
+
+export interface DeliveryConfig {
+  /** Decides per turn what the user asked for. */
+  agent: AvailableAgent;
+  /** What may be delivered beyond the screen; the agent's decision is clamped to this. */
+  allowed: Deliverable[];
 }
 
 export interface ModelConfig {
