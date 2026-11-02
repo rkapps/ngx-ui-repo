@@ -1015,13 +1015,17 @@ export class AgentEditorComponent {
   protected readonly subAgentChoices = computed(() =>
     this.agentList()
       .filter(r => r.config.id !== this.draft().id)
-      .map(r => ({ id: r.config.id, name: r.config.name, enabled: r.config.enabled, execution: r.config.execution, draftOnly: r.status === 'draft' }))
+      .map(r => ({ id: r.config.id, name: r.config.name, enabled: r.config.enabled, execution: r.config.execution, standalone: r.config.standalone, draftOnly: r.status === 'draft' }))
       .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id)),
   );
-  /** Delivery and synthesizer take pipeline agents only; a stale pick of another type stays listed so it can be unticked. */
+  /**
+   * Agents offered for `target`: never standalone pipelines; delivery and synthesizer take pipeline
+   * agents only. A stale pick that no longer qualifies stays listed so it can be unticked.
+   */
   protected choicesFor(target: RefTarget) {
-    const all = this.subAgentChoices();
-    return this.isSingle(target) ? all.filter(c => c.execution === 'pipeline_agent' || this.hasRef(target, c.id)) : all;
+    const fits = (c: ReturnType<typeof this.subAgentChoices>[number]) =>
+      !(c.execution === 'pipeline' && c.standalone) && (!this.isSingle(target) || c.execution === 'pipeline_agent');
+    return this.subAgentChoices().filter(c => fits(c) || this.hasRef(target, c.id));
   }
   private readonly agentNames = computed(() => new Map(this.agentList().map(r => [r.config.id, r.config.name])));
   private readonly agentExecutions = computed(() => new Map(this.agentList().map(r => [r.config.id, r.config.execution])));
