@@ -17,7 +17,7 @@ import {
 import { ADMIN_RIGHT_WIDTH } from '../admin-page/admin-layout';
 import { PageBreadcrumbs } from '../breadcrumbs/page-breadcrumbs';
 import { ThreePanelLayoutComponent } from '../three-panel-layout/three-panel-layout.component';
-import { resolveAgentsFolder } from './agent-import';
+import { agentsFilesIn, resolveAgentsFolder } from './agent-import';
 import { CONFIG_LAYOUT_KEY, currentAgent, rememberCurrentAgent } from './config-sections';
 import { RefreshCacheButtonComponent } from './refresh-cache-button.component';
 
@@ -78,6 +78,25 @@ const STATUS_ORDER: Record<AgentConfigResponse['status'], number> = { live: 0, l
             <button type="button" class="shrink-0 opacity-70 hover:opacity-100" aria-label="Dismiss" (click)="importError.set(null)">
               <lucide-icon name="x" [size]="14" />
             </button>
+          </div>
+        }
+        <!-- A folder with several agents.json files: choose which to import -->
+        @if (pendingImport(); as p) {
+          <div class="flex shrink-0 flex-col gap-2 border-b border-border px-4 py-3 text-sm">
+            <span class="font-medium">Import from {{ p.folder }}: choose the agents.json files</span>
+            <div class="flex flex-col gap-1">
+              @for (path of p.paths; track path) {
+                <label class="flex cursor-pointer items-center gap-2">
+                  <input type="checkbox" class="accent-primary-600" [checked]="p.chosen.has(path)" (change)="toggleImportPath(path)" />
+                  <span class="font-mono text-xs">{{ path }}</span>
+                </label>
+              }
+            </div>
+            <div class="flex items-center gap-2">
+              <twang-button variant="primary" size="sm" label="Import" [disabled]="!p.chosen.size" (buttonClick)="importChosen()" />
+              <twang-button variant="default" size="sm" label="Cancel" (buttonClick)="pendingImport.set(null)" />
+              <span class="text-xs text-text-muted">Files outside these packages (e.g. common) can still be referenced with ..</span>
+            </div>
           </div>
         }
         <div class="flex min-h-0 flex-1 flex-col">
@@ -330,8 +349,38 @@ export class ConfigAgentsComponent {
     if (!files.length) return;
     const folder = (files[0] as File & { webkitRelativePath?: string }).webkitRelativePath?.split('/')[0] || 'the folder';
     this.importError.set(null);
+    this.pendingImport.set(null);
+    const paths = agentsFilesIn(files);
+    // Several packages: let the user choose which agents.json files to import.
+    if (paths.length > 1) {
+      this.pendingImport.set({ files, folder, paths, chosen: new Set() });
+      return;
+    }
+    this.resolveAndImport(files, folder);
+  }
+
+  /** A picked folder with several agents.json files, waiting for the user to choose which to import. */
+  protected readonly pendingImport = signal<{ files: File[]; folder: string; paths: string[]; chosen: ReadonlySet<string> } | null>(null);
+
+  protected toggleImportPath(path: string): void {
+    this.pendingImport.update(p => {
+      if (!p) return p;
+      const chosen = new Set(p.chosen);
+      if (!chosen.delete(path)) chosen.add(path);
+      return { ...p, chosen };
+    });
+  }
+
+  protected importChosen(): void {
+    const p = this.pendingImport();
+    if (!p?.chosen.size) return;
+    this.pendingImport.set(null);
+    this.resolveAndImport(p.files, p.folder, [...p.chosen]);
+  }
+
+  private resolveAndImport(files: File[], folder: string, only?: string[]): void {
     this.importing.set(true);
-    resolveAgentsFolder(files).then(
+    resolveAgentsFolder(files, only).then(
       result => {
         this.importing.set(false);
         this.sendImport(result, folder);
