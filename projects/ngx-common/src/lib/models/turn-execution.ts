@@ -276,8 +276,9 @@ function turnNode(turn: TurnResponse, id: string, depth: number, kind: 'turn' | 
   }
   if (turn.delivery) meta = [meta, deliveryLabel(turn.delivery)].filter(Boolean).join(' · ');
 
-  const prefix = { synthesizer: 'Synthesizer · ', delivery: 'Delivery · ', orchestrator: 'Orchestrator · ' }[kind as string] ?? '';
-  const label = prefix + turn.agent_id;
+  // The orchestrator is the pipeline itself, so its row is just "Orchestrator" (the id is in its details).
+  const prefix = { synthesizer: 'Synthesizer · ', delivery: 'Delivery · ' }[kind as string] ?? '';
+  const label = kind === 'orchestrator' ? 'Orchestrator' : prefix + turn.agent_id;
   return node(id, depth, { kind, label, meta, duration_ms: duration, error: anyError(children), data: { turn, agent } }, children);
 }
 
