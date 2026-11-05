@@ -23,10 +23,10 @@ esac
 echo "Deploying rustic-ai-ng → $INSTANCE (config: $BUILD_CONFIG)"
 
 echo "Building ngx-twang-ui..."
-ng build ngx-twang-ui
+npx ng build ngx-twang-ui
 
 echo "Building rustic-ai-ng..."
-ng build rustic-ai-ng --configuration "$BUILD_CONFIG"
+npx ng build rustic-ai-ng --configuration "$BUILD_CONFIG"
 
 echo "Deploying to Firebase ($FIREBASE_PROJECT / hosting:$HOSTING_TARGET)..."
 npx firebase deploy --project "$FIREBASE_PROJECT" --only "hosting:$HOSTING_TARGET"
