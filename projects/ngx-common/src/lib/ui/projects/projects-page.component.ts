@@ -57,6 +57,15 @@ function parseCount(text: string): number | null {
             (buttonClick)="load()"
           />
         </div>
+        @if (deleteError()) {
+          <div class="flex shrink-0 items-start gap-2 border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">
+            <lucide-icon name="circle-alert" [size]="14" class="mt-0.5 shrink-0" />
+            <span class="min-w-0 flex-1 break-words">{{ deleteError() }}</span>
+            <button type="button" class="shrink-0 opacity-70 hover:opacity-100" aria-label="Dismiss" (click)="deleteError.set(null)">
+              <lucide-icon name="x" [size]="14" />
+            </button>
+          </div>
+        }
         <div class="flex min-h-0 flex-1 flex-col">
           @if (error()) {
             <div class="flex flex-1 items-center justify-center p-8 text-sm text-red-600">{{ error() }}</div>
@@ -174,10 +183,19 @@ function parseCount(text: string): number | null {
     <!-- Rendered in the page header (right side) via PageBreadcrumbs.actions. -->
     <ng-template #headerActions>
       @if (selected(); as p) {
-        <twang-button variant="default" size="sm" icon="square-pen" label="Edit" [disabled]="mode() !== 'view'" (buttonClick)="startEdit(p)" />
-        <twang-button variant="default" size="sm" icon="file-text" label="Files" title="Files and search for this project" (buttonClick)="openFiles(p)" />
+        @if (confirmDelete()) {
+          <span class="text-xs text-text-muted">Delete "{{ p.name }}" with all its files? This can't be undone.</span>
+          <twang-button variant="default" size="sm" label="Cancel" [disabled]="deleting()" (buttonClick)="confirmDelete.set(false)" />
+          <twang-button variant="destructive" size="sm" label="Delete" [loading]="deleting()" [disabled]="deleting()" (buttonClick)="deleteProject(p)" />
+        } @else {
+          <twang-button variant="default" size="sm" icon="square-pen" label="Edit" [disabled]="mode() !== 'view'" (buttonClick)="startEdit(p)" />
+          <twang-button variant="default" size="sm" icon="file-text" label="Files" title="Files and search for this project" (buttonClick)="openFiles(p)" />
+          <twang-button variant="default" size="sm" icon="trash-2" label="Delete" [disabled]="mode() !== 'view'" (buttonClick)="confirmDelete.set(true)" />
+        }
       }
-      <twang-button variant="primary" size="sm" icon="plus" label="New project" [disabled]="mode() !== 'view'" (buttonClick)="startCreate()" />
+      @if (!confirmDelete()) {
+        <twang-button variant="primary" size="sm" icon="plus" label="New project" [disabled]="mode() !== 'view'" (buttonClick)="startCreate()" />
+      }
     </ng-template>
   `,
 })
@@ -231,6 +249,7 @@ export class ProjectsPageComponent {
   protected readonly onRowClick = (row: Project) => {
     this.selectedId.set(row.id);
     this.mode.set('view');
+    this.confirmDelete.set(false);
   };
   /** Files page for a project (also row double-click). */
   protected readonly openFiles = (row: Project) => this.router.navigate(['/projects', row.id]);
@@ -274,6 +293,35 @@ export class ProjectsPageComponent {
         error: err => {
           console.error('Failed to load projects', err);
           this.error.set(errorText(err, 'Failed to load projects.'));
+        },
+      });
+  }
+
+  protected readonly confirmDelete = signal(false);
+  protected readonly deleting = signal(false);
+  protected readonly deleteError = signal<string | null>(null);
+
+  /** Deletes the project, then selects the most recently updated one left. */
+  protected deleteProject(project: Project): void {
+    this.deleting.set(true);
+    this.deleteError.set(null);
+    this.projectService
+      .deleteProject(project.id)
+      .pipe(
+        finalize(() => this.deleting.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: () => {
+          this.confirmDelete.set(false);
+          const rest = this.projects().filter(p => p.id !== project.id);
+          this.projects.set(rest);
+          this.selectedId.set([...rest].sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0]?.id ?? null);
+        },
+        error: err => {
+          console.error('Failed to delete project', err);
+          this.confirmDelete.set(false);
+          this.deleteError.set(`Couldn't delete ${project.name}: ${errorText(err, 'request failed.')}`);
         },
       });
   }

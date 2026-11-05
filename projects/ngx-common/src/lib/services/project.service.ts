@@ -108,4 +108,19 @@ export class ProjectService {
     form.append('file', file, file.name);
     return this.http.post<ProjectFile | null>(`${this.base}/projects/${encodeURIComponent(projectId)}/files`, form);
   }
+
+  /** Delete a project with all its files and chunks (`DELETE /projects/{id}`). */
+  deleteProject(projectId: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/projects/${encodeURIComponent(projectId)}`);
+  }
+
+  /** Delete one file and its chunks (`DELETE /projects/{id}/files/{file_id}`). */
+  deleteProjectFile(projectId: string, fileId: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(fileId)}`);
+  }
+
+  /** Index a file again from its stored upload (`POST /projects/{id}/files/{file_id}/reingest`). */
+  reingestProjectFile(projectId: string, fileId: string): Observable<void> {
+    return this.http.post<void>(`${this.base}/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(fileId)}/reingest`, {});
+  }
 }

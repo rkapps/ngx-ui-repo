@@ -84,6 +84,28 @@ function uploadErrorText(err: unknown): string {
             <span class="min-w-0 flex-1 break-words">{{ filesError() }}</span>
           </div>
         }
+        @if (reingestNotice(); as notice) {
+          <div class="flex shrink-0 items-center gap-2 border-b border-primary-200 bg-primary-50 px-4 py-2 text-xs text-primary-700">
+            @if (reingesting().size) {
+              <lucide-icon name="loader-circle" [size]="14" class="shrink-0 animate-spin" />
+            } @else {
+              <lucide-icon name="circle-check" [size]="14" class="shrink-0" />
+            }
+            <span class="min-w-0 flex-1 break-words">{{ notice }}</span>
+            @if (!reingesting().size) {
+              <button type="button" class="shrink-0 opacity-70 hover:opacity-100" aria-label="Dismiss" (click)="reingestNotice.set(null)">
+                <lucide-icon name="x" [size]="14" />
+              </button>
+            }
+          </div>
+        }
+        @if (confirmingDelete(); as f) {
+          <div class="flex shrink-0 items-center gap-2 border-b border-border bg-surface-muted px-4 py-2 text-xs">
+            <span class="min-w-0 flex-1 truncate">Delete "{{ f.name }}" and its chunks? This can't be undone.</span>
+            <twang-button variant="default" size="sm" label="Cancel" [disabled]="deletingFile()" (buttonClick)="confirmingDelete.set(null)" />
+            <twang-button variant="destructive" size="sm" label="Delete" [loading]="deletingFile()" [disabled]="deletingFile()" (buttonClick)="deleteFile(f)" />
+          </div>
+        }
         <div class="flex min-h-0 flex-1 flex-col">
           <twang-table
             [rows]="files()"
@@ -297,7 +319,104 @@ export class ProjectFilesPageComponent {
     { id: 'size', header: 'Size', align: 'right', sortable: true, width: '100px', value: f => f.size, format: v => (v == null ? '' : formatSize(Number(v))) },
     { id: 'created_at', header: 'Uploaded', align: 'left', sortable: true, width: '170px', value: f => f.created_at, format: v => formatWhen(v) },
     { id: 'error', header: 'Error', align: 'left', sortable: false, width: '220px', cellTruncate: true, value: f => f.error ?? '', cellClass: 'text-red-700' },
+    {
+      id: 'reingest',
+      header: '',
+      align: 'left',
+      sortable: false,
+      width: '48px',
+      // Not while it's being indexed (or a request for it is in flight).
+      isAction: f => this.canAct(f),
+      actionIcon: f => (this.canAct(f) ? 'refresh-cw' : null),
+      actionTitle: 'Reingest — index the file again',
+      actionClass: 'text-text-muted hover:text-primary-600',
+      value: f => (this.reingesting().has(f.id) ? '…' : ''),
+      cellClass: 'text-text-muted',
+      onCellClick: f => this.reingest(f),
+    },
+    {
+      id: 'delete',
+      header: '',
+      align: 'left',
+      sortable: false,
+      width: '48px',
+      isAction: f => this.canAct(f),
+      actionIcon: f => (this.canAct(f) ? 'trash-2' : null),
+      actionTitle: 'Delete the file and its chunks',
+      actionClass: 'text-text-muted hover:text-red-600',
+      value: () => '',
+      onCellClick: f => this.confirmingDelete.set(f),
+    },
   ];
+
+  /** The file whose Delete was clicked, waiting for confirmation above the table. */
+  protected readonly confirmingDelete = signal<ProjectFile | null>(null);
+  protected readonly deletingFile = signal(false);
+
+  protected deleteFile(file: ProjectFile): void {
+    this.deletingFile.set(true);
+    this.projectService
+      .deleteProjectFile(this.id(), file.id)
+      .pipe(
+        finalize(() => this.deletingFile.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: () => {
+          this.confirmingDelete.set(null);
+          this.files.update(files => files.filter(f => f.id !== file.id));
+        },
+        error: err => {
+          console.error('Failed to delete file', err);
+          this.confirmingDelete.set(null);
+          this.filesError.set(`Couldn't delete ${file.name}: ${errorText(err, 'request failed.')}`);
+        },
+      });
+  }
+
+  /** Row actions are off while a file is being indexed or reingested. */
+  private canAct(f: ProjectFile): boolean {
+    return f.status !== 'processing' && !this.reingesting().has(f.id);
+  }
+
+  /** What's happening with a reingest (in flight, then done), shown above the table. */
+  protected readonly reingestNotice = signal<string | null>(null);
+
+  /** Files with a reingest request in flight. */
+  protected readonly reingesting = signal<ReadonlySet<string>>(new Set());
+
+  /** Index the file again from its stored upload, then reload the list to show its new status. */
+  protected reingest(file: ProjectFile): void {
+    if (this.reingesting().has(file.id)) return;
+    const mark = (on: boolean) => {
+      this.reingesting.update(set => {
+        const next = new Set(set);
+        if (on) next.add(file.id);
+        else next.delete(file.id);
+        return next;
+      });
+      this.files.update(files => [...files]); // re-render the action cell
+    };
+    mark(true);
+    this.reingestNotice.set(`${file.name} is ingesting — reading the file, splitting it into chunks and indexing them again. This can take a minute for large files.`);
+    this.projectService
+      .reingestProjectFile(this.id(), file.id)
+      .pipe(
+        finalize(() => mark(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: () => {
+          this.reingestNotice.set(`${file.name} was sent for ingesting again. Its status and chunk count update below; use Refresh if it still shows processing.`);
+          this.loadFiles();
+        },
+        error: err => {
+          console.error('Failed to reingest file', err);
+          this.reingestNotice.set(null);
+          this.filesError.set(`Couldn't reingest ${file.name}: ${errorText(err, 'request failed.')}`);
+        },
+      });
+  }
 
   constructor() {
     effect(() => this.breadcrumbs.actions.set(this.headerActions() ?? null));

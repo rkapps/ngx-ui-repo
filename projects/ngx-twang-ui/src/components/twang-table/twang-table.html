@@ -128,9 +128,13 @@
                         [class.w-full]="col.align === 'right'"
                         [class.text-left]="col.align !== 'right'"
                         [ngClass]="getActionClass(col, row)"
+                        [attr.title]="getActionTitle(col, row)"
+                        [attr.aria-label]="getActionTitle(col, row)"
                         (click)="col.onCellClick?.(row, $event)"
                       >
-                        @if (splitCellValue(col, row); as split) {
+                        @if (getActionIcon(col, row); as icon) {
+                          <lucide-icon [name]="icon" [size]="15" class="inline-block align-middle" />
+                        } @else if (splitCellValue(col, row); as split) {
                           <div
                             class="flex w-full min-w-0 gap-2"
                             [class.flex-col]="split.layout === 'stack'"

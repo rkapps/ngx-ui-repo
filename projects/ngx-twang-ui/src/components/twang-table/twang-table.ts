@@ -48,6 +48,10 @@ export interface TwangTableColumn<T> {
   /** With `splitCell`: only the `secondary` segment is clickable, instead of the whole cell. */
   actionOnSecondaryOnly?: boolean;
   actionClass?: string | ((row: T) => string);
+  /** Action cells: a lucide icon name to show instead of the value text (null = the text). */
+  actionIcon?: string | ((row: T) => string | null);
+  /** Action cells: tooltip / accessible label (defaults to the value text). */
+  actionTitle?: string | ((row: T) => string);
   value: (row: T) => string | number | null;
   sortValue?: (row: T) => string | number | null;
   format?: (value: string | number | null, row: T) => string;
@@ -267,6 +271,15 @@ export class TwangTableComponent<T extends object> implements OnChanges {
       return col.isAction(row);
     }
     return Boolean(col.isAction);
+  }
+
+  protected getActionIcon(col: TwangTableColumn<T>, row: T): string | null {
+    return typeof col.actionIcon === 'function' ? col.actionIcon(row) : (col.actionIcon ?? null);
+  }
+
+  protected getActionTitle(col: TwangTableColumn<T>, row: T): string | null {
+    const title = typeof col.actionTitle === 'function' ? col.actionTitle(row) : col.actionTitle;
+    return title ?? (col.actionIcon ? String(col.value(row) ?? '') : null);
   }
 
   protected getActionClass(col: TwangTableColumn<T>, row: T): string {
