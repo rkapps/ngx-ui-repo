@@ -21,6 +21,26 @@ export function formatReportNumber(value: number, format?: ReportFormat): string
     }
 }
 
+/**
+ * A dollar amount abbreviated for a headline (metric cards): $192.0M, $16.9M, $7.5K, $1.3B.
+ * Under $1,000 it shows in full with cents.
+ */
+export function formatCompactCurrency(value: number): string {
+    if (!Number.isFinite(value)) return '—';
+    const abs = Math.abs(value);
+    const sign = value < 0 ? '-' : '';
+    const units: [number, string][] = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']];
+    for (let i = 0; i < units.length; i++) {
+        const [size, suffix] = units[i];
+        if (abs < size) continue;
+        const text = (abs / size).toFixed(1);
+        // Rounding can carry into the unit above (999,950 → 1000.0K): show that unit instead.
+        if (text === '1000.0' && i > 0) return `${sign}$1.0${units[i - 1][1]}`;
+        return `${sign}$${text}${suffix}`;
+    }
+    return `${sign}$${num(abs, 2, 2)}`;
+}
+
 /** Change from current to target in percentage points, as the backend computes it; null when current is 0. */
 export function targetChangePct(item: TargetItem): number | null {
     return item.current !== 0 ? ((item.target - item.current) / Math.abs(item.current)) * 100 : null;

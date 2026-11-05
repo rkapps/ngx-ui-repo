@@ -1,4 +1,4 @@
-import { Component, ElementRef, afterRenderEffect, computed, input, signal, viewChildren } from '@angular/core';
+import { Component, computed, input } from '@angular/core';
 import { BarChartItem, BarChartSection } from '../message-renderer.types';
 
 const FORMAT_UNITS: Record<string, string> = { currency: '$', percent: '%', percent_change: '%', multiple: 'x' };
@@ -32,12 +32,12 @@ const FORMAT_UNITS: Record<string, string> = { currency: '$', percent: '%', perc
                         </div>
                     }
                     @if (isHorizontal()) {
-                        <div class="space-y-4">
+                        <!-- One grid for every row: the label column sizes to the widest label in CSS, so
+                             bars line up from the first paint (no measuring after render). -->
+                        <div class="grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-3 gap-y-4">
                             @for (group of (normalizedSection().groups ?? []); track $index; let gi = $index) {
-                                <div class="flex items-center gap-3">
-                                    <div #groupLabel class="shrink-0 text-xs font-medium text-gray-600 text-right whitespace-nowrap"
-                                         [style.width.px]="labelWidthPx() || null" [title]="group">{{ group }}</div>
-                                    <div class="flex-1 space-y-0.5">
+                                    <div class="text-xs font-medium text-gray-600 text-right whitespace-nowrap" [title]="group">{{ group }}</div>
+                                    <div class="min-w-0 space-y-0.5">
                                         @for (item of normalizedSection().data; track item.name; let i = $index) {
                                             @let val = item.values?.[gi] ?? 0;
                                             <div class="flex items-center gap-2">
@@ -55,7 +55,6 @@ const FORMAT_UNITS: Record<string, string> = { currency: '$', percent: '%', perc
                                             </div>
                                         }
                                     </div>
-                                </div>
                             }
                         </div>
                     } @else {
@@ -191,25 +190,34 @@ const FORMAT_UNITS: Record<string, string> = { currency: '$', percent: '%', perc
 export class BarChartSectionComponent {
     section = input.required<BarChartSection>();
 
-    // Horizontal chart's y-axis label column: measured from actual rendered label widths
-    // (not a char-count/ch estimate) so every row aligns to the widest label, whatever the font.
-    private readonly groupLabelEls = viewChildren<ElementRef<HTMLElement>>('groupLabel');
-    protected readonly labelWidthPx = signal(0);
-
-    constructor() {
-        afterRenderEffect(() => {
-            const els = this.groupLabelEls();
-            if (!els.length) return;
-            const max = Math.max(...els.map(e => e.nativeElement.scrollWidth));
-            if (max > 0 && max !== this.labelWidthPx()) this.labelWidthPx.set(max);
-        });
-    }
-
     // Normalize the LLM's {label,value}[] format into the renderer's number[] + groups format.
     protected normalizedSection = computed<BarChartSection>(() => {
         const raw = this.section();
-        // rustic-report names the series `series`; older sections call them `groups`.
-        const s: BarChartSection = raw.series?.length && !raw.groups?.length ? { ...raw, groups: raw.series } : raw;
+        // rustic-report: each `data` row is a category (its `name` the label) and `values[j]` is
+        // series j's value — the PDF renderer reads it the same way. The renderer below draws the
+        // old shape (`groups` = category labels, `data` = one item per series, shown in the legend),
+        // so transpose. One series → one data item → no legend.
+        // Series given as `{ name, values }` objects (line-chart style) are already one item per
+        // series. Streaming or malformed sections may lack `data`, so never assume it.
+        const rawData = raw.data ?? [];
+        const series = (raw.series ?? []) as unknown[];
+        let s: BarChartSection = { ...raw, data: rawData };
+        if (series.length && !raw.groups?.length) {
+            if (series.every(x => typeof x === 'string')) {
+                s = {
+                    ...raw,
+                    groups: rawData.map(d => d.name),
+                    data: (series as string[]).map((name, j) => ({
+                        name,
+                        values: rawData.map(d => (d.values?.[j] ?? (j === 0 ? d.value : undefined) ?? 0) as number),
+                    })),
+                };
+            } else if (!rawData.length) {
+                const items = series.filter((x): x is BarChartItem => !!x && typeof x === 'object');
+                const cats = (raw as { x?: string[]; categories?: string[] }).x ?? (raw as { categories?: string[] }).categories;
+                s = { ...raw, groups: cats, data: items };
+            }
+        }
         const firstValues = s.data?.[0]?.values;
 
         // Derive unit from format field if not already set
@@ -346,7 +354,7 @@ export class BarChartSectionComponent {
     ];
 
     // Number of bars per x-axis column = number of data series (stocks)
-    private numSeries = computed(() => this.section().data?.length ?? 1);
+    private numSeries = computed(() => this.normalizedSection().data?.length ?? 1);
 
     groupGapClass = computed(() => {
         const n = this.numSeries();

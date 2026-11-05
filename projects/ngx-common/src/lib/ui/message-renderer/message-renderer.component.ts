@@ -167,7 +167,9 @@ export class MessageRendererComponent {
             return n >= 10 ? 3 : n >= 6 ? 2 : n >= 5 ? 1 : 0;
         }
         if (s.type === 'chart' || s.type === 'bar_chart' || s.type === 'line_chart' || s.type === 'positioning' || s.type === 'profiles') {
-            const n = s.data?.length ?? 0;
+            // rustic-report bar charts: `data` rows are categories, so the series names count instead.
+            const series = s.type === 'bar_chart' && !s.groups?.length ? s.series : undefined;
+            const n = series?.length ? series.length : s.data?.length ?? 0;
             return n >= 5 ? 2 : n >= 4 ? 1 : 0;
         }
         return 0;
@@ -264,7 +266,7 @@ export class MessageRendererComponent {
             case 'table':
             case 'technicals': {
                 const totals = section.type === 'table' ? section.totals ?? [] : [];
-                lines.push(tableCsv(section.headers ?? [], normalizeRows([...(section.rows ?? []), ...totals])));
+                lines.push(tableCsv(section.headers ?? [], normalizeRows([...(section.rows ?? []), ...totals], section.type === 'table' ? section.formats : undefined)));
                 break;
             }
             case 'positioning':

@@ -24,21 +24,25 @@ function normalizeCell(cell: TableCellInput | unknown, rowFormat?: ReportFormat 
     return { value: displayValue(cell as string | number | null | undefined, rowFormat ?? undefined) };
 }
 
-/** Every row shape — rustic-report's `{ label, format, cells }` and the older ones — as display cells. */
-export function normalizeRows(source: TableRowInput[] | null | undefined): NormalizedRow[] {
+/**
+ * Every row shape — rustic-report's `{ label, format, cells }` and the older ones — as display cells.
+ * `formats` are per-column formats (index 0 = label column); a cell's or row's own format wins.
+ */
+export function normalizeRows(source: TableRowInput[] | null | undefined, formats?: (ReportFormat | null)[] | null): NormalizedRow[] {
+    const col = (i: number) => formats?.[i] ?? null;
     return (source ?? []).map(row => {
         if (Array.isArray(row)) {
-            return { cells: row.map(c => normalizeCell(c)) };
+            return { cells: row.map((c, i) => normalizeCell(c, col(i))) };
         }
         if (row && typeof row === 'object') {
             // rustic-report: { label, format, cells } — the label is the first column.
             if (isReportRow(row)) {
-                return { rowType: row.row_type, cells: [{ value: row.label }, ...row.cells.map(c => normalizeCell(c, row.format))] };
+                return { rowType: row.row_type, cells: [{ value: row.label }, ...row.cells.map((c, j) => normalizeCell(c, row.format ?? col(j + 1)))] };
             }
             // Row wrapper: { row_type, cells: [...] }
             if ('cells' in row && Array.isArray((row as TableRow).cells)) {
                 const r = row as TableRow;
-                return { rowType: r.row_type, cells: r.cells.map(c => normalizeCell(c)) };
+                return { rowType: r.row_type, cells: r.cells.map((c, i) => normalizeCell(c, col(i))) };
             }
             // Single-cell row: { value, note, signal, indicator } — label + data in one object
             if ('value' in row) {
@@ -51,7 +55,7 @@ export function normalizeRows(source: TableRowInput[] | null | undefined): Norma
                 };
             }
             // Keyed-by-header row: { "Metric": "Price", "CRUS": { value, ... } }
-            return { cells: Object.values(row).map(c => normalizeCell(c)) };
+            return { cells: Object.values(row).map((c, i) => normalizeCell(c, col(i))) };
         }
         return { cells: [] };
     });
@@ -167,17 +171,39 @@ export function tableCsv(headers: string[], rows: NormalizedRow[]): string {
 export class TableSectionComponent {
     section = input.required<TableSection | TechnicalsSection>();
 
-    protected readonly normalizedRows = computed(() => normalizeRows(this.section().rows));
+    private readonly formats = computed(() => {
+        const s = this.section();
+        return s.type === 'table' ? s.formats : undefined;
+    });
+    protected readonly normalizedRows = computed(() => normalizeRows(this.section().rows, this.formats()));
     protected readonly normalizedTotals = computed(() => {
         const s = this.section();
-        return normalizeRows(s.type === 'table' ? s.totals : undefined);
+        return normalizeRows(s.type === 'table' ? s.totals : undefined, this.formats());
     });
     protected readonly headers = computed(() => this.section().headers ?? []);
 
     /**
-     * Column alignment. rustic-report computes `align` (missing entries = left); otherwise the older
-     * `column_align`, and for older tables without either, label left and values right (all left in
-     * column layout). A rustic-report table without `align` is all left.
+     * A rustic-report table's numeric columns, for when `align` is missing — the backend adds it
+     * after the fact, so a report still streaming in arrives without it. A column is numeric when
+     * it has a format or any of its cells holds a number.
+     */
+    private readonly numericColumns = computed(() => {
+        const s = this.section();
+        const numeric = new Set<number>();
+        if (s.type !== 'table' || !isReportTable(s.rows)) return numeric;
+        s.formats?.forEach((f, i) => { if (f) numeric.add(i); });
+        const isNum = (c: unknown) =>
+            typeof c === 'number' || (!!c && typeof c === 'object' && typeof (c as TableCell).value === 'number');
+        for (const row of [...(s.rows ?? []), ...(s.totals ?? [])]) {
+            if (isReportRow(row)) row.cells.forEach((c, j) => { if (isNum(c)) numeric.add(j + 1); });
+        }
+        return numeric;
+    });
+
+    /**
+     * Column alignment. rustic-report computes `align` (missing entries = left); without it, its
+     * numeric columns right and the rest left. Otherwise the older `column_align`, and for older
+     * tables without either, label left and values right (all left in column layout).
      */
     protected alignFor(i: number): ColumnAlign {
         const s = this.section();
@@ -185,7 +211,7 @@ export class TableSectionComponent {
         if (align?.length) return align[i] ?? 'left';
         const legacy = s.column_align?.[i];
         if (legacy) return legacy;
-        if (isReportTable(s.rows)) return 'left';
+        if (isReportTable(s.rows)) return this.numericColumns().has(i) ? 'right' : 'left';
         return i === 0 || s.type === 'technicals' || s.layout === 'column' ? 'left' : 'right';
     }
 

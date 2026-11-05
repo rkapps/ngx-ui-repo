@@ -1,7 +1,7 @@
 import { Component, input } from '@angular/core';
 import { LucideAngularModule } from 'lucide-angular';
 import { MetricCard, MetricCardsSection, Signal } from '../message-renderer.types';
-import { displayValue, formatReportNumber } from '../report-format';
+import { displayValue, formatCompactCurrency, formatReportNumber } from '../report-format';
 
 @Component({
     selector: 'app-metric-cards-section',
@@ -64,6 +64,7 @@ export class MetricCardsSectionComponent {
     }
 
     valueText(card: MetricCard): string {
+        if (card.format === 'currency' && typeof card.value === 'number') return formatCompactCurrency(card.value);
         return displayValue(card.value, card.format);
     }
 

@@ -32,7 +32,7 @@ export type TableRowType = 'data' | 'subtotal' | 'grand_total';
 export interface TableRow             { label?: string; format?: ReportFormat | null; row_type?: TableRowType; cells: TableCellInput[]; }
 export type TableRowInput = TableCellInput[] | TableRow | Record<string, TableCell | string>;
 /** `align` (rustic-report, computed: one per header, missing = left) supersedes the older `column_align`. */
-export interface TableSection         { type: 'table';             title?: string; group?: string; layout?: 'row' | 'column'; headers?: string[]; align?: ColumnAlign[] | null; column_align?: ColumnAlign[]; rows?: TableRowInput[]; totals?: TableRowInput[] | null; }
+export interface TableSection         { type: 'table';             title?: string; group?: string; layout?: 'row' | 'column'; headers?: string[]; formats?: (ReportFormat | null)[] | null; align?: ColumnAlign[] | null; column_align?: ColumnAlign[]; rows?: TableRowInput[]; totals?: TableRowInput[] | null; }
 /** Always renders as a column-layout table with signal badges — the explicit counterpart to `table` + group containing "technical". */
 export interface TechnicalsSection    { type: 'technicals';        title?: string; group?: string; headers?: string[]; column_align?: ColumnAlign[]; rows?: TableRowInput[]; }
 /** `number` is absent in rustic-report (cards are numbered by position). */
