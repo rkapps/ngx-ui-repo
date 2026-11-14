@@ -226,7 +226,7 @@ export class LlmPresetsPageComponent {
       header: 'Order',
       align: 'right',
       sortable: true,
-      width: '80px',
+      width: '110px',
       value: p => p.sort_order ?? '—',
       // Unset sorts after every set order.
       sortValue: p => p.sort_order ?? Number.MAX_SAFE_INTEGER,
@@ -239,7 +239,7 @@ export class LlmPresetsPageComponent {
       header: f.label,
       align: f.align,
       sortable: true,
-      width: f.key === 'reasoning_effort' ? '150px' : '120px',
+      width: f.key === 'reasoning_effort' ? '190px' : f.key === 'enable_cache' ? '120px' : '160px',
       value: p => paramText(p.parameters, f),
       sortValue: p => {
         const v = p.parameters?.[f.key];
