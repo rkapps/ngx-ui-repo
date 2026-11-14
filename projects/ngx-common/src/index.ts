@@ -21,6 +21,8 @@ export {
   type AgentConfig,
   type McpServerConfig,
   type ProviderConfig,
+  type LlmParameters,
+  type LlmPreset,
   type ModelConfig,
   type ModelPrice,
   type ConfigScope,
@@ -118,6 +120,7 @@ export { ADMIN_ROUTES } from './lib/ui/admin-page/admin.routes';
 export { AGENT_CONFIG_ROUTES } from './lib/ui/admin-config/agent-config.routes';
 export { McpServersPageComponent } from './lib/ui/platform/mcp-servers-page.component';
 export { ChatTemplatesPageComponent } from './lib/ui/platform/chat-templates-page.component';
+export { LlmPresetsPageComponent } from './lib/ui/platform/llm-presets-page.component';
 export { PageBreadcrumbs, type PageCrumb } from './lib/ui/breadcrumbs/page-breadcrumbs';
 export { BreadcrumbBarComponent } from './lib/ui/breadcrumbs/breadcrumb-bar.component';
 export { LOGS_ROUTES, USER_LOGS_ROUTE } from './lib/ui/logs/logs.routes';

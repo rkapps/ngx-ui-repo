@@ -54,6 +54,7 @@ export const routes: Routes = [
     children: [
       { path: 'mcp-servers', loadComponent: () => import('ngx-common').then(m => m.McpServersPageComponent), data: { scope: 'platform' } },
       { path: 'chat-templates', loadComponent: () => import('ngx-common').then(m => m.ChatTemplatesPageComponent) },
+      { path: 'llm-presets', loadComponent: () => import('ngx-common').then(m => m.LlmPresetsPageComponent) },
       ...configChildren('platform'),
     ],
   },

@@ -5,7 +5,8 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { TwangTreeTableComponent, type TwangTreeTableColumn } from 'ngx-twang-ui';
 import { catchError, map, of, startWith, switchMap } from 'rxjs';
-import { buildTurnTree, deliveryLabel, iterationUsage, type ExecNode, execNodePath, type ExecRow, findExecNode, rowOf, type TokenUsage } from '../../models/turn-execution';
+import type { LlmParameters } from '../../services/admin-config.service';
+import { buildTurnTree, deliveryLabel, formatLooseJson, parseJsonContent, iterationUsage, type ExecNode, execNodePath, type ExecRow, findExecNode, rowOf, type TokenUsage } from '../../models/turn-execution';
 import { AgentTestSessions } from '../../services/agent-test-sessions';
 import { TURN_LOGS, type TurnLogDetail } from '../../services/turn-logs.service';
 import { type PageCrumb, PageBreadcrumbs } from '../breadcrumbs/page-breadcrumbs';
@@ -115,8 +116,8 @@ const seconds = (ms: number | null | undefined) => (ms == null ? '—' : (ms / 1
             </div>
 
             <div class="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-4 text-sm">
-              <!-- Properties (fills the width) | token usage (sized to fit, right) -->
-              <div class="grid shrink-0 gap-x-8 gap-y-4 border-b border-border pb-5" [class]="usage() ? 'md:grid-cols-[minmax(0,1fr)_auto]' : ''">
+              <!-- Three equal columns: properties | LLM parameters | token usage (an absent one leaves its slot empty) -->
+              <div class="grid shrink-0 gap-x-8 gap-y-4 border-b border-border pb-5 md:grid-cols-3">
                 <dl class="grid min-w-0 content-start grid-cols-[9rem_minmax(0,1fr)] gap-x-4 gap-y-1.5">
 
 
@@ -219,8 +220,19 @@ const seconds = (ms: number | null | undefined) => (ms == null ? '—' : (ms / 1
                 }
                 </dl>
 
+                @if (params().length) {
+                  <div class="flex min-w-0 flex-col gap-1.5 md:border-l md:border-border md:pl-8">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Parameters</span>
+                    <dl class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1">
+                      @for (p of params(); track p.label) {
+                        <dt class="text-xs text-text-muted">{{ p.label }}</dt>
+                        <dd class="text-right text-sm tabular-nums">{{ p.text }}</dd>
+                      }
+                    </dl>
+                  </div>
+                }
                 @if (usage(); as u) {
-                  <div class="flex min-w-56 flex-col gap-1.5 md:border-l md:border-border md:pl-8">
+                  <div class="flex min-w-0 flex-col gap-1.5 md:col-start-3 md:border-l md:border-border md:pl-8">
                     <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Token usage</span>
                     <dl class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1">
                       @for (f of usageFields; track f.key) {
@@ -277,7 +289,39 @@ const seconds = (ms: number | null | undefined) => (ms == null ? '—' : (ms / 1
                 }
                 @case ('llm') {
                   @if (asLlm(row); as l) {
-                    <app-json-view title="Content" [text]="l.content" emptyText="No text — the model only called tools." [fill]="true" />
+                    <!-- Request stays short unless Content is collapsed; collapsing either gives the other the room. -->
+                    @if (l.request_tail?.length) {
+                      <section class="flex flex-col gap-2" [class.min-h-0]="secondCollapsed() && !firstCollapsed()" [class.flex-1]="secondCollapsed() && !firstCollapsed()">
+                        <button
+                          type="button"
+                          class="flex items-center gap-1 self-start text-xs font-semibold uppercase tracking-wider text-primary-600 hover:text-primary-700"
+                          [attr.aria-expanded]="!firstCollapsed()"
+                          title="The last messages sent on this call, truncated. Full tool I/O is on the tool rows."
+                          (click)="firstCollapsed.set(!firstCollapsed())"
+                        >
+                          <lucide-icon name="chevron-right" [size]="14" class="transition-transform" [class.rotate-90]="!firstCollapsed()" />
+                          Request · last {{ l.request_tail!.length }}
+                        </button>
+                        @if (!firstCollapsed()) {
+                          <ol class="flex flex-col gap-2 overflow-auto" [class]="secondCollapsed() ? 'min-h-0 flex-1' : 'max-h-64'">
+                            @for (m of l.request_tail; track $index) {
+                              <li class="rounded-md border border-border bg-surface-muted px-3 py-2">
+                                <span class="rounded px-1.5 py-0.5 text-[10px] uppercase" [class]="roleClass(m.role)">{{ roleLabel(m.role) }}</span>
+                                <pre class="mt-1 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed">{{ formatMessage(m.text) }}</pre>
+                              </li>
+                            }
+                          </ol>
+                        }
+                      </section>
+                    }
+                    <app-json-view
+                      title="Content"
+                      [text]="l.content"
+                      emptyText="No text — the model only called tools."
+                      [collapsible]="!!l.request_tail?.length"
+                      [fill]="true"
+                      [(collapsed)]="secondCollapsed"
+                    />
                   }
                 }
                 @case ('iteration') {
@@ -441,6 +485,12 @@ export class TurnExecutionComponent {
     (this.path().at(-1)?.children ?? []).map(child => ({ id: child.id, row: rowOf(child) })),
   );
 
+  /** The selected agent's LLM parameters (set ones only), for the Parameters column. */
+  protected readonly params = computed(() => {
+    const row = this.selected();
+    return row ? this.paramRows(this.asAgent(row)?.agent?.params) : [];
+  });
+
   protected readonly usage = computed<TokenUsage | null>(() => {
     const row = this.selected();
     if (!row) return null;
@@ -507,6 +557,42 @@ export class TurnExecutionComponent {
   protected readonly asTool = (r: ExecRow) => (r.kind === 'tool' ? r.data : null);
   protected readonly asIteration = (r: ExecRow) => (r.kind === 'iteration' ? r.data : null);
   protected readonly asLlm = (r: ExecRow) => (r.kind === 'llm' ? r.data : null);
+  /** The LLM parameters that were set, as label/value rows (unset ones are left out). */
+  protected paramRows(params: LlmParameters | null | undefined): { label: string; text: string }[] {
+    if (!params) return [];
+    const rows: { label: string; text: string }[] = [];
+    if (params.temperature != null) rows.push({ label: 'Temperature', text: String(params.temperature) });
+    if (params.max_tokens != null) rows.push({ label: 'Max tokens', text: params.max_tokens.toLocaleString() });
+    if (params.reasoning_effort != null) rows.push({ label: 'Reasoning effort', text: params.reasoning_effort });
+    if (params.enable_cache != null) rows.push({ label: 'Cache', text: params.enable_cache ? 'On' : 'Off' });
+    return rows;
+  }
+
+  /** A request-tail message: JSON pretty-printed (truncated JSON indented best-effort), else as sent. */
+  protected formatMessage(text: string): string {
+    const json = parseJsonContent(text);
+    if (json !== undefined) return JSON.stringify(json, null, 2);
+    return formatLooseJson(text) ?? text;
+  }
+
+  /** Request-tail role chips: who sent each message. */
+  protected roleLabel(role: string): string {
+    return { user: 'User', assistant: 'Assistant', tool_call: 'Tool call', tool_output: 'Tool output' }[role] ?? role;
+  }
+  protected roleClass(role: string): string {
+    switch (role) {
+      case 'user':
+        return 'bg-primary-50 text-primary-700';
+      case 'assistant':
+        return 'bg-gray-100 text-gray-700';
+      case 'tool_call':
+        return 'bg-amber-50 text-amber-700';
+      case 'tool_output':
+        return 'bg-green-50 text-green-700';
+      default:
+        return 'bg-gray-100 text-text-muted';
+    }
+  }
   protected readonly asPipeline = (r: ExecRow) => (r.kind === 'pipeline' ? r.data : null);
   protected readonly asStage = (r: ExecRow) => (r.kind === 'stage' ? r.data : null);
   protected readonly asDecision = (r: ExecRow) => (r.kind === 'decision' ? r.data : null);

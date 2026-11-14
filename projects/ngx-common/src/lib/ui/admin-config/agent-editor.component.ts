@@ -20,6 +20,7 @@ import {
   type PipelineStage,
   type PipelineType,
   type Preset,
+  type PresetChoice,
   type ProviderConfig,
   type ToolDefinition,
 } from '../../services/admin-config.service';
@@ -51,16 +52,10 @@ const EXECUTION_OPTIONS: TwangDropdownOption[] = (Object.keys(EXECUTION_TYPE_LAB
   label: EXECUTION_TYPE_LABELS[value],
 }));
 
-const PRESETS: { value: Preset; hint: string }[] = [
-  { value: 'fast', hint: 'speed first' },
-  { value: 'balanced', hint: 'cache, low reasoning' },
-  { value: 'data', hint: 'extraction' },
-  { value: 'precise', hint: 'accuracy over speed' },
-  { value: 'thorough', hint: 'max quality' },
-  { value: 'local', hint: 'local models' },
-];
-
 const SERVER_DEFAULT: TwangDropdownOption = { value: '', label: 'Server default' };
+
+/** A preset as a dropdown option: its id, with the summary as a hint. */
+const presetOption = (p: PresetChoice): TwangDropdownOption => ({ value: p.id, label: p.summary ? `${p.id} — ${p.summary}` : p.id });
 
 /** Option list for `value`, keeping an unknown stored value visible rather than silently blank. */
 function withCurrent(options: TwangDropdownOption[], value: string | null | undefined): TwangDropdownOption[] {
@@ -314,7 +309,7 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
                     </div>
                     <div class="flex flex-col gap-1.5">
                       <label class="text-xs font-medium text-text-muted">Preset</label>
-                      <twang-dropdown [options]="presetOptions" [value]="llm().preset ?? ''" (valueChange)="setLlm({ preset: $any($event) || null })" />
+                      <twang-dropdown [options]="presetOptions()" [value]="llm().preset ?? ''" (valueChange)="setLlm({ preset: $any($event) || null })" />
                     </div>
                     <p class="text-xs text-text-muted">
                       Unset fields fall back to the caller's choice, then the server default.
@@ -717,7 +712,7 @@ const pipelineMode = (p: PipelineConfig | null | undefined): PipelineType => (p?
                   </div>
                   <div class="flex min-w-0 flex-col gap-1">
                     <label class="text-[11px] font-medium text-text-muted">Preset</label>
-                    <twang-dropdown [options]="refPresetOptions" [value]="refLlm.preset ?? ''" (valueChange)="setRefLlm(target, j, { preset: $any($event) || null })" />
+                    <twang-dropdown [options]="refPresetOptions(refLlm.preset)" [value]="refLlm.preset ?? ''" (valueChange)="setRefLlm(target, j, { preset: $any($event) || null })" />
                   </div>
                 </div>
                 @if (!isSingle(target) && (canRelay(ref.id) || ref.relay_tool_output)) {
@@ -920,9 +915,16 @@ export class AgentEditorComponent {
   protected readonly providerOptions = computed<TwangDropdownOption[]>(() => this.providerOptionsFor(this.llm().llm));
   protected readonly modelOptions = computed<TwangDropdownOption[]>(() => this.modelOptionsFor(this.llm()));
 
-  protected readonly presetOptions: TwangDropdownOption[] = [SERVER_DEFAULT, ...PRESETS.map(p => ({ value: p.value, label: `${p.value} — ${p.hint}` }))];
+  /** Enabled LLM presets (`/admin/llm_presets`). */
+  private readonly presetChoices = signal<PresetChoice[]>([]);
+  private readonly presetChoiceOptions = computed(() => this.presetChoices().map(presetOption));
+  protected readonly presetOptions = computed<TwangDropdownOption[]>(() =>
+    withCurrent([SERVER_DEFAULT, ...this.presetChoiceOptions()], this.llm().preset),
+  );
   /** Sub-agent references: unset means the sub-agent's own preset, not the server's. */
-  protected readonly refPresetOptions: TwangDropdownOption[] = [{ value: '', label: 'Agent default' }, ...this.presetOptions.slice(1)];
+  protected refPresetOptions(current: Preset | null | undefined): TwangDropdownOption[] {
+    return withCurrent([{ value: '', label: 'Agent default' }, ...this.presetChoiceOptions()], current);
+  }
   protected readonly noLlm: LlmConfig = { llm: null, model: null, preset: null };
 
   /** Enabled providers only, plus `current` if it has since been disabled. */
@@ -1113,6 +1115,11 @@ export class AgentEditorComponent {
 
     this.loadToolSource('registry', this.configService.getTools(), destroyRef);
     this.loadToolSource('mcp', this.configService.getMcpTools(), destroyRef);
+
+    this.configService
+      .getPresetChoices()
+      .pipe(takeUntilDestroyed(destroyRef))
+      .subscribe(choices => this.presetChoices.set(choices));
 
     this.configService
       .getProviders()

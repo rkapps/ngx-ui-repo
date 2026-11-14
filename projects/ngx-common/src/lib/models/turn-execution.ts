@@ -1,4 +1,5 @@
 import type { TwangTreeTableNode } from 'ngx-twang-ui';
+import type { LlmParameters } from '../services/admin-config.service';
 
 /**
  * Turn execution trace — mirrors `rustic-agent`'s `TurnExecution` and friends
@@ -25,10 +26,21 @@ export interface AgentToolCall {
   duration_ms: number;
 }
 
+/** A readable, truncated copy of one message sent to the model. */
+export interface MessagePreview {
+  role: 'user' | 'assistant' | 'tool_call' | 'tool_output' | string;
+  text: string;
+}
+
 /** One model call within an iteration: the request, the generation, the stream drained. */
 export interface LlmCall {
   model: string;
   duration_ms: number;
+  /**
+   * The last messages sent on this call (plus the latest user message if it fell outside),
+   * truncated. Full tool I/O is in `AgentIteration.tool_calls`. Absent on older executions.
+   */
+  request_tail?: MessagePreview[];
   /** Text the model produced (often empty when it only called tools). */
   content: string;
   response_id: string;
@@ -57,6 +69,8 @@ export function iterationUsage(it: AgentIteration): TokenUsage | null {
 export interface AgentResponse {
   agent_id: string;
   model: string;
+  /** The LLM parameters the agent ran with (after presets merged). Absent on older executions. */
+  params?: LlmParameters | null;
   iterations: AgentIteration[];
   response_id: string;
   content: string;

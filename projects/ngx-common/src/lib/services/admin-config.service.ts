@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { catchError, map, Observable, of } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { postEventStream, type StreamEvent } from '../http/event-stream';
 import type { TurnResponse } from '../models/turn-execution';
@@ -19,12 +19,51 @@ export const EXECUTION_TYPE_LABELS: Record<ExecutionType, string> = {
 
 /** `pipeline.type` values the backend understands: `"deterministic"`, anything else runs as dynamic. */
 export type PipelineType = 'deterministic' | 'dynamic';
-export type Preset = 'fast' | 'balanced' | 'data' | 'precise' | 'thorough' | 'local';
+/** An LLM preset's id (`LlmPreset.id`); the list comes from `/admin/llm_presets`. */
+export type Preset = string;
 
 export interface LlmConfig {
   llm: string | null;
   model: string | null;
   preset: Preset | null;
+}
+
+/**
+ * LLM generation parameters (backend `LlmParameters`). Every field is optional: an unset one falls
+ * through to the next level when merged. `reasoning_effort` is the backend's `ReasoningEffort`.
+ */
+export interface LlmParameters {
+  temperature?: number | null;
+  max_tokens?: number | null;
+  reasoning_effort?: string | null;
+  enable_cache?: boolean | null;
+}
+
+/** A preset as offered in an agent's Preset dropdown. */
+export interface PresetChoice {
+  id: Preset;
+  summary: string;
+}
+
+
+/** A named set of LLM parameters (`GET /platform/llm_presets`); `LlmConfig.preset` refers to its `id`. */
+export interface LlmPreset {
+  id: string;
+  summary?: string;
+  description: string;
+  origin: Origin;
+  enabled: boolean;
+  version: number | null;
+  /** Position in lists, ascending; presets without one come last. */
+  sort_order?: number | null;
+  parameters: LlmParameters;
+}
+
+/** Preset list order: `sort_order` ascending (unset last), then id. */
+export function byPresetOrder(a: Pick<LlmPreset, 'id' | 'sort_order'>, b: Pick<LlmPreset, 'id' | 'sort_order'>): number {
+  const ao = a.sort_order ?? Number.POSITIVE_INFINITY;
+  const bo = b.sort_order ?? Number.POSITIVE_INFINITY;
+  return ao !== bo ? (ao < bo ? -1 : 1) : a.id.localeCompare(b.id);
 }
 
 export interface AvailableAgent {
@@ -156,18 +195,16 @@ export interface AgentConfigResponse {
 }
 
 /**
- * `POST /admin/agents/test` body (the backend's `AgentRunConfigRequest`): run `agent_id` with the
- * given provider/model and `configsm` holding the config of every agent in the run (the test
+ * `POST /admin/agents/test` body (the backend's `AgentConfigTestRequest`): run `agent_id` with the
+ * given `llm_config` (provider/model/preset) and `configsm` holding the config of every agent in the run (the test
  * agent and its sub-agents — each the chosen draft or the live config), continuing from `prev_response_id` for
  * multi-turn tests. Nothing is saved.
  */
 export interface AgentTestRequest {
   agent_id: string;
-  llm: string;
-  model: string;
-  /** Preset override; null keeps the agent's own (or the server default). */
-  preset: Preset | null;
   prompt: string;
+  /** Provider, model and preset for the run; a null preset keeps the agent's own (or the server default). */
+  llm_config: LlmConfig;
   prev_response_id: string | null;
   configsm: Record<string, AgentConfig>;
 }
@@ -321,6 +358,35 @@ export class AdminConfigService {
   /** Platform only: save these model prices (`POST /platform/model_prices/import`). Empty response = success. */
   importModelPrices(prices: ModelPrice[]): Observable<void> {
     return this.http.post<void>(`${this.base}/platform/model_prices/import`, prices);
+  }
+
+  /** Platform: every LLM preset (`GET /platform/llm_presets`). */
+  getLlmPresets(scope: ConfigScope = 'platform'): Observable<LlmPreset[]> {
+    return this.http.get<LlmPreset[]>(`${this.base}/${scope}/llm_presets`);
+  }
+
+  /**
+   * The presets an agent can pick: the enabled ones from `/admin/llm_presets`, in `sort_order`. A failed load
+   * gives none (logged), so the dropdown offers just its default plus any preset already set.
+   */
+  getPresetChoices(): Observable<PresetChoice[]> {
+    return this.getLlmPresets('admin').pipe(
+      map(list =>
+        list
+          .filter(p => p.enabled)
+          .sort(byPresetOrder)
+          .map(p => ({ id: p.id, summary: p.summary ?? '' })),
+      ),
+      catchError(err => {
+        console.error('Failed to load LLM presets', err);
+        return of([]);
+      }),
+    );
+  }
+
+  /** Platform: save these LLM presets (`POST /platform/llm_presets/import`). Empty response = success. */
+  importLlmPresets(presets: LlmPreset[]): Observable<void> {
+    return this.http.post<void>(`${this.base}/platform/llm_presets/import`, presets);
   }
 
   /** Platform only: save these provider configs (`POST /platform/providers/import`). Empty response = success. */

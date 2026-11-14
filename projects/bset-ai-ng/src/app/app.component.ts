@@ -108,6 +108,7 @@ export class AppComponent {
           ...configPages('/platform'),
           { label: 'MCP Servers', icon: 'plug', link: '/platform/mcp-servers' },
           { label: 'Chat Templates', icon: 'message-square-plus', link: '/platform/chat-templates' },
+          { label: 'LLM Presets', icon: 'sliders-horizontal', link: '/platform/llm-presets' },
         ],
       });
     }

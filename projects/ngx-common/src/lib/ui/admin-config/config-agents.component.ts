@@ -2,9 +2,9 @@ import { Component, computed, DestroyRef, effect, inject, signal, type TemplateR
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
-import { TwangButtonComponent, TwangTableComponent, type TwangTableColumn } from 'ngx-twang-ui';
+import { TwangButtonComponent, TwangDropdownComponent, type TwangDropdownOption, TwangTableComponent, type TwangTableColumn } from 'ngx-twang-ui';
 import { finalize } from 'rxjs';
-import { originLabel } from '../../models/origin';
+import { ORIGIN_LABELS, type Origin, originLabel } from '../../models/origin';
 import {
   type AgentConfig,
   type AgentConfigResponse,
@@ -34,6 +34,37 @@ function llmLabel(c: LlmConfig | null | undefined): string {
   return [c.llm, c.model].filter(Boolean).join(' / ');
 }
 
+/** The table's filters; '' = all. */
+interface AgentFilters {
+  origin: Origin | '';
+  execution: ExecutionType | '';
+}
+
+const NO_FILTERS: AgentFilters = { origin: '', execution: '' };
+
+/** Saved filters for a scope's Agents table (admin and platform keep their own). */
+const filtersKey = (scope: ConfigScope) => `${scope}.config.agents.filters`;
+
+function loadFilters(scope: ConfigScope): AgentFilters {
+  try {
+    const saved = JSON.parse(localStorage.getItem(filtersKey(scope)) ?? 'null') as Partial<AgentFilters> | null;
+    return {
+      origin: saved?.origin && saved.origin in ORIGIN_LABELS ? saved.origin : '',
+      execution: saved?.execution && saved.execution in EXECUTION_TYPE_LABELS ? saved.execution : '',
+    };
+  } catch {
+    return { ...NO_FILTERS }; // storage unavailable or bad JSON — start unfiltered
+  }
+}
+
+function saveFilters(scope: ConfigScope, filters: AgentFilters): void {
+  try {
+    localStorage.setItem(filtersKey(scope), JSON.stringify(filters));
+  } catch {
+    // storage unavailable — just not remembered
+  }
+}
+
 /** Version column sort: live first, then live with a draft open, then draft-only. */
 const STATUS_ORDER: Record<AgentConfigResponse['status'], number> = { live: 0, live_with_draft: 1, draft: 2 };
 
@@ -45,7 +76,7 @@ const STATUS_ORDER: Record<AgentConfigResponse['status'], number> = { live: 0, l
 @Component({
   selector: 'app-config-agents',
   standalone: true,
-  imports: [LucideAngularModule, RouterLink, ThreePanelLayoutComponent, TwangButtonComponent, TwangTableComponent, RefreshCacheButtonComponent],
+  imports: [LucideAngularModule, RouterLink, ThreePanelLayoutComponent, TwangButtonComponent, TwangDropdownComponent, TwangTableComponent, RefreshCacheButtonComponent],
   template: `
     <app-three-panel-layout
       [showLeft]="false"
@@ -55,10 +86,23 @@ const STATUS_ORDER: Record<AgentConfigResponse['status'], number> = { live: 0, l
       panelMinHeight="min-h-[70vh]"
     >
 
-      <div middle class="flex flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
+      <!-- Middle: filters card above the agents card (same layout as Logs) -->
+      <div middle class="flex flex-1 flex-col gap-3">
+        <!-- Filters -->
+        <div class="flex shrink-0 flex-wrap items-end gap-3 rounded-lg border border-border bg-white px-4 py-3">
+          <div class="w-44">
+            <twang-dropdown label="Origin" [options]="originOptions" [value]="filters().origin" (valueChange)="setFilter({ origin: $any($event) })" />
+          </div>
+          <div class="w-48">
+            <twang-dropdown label="Execution" [options]="executionOptions" [value]="filters().execution" (valueChange)="setFilter({ execution: $any($event) })" />
+          </div>
+        </div>
+      <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-white">
         <div class="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
           <span class="text-sm font-semibold text-primary-600">Agents</span>
-          <span class="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700">{{ agents().length }}</span>
+          <span class="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700"
+                [title]="filtered() ? visibleAgents().length + ' of ' + agents().length + ' agents shown' : ''"
+          >{{ filtered() ? visibleAgents().length + ' / ' + agents().length : agents().length }}</span>
           <twang-button
             class="ml-auto"
             variant="default"
@@ -104,20 +148,21 @@ const STATUS_ORDER: Record<AgentConfigResponse['status'], number> = { live: 0, l
             <div class="flex flex-1 items-center justify-center p-8 text-sm text-red-600">{{ error() }}</div>
           } @else {
             <twang-table
-              [rows]="agents()"
+              [rows]="visibleAgents()"
               [columns]="columns"
               [loading]="loading()"
               [fillContainerWidth]="true"
               [onRowClick]="onRowClick"
               [onRowDoubleClick]="onRowDoubleClick"
               [rowClass]="rowClass"
-              initialSortKey="execution"
+              initialSortKey="id"
               initialSortDir="asc"
               tableMinWidthClass="min-w-[1360px]"
-              emptyMessage="No agents configured."
+              [emptyMessage]="filtered() && agents().length ? 'No agents match these filters.' : 'No agents configured.'"
             />
           }
         </div>
+      </div>
       </div>
 
       <!-- Fills the panel (min 70vh, same as the middle): the system prompt takes what's left and scrolls
@@ -244,8 +289,31 @@ export class ConfigAgentsComponent {
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
 
+  /** Origin / Execution filters, saved per scope in localStorage. */
+  protected readonly filters = signal<AgentFilters>(loadFilters(this.scope));
+  protected readonly filtered = computed(() => !!(this.filters().origin || this.filters().execution));
+  protected readonly visibleAgents = computed(() => {
+    const { origin, execution } = this.filters();
+    return this.agents().filter(a => (!origin || a.origin === origin) && (!execution || a.execution === execution));
+  });
+  protected readonly originOptions: TwangDropdownOption[] = [
+    { value: '', label: 'All origins' },
+    ...(Object.keys(ORIGIN_LABELS) as Origin[]).map(o => ({ value: o, label: ORIGIN_LABELS[o] })),
+  ];
+  protected readonly executionOptions: TwangDropdownOption[] = [
+    { value: '', label: 'All execution types' },
+    ...(Object.keys(EXECUTION_TYPE_LABELS) as ExecutionType[]).map(e => ({ value: e, label: EXECUTION_TYPE_LABELS[e] })),
+  ];
+
+  protected setFilter(change: Partial<AgentFilters>): void {
+    const next = { ...this.filters(), ...change };
+    this.filters.set(next);
+    saveFilters(this.scope, next);
+  }
+
   protected readonly selectedId = signal<string | null>(null);
-  protected readonly selected = computed(() => this.agents().find(a => a.id === this.selectedId()) ?? null);
+  /** The selected agent, while it passes the filters — a filtered-out one isn't shown in the panel. */
+  protected readonly selected = computed(() => this.visibleAgents().find(a => a.id === this.selectedId()) ?? null);
 
   protected readonly llmLabel = llmLabel;
   protected readonly originLabel = originLabel;
@@ -307,6 +375,18 @@ export class ConfigAgentsComponent {
     });
 
     this.load();
+
+    // A filter change that hides the selected agent selects the first one still shown.
+    effect(() => {
+      const visible = this.visibleAgents();
+      if (this.loading() || this.selected() || !visible.length) return;
+      this.selectedId.set(this.firstInDefaultOrder(visible)?.id ?? null);
+    });
+  }
+
+  /** The top row in the table's default order (ID A–Z). */
+  private firstInDefaultOrder(agents: AgentConfig[]): AgentConfig | undefined {
+    return [...agents].sort((a, b) => a.id.localeCompare(b.id))[0];
   }
 
   protected load(): void {
@@ -321,19 +401,16 @@ export class ConfigAgentsComponent {
       .subscribe({
         next: responses => {
           this.responses.set(responses);
-          const agents = this.agents();
+          const agents = this.visibleAgents();
           // Keep the current selection if it's still there; else reopen the remembered agent; else
-          // select the top row in the table's default order (execution A–Z; stable sort).
+          // select the top row in the table's default order (ID A–Z).
           if (this.selected()) return;
           const remembered = currentAgent();
           if (remembered && agents.some(a => a.id === remembered)) {
             this.selectedId.set(remembered);
             return;
           }
-          const first = [...agents].sort((a, b) =>
-            this.executionLabel(a.execution).localeCompare(this.executionLabel(b.execution)),
-          )[0];
-          this.selectedId.set(first?.id ?? null);
+          this.selectedId.set(this.firstInDefaultOrder(agents)?.id ?? null);
         },
         error: err => {
           console.error('Failed to load agents', err);

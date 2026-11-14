@@ -13,6 +13,7 @@ import {
   EXECUTION_TYPE_LABELS,
   type LlmConfig,
   type Preset,
+  type PresetChoice,
   type ProviderConfig,
 } from '../../services/admin-config.service';
 import { type AgentTestSession, AgentTestSessions, type TestVersionChoice } from '../../services/agent-test-sessions';
@@ -25,7 +26,8 @@ import { rememberCurrentAgent } from './config-sections';
 
 type Choice = TestVersionChoice;
 
-const PRESETS: Preset[] = ['fast', 'balanced', 'data', 'precise', 'thorough', 'local'];
+/** A preset as a dropdown option: its id, with the summary as a hint. */
+const presetOption = (p: PresetChoice): TwangDropdownOption => ({ value: p.id, label: p.summary ? `${p.id} — ${p.summary}` : p.id });
 
 
 /**
@@ -135,7 +137,7 @@ const PRESETS: Preset[] = ['fast', 'balanced', 'data', 'precise', 'thorough', 'l
                 </div>
                 <div class="flex flex-col gap-1.5">
                   <label class="text-xs font-medium text-text-muted">Preset</label>
-                  <twang-dropdown [options]="presetOptions" [value]="llm().preset ?? ''" (valueChange)="setLlm({ preset: $any($event) || null })" />
+                  <twang-dropdown [options]="presetOptions()"[value]="llm().preset ?? ''" (valueChange)="setLlm({ preset: $any($event) || null })" />
                 </div>
               </div>
             </section>
@@ -352,10 +354,14 @@ export class AgentTestComponent {
     const model = override.model || (override.llm ? null : own?.model) || provider?.default_model || null;
     return model ? { llm, model } : null;
   });
-  protected readonly presetOptions: TwangDropdownOption[] = [
-    { value: '', label: "Agent's setting" },
-    ...PRESETS.map(p => ({ value: p, label: p })),
-  ];
+  /** Enabled LLM presets (`/admin/llm_presets`). */
+  private readonly presetChoices = signal<PresetChoice[]>([]);
+  /** The override choices, keeping a chosen preset that's no longer listed visible. */
+  protected readonly presetOptions = computed<TwangDropdownOption[]>(() => {
+    const options = [{ value: '', label: "Agent's setting" }, ...this.presetChoices().map(presetOption)];
+    const current = this.llm().preset;
+    return current && !options.some(o => o.value === current) ? [...options, { value: current, label: `${current} (not configured)` }] : options;
+  });
   /** Preset a run will use: the override, else the tested config's own (null = server default). */
   protected readonly resolvedPreset = computed<Preset | null>(() => this.llm().preset ?? this.configFor(this.agentId())?.llm_config?.preset ?? null);
 
@@ -382,6 +388,11 @@ export class AgentTestComponent {
   private readonly headerActions = viewChild<TemplateRef<unknown>>('headerActions');
 
   constructor() {
+    this.configService
+      .getPresetChoices()
+      .pipe(takeUntilDestroyed())
+      .subscribe(choices => this.presetChoices.set(choices));
+
     forkJoin({ agents: this.configService.getAgents(), providers: this.configService.getProviders() })
       .pipe(takeUntilDestroyed())
       .subscribe({
@@ -500,7 +511,13 @@ export class AgentTestComponent {
       this.sessions.update(agentId, s => ({ ...s, messages: s.messages.map(m => (m.id === id ? { ...m, ...changes } : m)) }));
     let content = '';
     this.run$ = this.configService
-      .testAgent({ agent_id: agentId, llm: resolved.llm, model: resolved.model, preset: this.resolvedPreset(), prompt, prev_response_id: this.session().lastResponseId, configsm: configs })
+      .testAgent({
+        agent_id: agentId,
+        prompt,
+        llm_config: { llm: resolved.llm, model: resolved.model, preset: this.resolvedPreset() },
+        prev_response_id: this.session().lastResponseId,
+        configsm: configs,
+      })
       .subscribe({
       next: event => {
         // Errors, files and failed files stay on the message, so they're kept with the run.
