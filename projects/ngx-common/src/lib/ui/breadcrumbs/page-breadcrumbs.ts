@@ -19,6 +19,11 @@ export class PageBreadcrumbs {
   readonly crumbs = signal<PageCrumb[]>([]);
   /** Optional buttons for the right side of the page header; a page sets it while open. */
   readonly actions = signal<TemplateRef<unknown> | null>(null);
+  /**
+   * Optional full-width row ABOVE the breadcrumbs (e.g. a market-index strip), for hosts that render
+   * it (the app shell). Hosts that don't simply ignore it. A page sets it while open.
+   */
+  readonly headerTop = signal<TemplateRef<unknown> | null>(null);
 
   set(crumbs: PageCrumb[]): void {
     this.crumbs.set(crumbs);
@@ -27,5 +32,6 @@ export class PageBreadcrumbs {
   clear(): void {
     this.crumbs.set([]);
     this.actions.set(null);
+    this.headerTop.set(null);
   }
 }

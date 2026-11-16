@@ -1,4 +1,4 @@
-import { Component, inject, input, model, output } from '@angular/core';
+import { Component, computed, inject, input, model, output } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
@@ -17,6 +17,13 @@ import { type ShellNavItem, shellNavTarget } from './shell-nav';
   host: { class: 'flex h-full shrink-0 flex-col border-r border-border bg-white transition-[width] duration-200' },
   template: `
     <div class="flex h-14 shrink-0 items-center gap-2.5 border-b border-border" [class]="narrow() ? 'justify-center px-2' : 'px-4'">
+      <!-- Brand: a link home (the first nav item's page). -->
+      <a
+        [routerLink]="homeLink()"
+        class="flex min-w-0 items-center gap-2.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+        [attr.aria-label]="'Go to ' + (loginConfig.appName ?? 'home')"
+        (click)="closeDrawer.emit()"
+      >
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="24" height="24" class="shrink-0" aria-hidden="true">
         <rect width="100" height="100" rx="22" fill="#1971c2" />
         <line x1="50" y1="26" x2="50" y2="74" stroke="rgba(255,255,255,0.35)" stroke-width="5" stroke-linecap="round" />
@@ -32,6 +39,7 @@ import { type ShellNavItem, shellNavTarget } from './shell-nav';
       @if (!narrow()) {
         <span class="truncate text-base font-bold tracking-tight text-primary-600">{{ loginConfig.appName }}</span>
       }
+      </a>
       @if (drawer()) {
         <button
           type="button"
@@ -174,5 +182,10 @@ export class ShellSidebarComponent {
 
   protected readonly loginConfig = inject(LOGIN_CONFIG);
   protected readonly narrow = () => this.collapsed() && !this.drawer();
+  /** Where the brand links: the first nav item's page (Home in the apps), else the app's configured landing route. */
+  protected readonly homeLink = computed(() => {
+    const first = this.navItems()[0];
+    return first ? shellNavTarget(first) : (this.loginConfig.redirectTo || '/');
+  });
   protected readonly target = shellNavTarget;
 }

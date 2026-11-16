@@ -38,7 +38,7 @@ import { ShellTitleBarComponent } from './shell-title-bar.component';
         <!-- Sidebar: in the layout from md up; a drawer over the page below that. -->
         <app-shell-sidebar
           class="hidden md:flex"
-          [class]="collapsed() ? 'w-16' : 'w-72 xl:w-80 3xl:w-96'"
+          [class]="collapsed() ? collapsedSidebarWidth() : sidebarWidth()"
           [navItems]="navItems()"
           [activeLink]="activeItem()?.link ?? null"
           [closedGroups]="closedGroups()"
@@ -94,6 +94,12 @@ import { ShellTitleBarComponent } from './shell-title-bar.component';
                 </div>
               </div>
             } @else {
+            <!-- Optional row above the breadcrumbs, set by a page via PageBreadcrumbs.headerTop. -->
+            @if (headerTop(); as top) {
+              <div class="flex min-h-12 shrink-0 items-center border-b border-border bg-white px-3 py-2 md:px-4 lg:px-6 xl:px-8 3xl:px-16">
+                <ng-container *ngTemplateOutlet="top" />
+              </div>
+            }
             <!-- Page header: breadcrumbs (section, then the page's own) and the page's actions.
                  Side padding matches the title bar and the detail, so everything lines up. -->
             <header class="flex min-h-12 shrink-0 items-center gap-2 border-b border-border bg-white px-3 py-2 md:px-4 lg:px-6 xl:px-8 3xl:px-16">
@@ -122,9 +128,17 @@ export class AppShellComponent {
   /** Shown in place of the page (header and outlet) while set, e.g. the account failed to load. */
   readonly error = input<string | null>(null);
   readonly errorTitle = input("We couldn't load your account");
+  /**
+   * Tailwind width classes for the expanded desktop sidebar (the mobile drawer is fixed). Give
+   * complete class strings, e.g. `'w-60 xl:w-64'`, so the app's Tailwind build picks them up.
+   */
+  readonly sidebarWidth = input('w-72 xl:w-80 3xl:w-96');
+  /** Tailwind width classes for the icon-only (collapsed) desktop sidebar. */
+  readonly collapsedSidebarWidth = input('w-16');
 
   protected readonly auth = inject(AuthService);
   protected readonly actions = inject(PageBreadcrumbs).actions;
+  protected readonly headerTop = inject(PageBreadcrumbs).headerTop;
   private readonly loginConfig = inject(LOGIN_CONFIG);
   private readonly router = inject(Router);
 
