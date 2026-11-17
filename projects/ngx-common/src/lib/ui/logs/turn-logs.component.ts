@@ -5,6 +5,7 @@ import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { LucideAngularModule } from 'lucide-angular';
 import { TwangButtonComponent, TwangDatepickerComponent, TwangDropdownComponent, type TwangDropdownOption, TwangTableComponent, type TwangTableColumn, type TwangTableFooterCell } from 'ngx-twang-ui';
 import { catchError, map, of, startWith, switchMap } from 'rxjs';
+import { USAGE_FIELDS } from '../../models/turn-execution';
 import { TURN_LOGS, type TurnLog, type TurnLogRequest } from '../../services/turn-logs.service';
 import { ADMIN_RIGHT_WIDTH, ADMIN_TABLE_HEIGHT } from '../admin-page/admin-layout';
 import { PageBreadcrumbs } from '../breadcrumbs/page-breadcrumbs';
@@ -172,6 +173,20 @@ interface LoadState {
               <dd class="border-t border-border pt-2 text-right font-semibold tabular-nums">{{ money(t.total_tokens_cost) }}</dd>
             </dl>
           </section>
+
+          <section class="flex flex-col gap-2 border-t border-border pt-4">
+            <span class="text-xs font-semibold uppercase tracking-wider text-primary-600">Tokens</span>
+            @if (t.usage; as u) {
+              <dl class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-2">
+                @for (f of usageFields; track f.key) {
+                  <dt class="text-xs" [class]="f.key === 'total_tokens' ? 'border-t border-border pt-2 font-semibold' : 'text-text-muted'">{{ f.label }}</dt>
+                  <dd class="text-right tabular-nums" [class]="f.key === 'total_tokens' ? 'border-t border-border pt-2 font-semibold' : ''">{{ u[f.key].toLocaleString() }}</dd>
+                }
+              </dl>
+            } @else {
+              <p class="text-xs text-text-muted">Not recorded for this turn.</p>
+            }
+          </section>
         } @else {
           <p class="text-text-muted">Select a turn to see its details.</p>
         }
@@ -244,6 +259,8 @@ export class TurnLogsComponent {
     return this.rangeLogs().filter(t => (!llm || t.llm === llm) && (!user || t.email === user));
   });
   protected readonly error = computed(() => this.state().error);
+  protected readonly usageFields = USAGE_FIELDS;
+  protected readonly totalTokens = computed(() => this.logs().reduce((sum, t) => sum + (t.usage?.total_tokens || 0), 0));
   protected readonly totalCost = computed(() => this.logs().reduce((sum, t) => sum + (t.total_tokens_cost || 0), 0));
 
   protected readonly selectedKey = this.logsService.selectedKey;
@@ -279,6 +296,15 @@ export class TurnLogsComponent {
     { id: 'agent', header: 'Agent', align: 'left', sortable: true, width: '300px', cellTruncate: true, value: t => t.agent_id || 'Chat' },
     { id: 'llm', header: 'LLM', align: 'left', sortable: true, width: '220px', cellTruncate: true, value: t => t.llm },
     { id: 'model', header: 'Model', align: 'left', sortable: true, width: '180px', cellTruncate: true, value: t => t.model },
+    {
+      id: 'tokens',
+      header: 'Tokens',
+      align: 'right',
+      sortable: true,
+      width: '120px',
+      value: t => t.usage?.total_tokens ?? null,
+      format: v => (v == null ? '—' : Number(v).toLocaleString()),
+    },
     { id: 'total', header: 'Total cost', align: 'right', sortable: true, width: '140px', value: t => t.total_tokens_cost, format: v => money(Number(v)) },
     {
       id: 'execution_time',
@@ -293,13 +319,13 @@ export class TurnLogsComponent {
 
   // The user scope only ever sees its own turns, so drop the User column (and its width).
   protected readonly columns = this.scope === 'admin' ? this.allColumns : this.allColumns.filter(c => c.id !== 'email');
-  protected readonly tableMinWidthClass = this.scope === 'admin' ? 'min-w-[1640px]' : 'min-w-[1420px]';
+  protected readonly tableMinWidthClass = this.scope === 'admin' ? 'min-w-[1760px]' : 'min-w-[1540px]';
 
-  /** Totals row: one cell per column (widths match), with the row count first and the summed cost. */
+  /** Totals row: one cell per column (widths match), with the row count first, then summed tokens and cost. */
   protected readonly footer = computed<TwangTableFooterCell[] | null>(() => {
     if (!this.logs().length) return null;
     return this.columns.map((c, i) => ({
-      text: i === 0 ? `Total (${this.logs().length})` : c.id === 'total' ? money(this.totalCost()) : '',
+      text: i === 0 ? `Total (${this.logs().length})` : c.id === 'total' ? money(this.totalCost()) : c.id === 'tokens' ? this.totalTokens().toLocaleString() : '',
       align: c.align,
       width: c.fillRemaining ? undefined : c.width,
       minWidth: c.minWidth,

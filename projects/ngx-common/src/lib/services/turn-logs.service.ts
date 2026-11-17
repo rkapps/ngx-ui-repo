@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, InjectionToken, signal } from '@angular/core';
 import { Observable, tap } from 'rxjs';
-import type { TurnResponse } from '../models/turn-execution';
+import type { TokenUsage, TurnResponse } from '../models/turn-execution';
 import { API_BASE_URL } from './api-url.token';
 
 /** One conversation turn with its model and cost, as listed by `POST /admin/turns/logs`. */
@@ -23,6 +23,8 @@ export interface TurnLog {
   cached_write_tokens_cost: number;
   output_tokens_cost: number;
   total_tokens_cost: number;
+  /** Token counts; null on turns stored before usage was recorded. */
+  usage?: TokenUsage | null;
   execution_time_ms: number | null;
   /** Whether an execution trace was recorded (fetch it with `getTurnDetail`). */
   has_execution: boolean;

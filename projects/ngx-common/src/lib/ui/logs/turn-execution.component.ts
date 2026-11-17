@@ -6,7 +6,7 @@ import { LucideAngularModule } from 'lucide-angular';
 import { TwangTreeTableComponent, type TwangTreeTableColumn } from 'ngx-twang-ui';
 import { catchError, map, of, startWith, switchMap } from 'rxjs';
 import type { LlmParameters } from '../../services/admin-config.service';
-import { buildTurnTree, deliveryLabel, formatLooseJson, parseJsonContent, iterationUsage, type ExecNode, execNodePath, type ExecRow, findExecNode, rowOf, type TokenUsage } from '../../models/turn-execution';
+import { USAGE_FIELDS, buildTurnTree, deliveryLabel, formatLooseJson, parseJsonContent, iterationUsage, type ExecNode, execNodePath, type ExecRow, findExecNode, rowOf, type TokenUsage } from '../../models/turn-execution';
 import { AgentTestSessions } from '../../services/agent-test-sessions';
 import { TURN_LOGS, type TurnLogDetail } from '../../services/turn-logs.service';
 import { type PageCrumb, PageBreadcrumbs } from '../breadcrumbs/page-breadcrumbs';
@@ -51,15 +51,6 @@ const KIND_TEXT: Partial<Record<ExecRow['kind'], string>> = {
 };
 const kindText = (r: ExecRow) => KIND_TEXT[r.kind] ?? '';
 
-const USAGE_FIELDS: { key: keyof TokenUsage; label: string }[] = [
-  { key: 'input_tokens', label: 'Input' },
-  { key: 'cached_read_tokens', label: 'Cache read' },
-  { key: 'cached_write_tokens', label: 'Cache write' },
-  { key: 'output_tokens', label: 'Output' },
-  { key: 'reasoning_tokens', label: 'Reasoning' },
-  { key: 'tool_use_tokens', label: 'Tool use' },
-  { key: 'total_tokens', label: 'Total' },
-];
 
 const seconds = (ms: number | null | undefined) => (ms == null ? '—' : (ms / 1000).toFixed(2));
 

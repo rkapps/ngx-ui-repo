@@ -17,6 +17,17 @@ export interface TokenUsage {
   total_tokens: number;
 }
 
+/** Token-usage fields as labelled rows, in display order. */
+export const USAGE_FIELDS: { key: keyof TokenUsage; label: string }[] = [
+  { key: 'input_tokens', label: 'Input' },
+  { key: 'cached_read_tokens', label: 'Cache read' },
+  { key: 'cached_write_tokens', label: 'Cache write' },
+  { key: 'output_tokens', label: 'Output' },
+  { key: 'reasoning_tokens', label: 'Reasoning' },
+  { key: 'tool_use_tokens', label: 'Tool use' },
+  { key: 'total_tokens', label: 'Total' },
+];
+
 export interface AgentToolCall {
   id: string;
   name: string;
